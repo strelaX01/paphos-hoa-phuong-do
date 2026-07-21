@@ -1,0 +1,145 @@
+import { randomBytes } from "node:crypto";
+
+import { calculateDeliveryFeeCents, centsToMoney, getDeliveryAvailability } from "@/lib/deliveryConfig";
+import { prisma } from "@/lib/prisma";
+import { checkRateLimit } from "@/lib/rateLimit";
+import { validateDeliveryOrderInput } from "@/lib/validations/deliveryOrder";
+import { getRestaurantProfileData } from "@/lib/restaurantProfileData";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+const RATE_LIMIT = { key: "public-delivery-order", limit: 5, windowMs: 15 * 60 * 1000 };
+const MAX_BODY_BYTES = 32 * 1024;
+
+function json(payload, status, rateHeaders = {}) {
+  return Response.json(payload, { status, headers: { ...rateHeaders, "Cache-Control": "no-store" } });
+}
+
+function createOrderNumber() {
+  const date = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Nicosia", year: "numeric", month: "2-digit", day: "2-digit" })
+    .format(new Date()).replaceAll("-", "");
+  return `HPD-${date}-${randomBytes(3).toString("hex").toUpperCase()}`;
+}
+
+function sameItems(previousItems, pricedItems) {
+  if (previousItems.length !== pricedItems.length) return false;
+  const expected = new Map(pricedItems.map((item) => [item.menuItemId, `${item.quantity}:${item.note || ""}`]));
+  return previousItems.every((item) => expected.get(item.menuItemId) === `${item.quantity}:${item.note || ""}`);
+}
+
+async function createOrder(data, pricedItems, totals) {
+  return prisma.$transaction(async (tx) => {
+    let customer = await tx.customer.findFirst({ where: { phone: data.phone }, orderBy: { updatedAt: "desc" } });
+    if (customer) {
+      customer = await tx.customer.update({ where: { id: customer.id }, data: { name: data.name, ...(data.email ? { email: data.email } : {}) } });
+    } else {
+      customer = await tx.customer.create({ data: { name: data.name, email: data.email, phone: data.phone } });
+    }
+
+    let address = await tx.customerAddress.findFirst({ where: { customerId: customer.id, street: data.street, zone: data.area } });
+    if (!address) {
+      address = await tx.customerAddress.create({ data: { customerId: customer.id, street: data.street, zone: data.area, city: data.area, notes: data.notes } });
+    }
+
+    return tx.order.create({
+      data: {
+        orderNumber: createOrderNumber(),
+        status: "PENDING",
+        paymentMethod: "CASH",
+        paymentStatus: "PENDING",
+        customerId: customer.id,
+        addressId: address.id,
+        customerName: data.name,
+        customerPhone: data.phone,
+        customerEmail: data.email,
+        deliveryStreet: data.street,
+        deliveryZone: data.area,
+        deliveryNotes: data.notes,
+        subtotal: centsToMoney(totals.subtotalCents),
+        deliveryFee: centsToMoney(totals.deliveryFeeCents),
+        total: centsToMoney(totals.totalCents),
+        items: { create: pricedItems.map((item) => ({ menuItemId: item.menuItemId, name: item.name, note: item.note, quantity: item.quantity, unitPrice: centsToMoney(item.unitPriceCents), lineTotal: centsToMoney(item.lineTotalCents) })) },
+        timeline: { create: { status: "PENDING", title: "Order received", note: "Waiting for restaurant confirmation." } },
+      },
+      select: { id: true, orderNumber: true, status: true, subtotal: true, deliveryFee: true, total: true, createdAt: true },
+    });
+  });
+}
+
+export async function POST(request) {
+  const rate = checkRateLimit(request, RATE_LIMIT);
+  if (!rate.allowed) return json({ error: "Too many order attempts. Please try again later." }, 429, rate.headers);
+
+  const contentLength = Number(request.headers.get("content-length") || 0);
+  if (contentLength > MAX_BODY_BYTES) return json({ error: "Request body is too large." }, 413, rate.headers);
+
+  let body;
+  try {
+    const rawBody = await request.text();
+    if (new TextEncoder().encode(rawBody).byteLength > MAX_BODY_BYTES) return json({ error: "Request body is too large." }, 413, rate.headers);
+    body = JSON.parse(rawBody);
+  } catch {
+    return json({ error: "Invalid JSON body." }, 400, rate.headers);
+  }
+
+  if (typeof body?.website === "string" && body.website.trim()) return json({ data: { reference: "RECEIVED", status: "PENDING" } }, 201, rate.headers);
+  const validation = validateDeliveryOrderInput(body);
+  if (!validation.isValid) return json({ errors: validation.errors }, 422, rate.headers);
+
+  const { openingHours } = await getRestaurantProfileData();
+  const availability = getDeliveryAvailability(openingHours);
+  if (!availability.isOpen) {
+    const error = availability.isClosedDay
+      ? "Delivery orders are not available today."
+      : `Delivery orders are accepted today from ${availability.opensAt} to ${availability.closesAt}.`;
+    return json({ error }, 409, rate.headers);
+  }
+
+  try {
+    const slugs = validation.data.items.map((item) => item.slug);
+    const menuItems = await prisma.menuItem.findMany({
+      where: { slug: { in: slugs } },
+      select: { id: true, slug: true, name: true, price: true, isActive: true, deliverable: true, category: { select: { isActive: true } } },
+    });
+    const menuBySlug = new Map(menuItems.map((item) => [item.slug, item]));
+    const unavailable = validation.data.items.filter((item) => {
+      const menuItem = menuBySlug.get(item.slug);
+      return !menuItem || !menuItem.isActive || !menuItem.deliverable || !menuItem.category.isActive;
+    }).map((item) => item.slug);
+    if (unavailable.length) return json({ error: "Some dishes are no longer available. Refresh the menu and review your cart.", unavailableItems: unavailable }, 409, rate.headers);
+
+    const pricedItems = validation.data.items.map((item) => {
+      const menuItem = menuBySlug.get(item.slug);
+      const unitPriceCents = Math.round(Number(menuItem.price) * 100);
+      return { menuItemId: menuItem.id, name: menuItem.name, quantity: item.quantity, note: item.note, unitPriceCents, lineTotalCents: unitPriceCents * item.quantity };
+    });
+    const subtotalCents = pricedItems.reduce((sum, item) => sum + item.lineTotalCents, 0);
+    const deliveryFeeCents = calculateDeliveryFeeCents();
+    const totals = { subtotalCents, deliveryFeeCents, totalCents: subtotalCents + deliveryFeeCents };
+
+    const duplicateSince = new Date(Date.now() - 2 * 60 * 1000);
+    const recentOrders = await prisma.order.findMany({
+      where: { customerPhone: validation.data.phone, createdAt: { gte: duplicateSince }, status: { not: "CANCELLED" } },
+      orderBy: { createdAt: "desc" },
+      select: { orderNumber: true, status: true, subtotal: true, deliveryFee: true, total: true, deliveryStreet: true, deliveryZone: true, items: { select: { menuItemId: true, quantity: true, note: true } } },
+    });
+    const duplicate = recentOrders.find((order) => order.deliveryStreet === validation.data.street && order.deliveryZone === validation.data.area && Math.round(Number(order.subtotal) * 100) === subtotalCents && sameItems(order.items, pricedItems));
+    if (duplicate) return json({ data: { reference: duplicate.orderNumber, status: duplicate.status, subtotal: Number(duplicate.subtotal), deliveryFee: Number(duplicate.deliveryFee), total: Number(duplicate.total), duplicate: true } }, 200, rate.headers);
+
+    let order;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        order = await createOrder(validation.data, pricedItems, totals);
+        break;
+      } catch (error) {
+        if (error.code !== "P2002" || attempt === 2) throw error;
+      }
+    }
+
+    return json({ data: { reference: order.orderNumber, status: order.status, subtotal: Number(order.subtotal), deliveryFee: Number(order.deliveryFee), total: Number(order.total), createdAt: order.createdAt } }, 201, rate.headers);
+  } catch (error) {
+    console.error("POST /api/orders", error);
+    return json({ error: "Could not place the order. Please call the restaurant or try again." }, 500, rate.headers);
+  }
+}

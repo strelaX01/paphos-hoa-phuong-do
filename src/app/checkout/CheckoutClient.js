@@ -1,0 +1,180 @@
+"use client"
+
+import Image from "next/image"
+import Link from "next/link"
+import { useRouter } from "next/navigation"
+import { CheckCircle2, LoaderCircle, Minus, Plus, ShoppingBag, Trash2, X } from "lucide-react"
+import { useEffect, useRef, useState } from "react"
+
+import { useCart } from "@/hooks/useCart"
+import { DELIVERY_CONFIG } from "@/lib/deliveryConfig"
+
+function formatMoney(value) {
+  return new Intl.NumberFormat("en-IE", { style: "currency", currency: DELIVERY_CONFIG.currency }).format(Number(value || 0))
+}
+
+const nearbyDeliveryFee = DELIVERY_CONFIG.nearbyFeeCents / 100
+const fartherDeliveryFee = DELIVERY_CONFIG.fartherFeeCents / 100
+
+async function readApi(response) {
+  const payload = await response.json().catch(() => ({}))
+  if (!response.ok) {
+    const firstError = payload.errors ? Object.values(payload.errors)[0] : null
+    const error = new Error(firstError || payload.error || "Could not place the order.")
+    error.unavailableItems = payload.unavailableItems || []
+    throw error
+  }
+  return payload
+}
+
+export default function CheckoutClient() {
+  const router = useRouter()
+  const cart = useCart()
+  const formRef = useRef(null)
+  const [isPending, setIsPending] = useState(false)
+  const [result, setResult] = useState(null)
+
+  async function handleSubmit(event) {
+    event.preventDefault()
+    if (isPending || !cart.items.length) return
+    setIsPending(true)
+    setResult(null)
+
+    const formData = new FormData(event.currentTarget)
+    const body = {
+      name: formData.get("name"),
+      email: formData.get("email"),
+      phone: formData.get("phone"),
+      street: formData.get("street"),
+      area: formData.get("area"),
+      notes: formData.get("notes"),
+      website: formData.get("website"),
+      items: cart.items.map((item) => ({ slug: item.id, quantity: item.qty, note: item.note || "" })),
+    }
+
+    try {
+      const payload = await fetch("/api/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      }).then(readApi)
+      setResult({ success: true, ...payload.data })
+      cart.clearCart()
+      formRef.current?.reset()
+    } catch (error) {
+      error.unavailableItems?.forEach((slug) => cart.removeItem(slug))
+      setResult({ success: false, error: error.message || "Could not place the order." })
+    } finally {
+      setIsPending(false)
+    }
+  }
+
+  if (cart.items.length === 0 && !result?.success) return <EmptyCart />
+
+  return (
+    <>
+      <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_420px] lg:items-start">
+        <section className="border border-[#E8DFC8] bg-[#FAF6EE] p-5 shadow-sm sm:p-8 lg:p-10">
+          <span className="mb-3 block text-[11px] font-semibold uppercase tracking-[0.3em] text-[#D4A017]">Delivery Details</span>
+          <h1 className="font-display text-4xl font-bold leading-tight text-[#2B2B2B] lg:text-[52px]">Where should we deliver?</h1>
+          <p className="mt-4 max-w-xl text-[14px] leading-relaxed text-[#6B6560]">Your order is paid in cash on delivery. The restaurant will confirm availability by phone.</p>
+
+          <form ref={formRef} onSubmit={handleSubmit} className="mt-8 space-y-4">
+            <input type="text" name="website" tabIndex={-1} autoComplete="off" className="hidden" aria-hidden="true" />
+            {result?.error ? <div role="alert" className="border border-[#8B1E1E]/25 bg-[#8B1E1E]/10 px-4 py-3 text-[13px] font-medium text-[#8B1E1E]">{result.error}</div> : null}
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Input name="name" label="Full name" minLength={2} maxLength={100} autoComplete="name" />
+              <Input name="phone" label="Phone number" type="tel" minLength={6} maxLength={30} autoComplete="tel" inputMode="tel" pattern="\+?[0-9 ()\-.]{6,30}" sanitize={sanitizePhone} />
+            </div>
+            <Input name="email" label="Email (optional)" type="email" maxLength={254} autoComplete="email" required={false} />
+            <Input name="street" label="Street, building, apartment" minLength={5} maxLength={200} autoComplete="street-address" />
+            <Input name="area" label="Area / village" minLength={2} maxLength={100} autoComplete="address-level2" />
+            <p className="border-l-2 border-[#D4A017] bg-[#F2EAD8] px-4 py-3 text-[13px] leading-relaxed text-[#5F5547]">
+              Delivery is {formatMoney(nearbyDeliveryFee)} for nearby areas and {formatMoney(fartherDeliveryFee)} for farther areas. The restaurant will confirm the final fee based on your address.
+            </p>
+            <label className="block"><span className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.2em] text-[#8B6F47]">Delivery notes</span><textarea name="notes" rows={4} maxLength={1000} placeholder="Door code, floor, landmark, or preferred call instructions" className="w-full resize-y border border-[#E8DFC8] bg-white/70 px-4 py-3 text-[14px] leading-relaxed text-[#2B2B2B] outline-none placeholder:text-[#9C9489] focus:border-[#D4A017] focus:ring-2 focus:ring-[#D4A017]/20" /></label>
+            <div className="border border-[#E8DFC8] bg-white/55 px-4 py-3"><p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#8B6F47]">Payment</p><p className="mt-1 text-sm font-semibold text-[#2B2B2B]">Cash on delivery</p></div>
+            <button type="submit" disabled={isPending || !cart.items.length} className="flex w-full items-center justify-center gap-2 bg-[#8B1E1E] px-7 py-4 text-[13px] font-semibold uppercase tracking-[0.14em] text-white transition-colors hover:bg-[#A02424] disabled:cursor-not-allowed disabled:opacity-60">{isPending ? <LoaderCircle className="size-4 animate-spin" /> : null}{isPending ? "Placing Order..." : `Place Order - ${formatMoney(cart.total)}`}</button>
+          </form>
+        </section>
+        <OrderSummary cart={cart} locked={isPending} />
+      </div>
+      {result?.success ? <OrderSuccessModal order={result} onClose={() => router.push("/delivery")} /> : null}
+    </>
+  )
+}
+
+function EmptyCart() {
+  return <div className="border border-[#E8DFC8] bg-[#FAF6EE] p-8 text-center"><div className="mx-auto mb-5 flex size-14 items-center justify-center bg-[#8B1E1E] text-white"><ShoppingBag className="size-6" /></div><h1 className="font-display text-4xl font-bold text-[#2B2B2B]">Your cart is empty.</h1><p className="mx-auto mt-3 max-w-md text-[14px] leading-relaxed text-[#6B6560]">Add Vietnamese dishes from the delivery menu before checkout.</p><Link href="/delivery" className="mt-7 inline-flex bg-[#8B1E1E] px-7 py-3.5 text-[13px] font-semibold uppercase tracking-[0.14em] text-white hover:bg-[#A02424]">Back to Delivery</Link></div>
+}
+
+function OrderSummary({ cart, locked }) {
+  return (
+    <aside className="border border-[#D4A017]/25 bg-[#1E1A18] p-5 text-white shadow-2xl shadow-black/10 lg:sticky lg:top-24">
+      <div className="mb-5 flex items-center justify-between border-b border-white/10 pb-4">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.25em] text-[#D4A017]">Your Order</p>
+          <h2 className="mt-1 font-display text-3xl font-bold">Summary</h2>
+        </div>
+        <div className="flex size-12 items-center justify-center bg-[#8B1E1E]"><ShoppingBag className="size-5" /></div>
+      </div>
+
+      <div className="max-h-[440px] space-y-3 overflow-y-auto pr-1">
+        {cart.items.map((item) => (
+          <div key={item.id} className="border border-white/10 bg-white/[0.03] p-3">
+            <div className="grid grid-cols-[64px_1fr_auto] gap-3">
+              <div className="relative size-16 overflow-hidden bg-white/10">
+                {item.image ? <Image src={item.image} alt={item.name} fill className="object-cover" sizes="64px" /> : null}
+              </div>
+              <div className="min-w-0">
+                <p className="truncate font-display text-lg font-bold leading-tight">{item.name}</p>
+                <p className="mt-0.5 text-[12px] text-white/45">{formatMoney(item.price)}</p>
+                <div className="mt-3 flex items-center gap-2">
+                  <QtyButton disabled={locked} onClick={() => cart.updateQty(item.id, -1)} label={`Decrease ${item.name}`}><Minus className="size-3.5" /></QtyButton>
+                  <span className="min-w-8 text-center text-[13px] font-semibold">{item.qty}</span>
+                  <QtyButton disabled={locked || item.qty >= DELIVERY_CONFIG.maxItemQuantity} onClick={() => cart.updateQty(item.id, 1)} label={`Increase ${item.name}`}><Plus className="size-3.5" /></QtyButton>
+                </div>
+              </div>
+              <button type="button" disabled={locked} onClick={() => cart.removeItem(item.id)} className="text-white/35 transition-colors hover:text-[#D4A017] disabled:opacity-30" aria-label={`Remove ${item.name}`}>
+                <Trash2 className="size-4" />
+              </button>
+            </div>
+            <input value={item.note || ""} onChange={(event) => cart.updateNote(item.id, event.target.value)} disabled={locked} maxLength={300} placeholder="Kitchen note for this dish" className="mt-3 h-9 w-full border border-white/15 bg-transparent px-2 text-xs text-white outline-none placeholder:text-white/30 focus:border-[#D4A017]" />
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-5 space-y-2 border-t border-white/10 pt-4 text-[13px]">
+        <PriceRow label="Subtotal" value={formatMoney(cart.subtotal)} />
+        <PriceRow label="Nearby delivery estimate" value={formatMoney(cart.deliveryFee)} />
+        <div className="flex items-center justify-between text-2xl font-bold">
+          <span className="font-display">Estimated total</span>
+          <span className="font-sans tabular-nums">{formatMoney(cart.total)}</span>
+        </div>
+        <p className="pt-2 text-[11px] leading-relaxed text-white/40">
+          Farther areas cost {formatMoney(fartherDeliveryFee)}. Final prices, availability, and delivery fee are verified by the restaurant.
+        </p>
+      </div>
+    </aside>
+  )
+}
+
+function OrderSuccessModal({ onClose, order }) {
+  const closeRef = useRef(null)
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow
+    const onKeyDown = (event) => { if (event.key === "Escape") onClose() }
+    document.body.style.overflow = "hidden"
+    window.addEventListener("keydown", onKeyDown)
+    closeRef.current?.focus()
+    return () => { document.body.style.overflow = previousOverflow; window.removeEventListener("keydown", onKeyDown) }
+  }, [onClose])
+  return <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#1E1A18]/70 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="order-success-title"><div className="w-full max-w-md border border-[#D4A017]/35 bg-[#FAF6EE] shadow-2xl"><div className="flex justify-end p-3 pb-0"><button ref={closeRef} type="button" onClick={onClose} className="flex size-10 items-center justify-center text-[#6B6560] hover:bg-[#F2EAD8]" aria-label="Close order confirmation"><X className="size-5" /></button></div><div className="px-6 pb-8 text-center"><div className="mx-auto flex size-14 items-center justify-center bg-[#4A7C59]/12 text-[#2F5F3D]"><CheckCircle2 className="size-7" /></div><p className="mt-5 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#8B6F47]">Order received</p><h2 id="order-success-title" className="mt-2 font-display text-3xl font-bold text-[#2B2B2B]">Thank you for your order.</h2><p className="mt-3 text-sm leading-relaxed text-[#6B6560]">We will call you shortly to confirm the delivery.</p><div className="mt-5 grid grid-cols-2 border border-[#E8DFC8] bg-white/65"><div className="border-r border-[#E8DFC8] p-3"><p className="text-[10px] font-semibold uppercase text-[#8B6F47]">Reference</p><p className="mt-1 break-all font-mono text-sm font-bold text-[#8B1E1E]">{order.reference}</p></div><div className="p-3"><p className="text-[10px] font-semibold uppercase text-[#8B6F47]">Total</p><p className="mt-1 text-lg font-bold text-[#2B2B2B]">{formatMoney(order.total)}</p></div></div><button type="button" onClick={onClose} className="mt-6 w-full bg-[#8B1E1E] px-6 py-3.5 text-[12px] font-semibold uppercase tracking-[0.14em] text-white hover:bg-[#A02424]">Done</button></div></div></div>
+}
+
+function Input({ autoComplete, inputMode, label, maxLength, minLength, name, pattern, required = true, sanitize, type = "text" }) {
+  return <label className="block"><span className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.2em] text-[#8B6F47]">{label}</span><input name={name} type={type} required={required} minLength={minLength} maxLength={maxLength} pattern={pattern} inputMode={inputMode} autoComplete={autoComplete} onInput={sanitize ? (event) => { event.currentTarget.value = sanitize(event.currentTarget.value) } : undefined} className="h-12 w-full border border-[#E8DFC8] bg-white/70 px-4 text-[14px] text-[#2B2B2B] outline-none focus:border-[#D4A017] focus:ring-2 focus:ring-[#D4A017]/20" /></label>
+}
+function QtyButton({ children, disabled, label, onClick }) { return <button type="button" disabled={disabled} onClick={onClick} className="flex size-8 items-center justify-center border border-white/15 text-white/70 hover:border-[#D4A017]/60 hover:text-[#D4A017] disabled:cursor-not-allowed disabled:opacity-30" aria-label={label}>{children}</button> }
+function PriceRow({ label, value }) { return <div className="flex justify-between text-white/45"><span>{label}</span><span>{value}</span></div> }
+function sanitizePhone(value) { return value.replace(/[^\d+\s().-]/g, "").replace(/(?!^)\+/g, "") }

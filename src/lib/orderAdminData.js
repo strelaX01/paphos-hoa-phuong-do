@@ -1,0 +1,80 @@
+export const orderAdminSelect = {
+  id: true,
+  orderNumber: true,
+  status: true,
+  paymentMethod: true,
+  paymentStatus: true,
+  customerName: true,
+  customerPhone: true,
+  customerEmail: true,
+  deliveryStreet: true,
+  deliveryZone: true,
+  deliveryNotes: true,
+  subtotal: true,
+  deliveryFee: true,
+  discountTotal: true,
+  total: true,
+  prepTargetMins: true,
+  createdAt: true,
+  updatedAt: true,
+  items: { orderBy: { createdAt: "asc" }, select: { id: true, name: true, note: true, quantity: true, unitPrice: true, lineTotal: true } },
+  timeline: { orderBy: { createdAt: "asc" }, select: { id: true, status: true, title: true, note: true, createdAt: true } },
+};
+
+export const orderDriverSelect = {
+  id: true,
+  orderNumber: true,
+  status: true,
+  customerName: true,
+  customerPhone: true,
+  deliveryStreet: true,
+  deliveryZone: true,
+  deliveryNotes: true,
+  createdAt: true,
+  updatedAt: true,
+  items: {
+    orderBy: { createdAt: "asc" },
+    select: { id: true, name: true, note: true, quantity: true },
+  },
+};
+
+export function serializeAdminOrder(order) {
+  return {
+    id: order.id,
+    orderNumber: order.orderNumber,
+    status: order.status,
+    paymentMethod: order.paymentMethod,
+    paymentStatus: order.paymentStatus,
+    customerName: order.customerName,
+    customerPhone: order.customerPhone,
+    customerEmail: order.customerEmail || "",
+    deliveryStreet: order.deliveryStreet,
+    deliveryZone: order.deliveryZone || "",
+    deliveryNotes: order.deliveryNotes || "",
+    subtotal: Number(order.subtotal),
+    deliveryFee: Number(order.deliveryFee),
+    discountTotal: Number(order.discountTotal),
+    total: Number(order.total),
+    prepTargetMins: order.prepTargetMins,
+    createdAt: order.createdAt.toISOString(),
+    updatedAt: order.updatedAt.toISOString(),
+    items: order.items.map((item) => ({ ...item, unitPrice: Number(item.unitPrice), lineTotal: Number(item.lineTotal) })),
+    timeline: order.timeline.map((event) => ({ ...event, createdAt: event.createdAt.toISOString() })),
+  };
+}
+
+export function serializeDriverOrder(order) {
+  return {
+    id: order.id,
+    orderNumber: order.orderNumber,
+    status: order.status,
+    customerName: order.customerName,
+    customerPhone: order.customerPhone,
+    deliveryStreet: order.deliveryStreet,
+    deliveryZone: order.deliveryZone || "",
+    deliveryNotes: order.deliveryNotes || "",
+    createdAt: order.createdAt.toISOString(),
+    updatedAt: order.updatedAt.toISOString(),
+    items: order.items,
+  };
+}

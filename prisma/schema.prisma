@@ -1,0 +1,416 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  ADMIN
+  DRIVER
+}
+
+enum AccountStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum ContentStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum MediaType {
+  IMAGE
+  VIDEO
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  PREPARING
+  ASSIGNED
+  PENDING_PICKUP
+  PICKED_UP
+  EN_ROUTE
+  DELIVERED
+  CANCELLED
+}
+
+enum PaymentMethod {
+  CASH
+  CARD
+  ONLINE
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+enum ReservationStatus {
+  PENDING
+  CONFIRMED
+  SEATED
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum ContactMessageStatus {
+  NEW
+  READ
+  REPLIED
+  ARCHIVED
+}
+
+enum NoticeType {
+  GENERAL
+  PROMOTION
+  TEMPORARY_CLOSURE
+  HOLIDAY
+}
+
+enum NoticePriority {
+  LOW
+  NORMAL
+  IMPORTANT
+  URGENT
+}
+
+enum FestivalEffect {
+  NONE
+  LUNAR_NEW_YEAR
+  CHRISTMAS
+  NEW_YEAR
+  VALENTINE
+  SUMMER
+}
+
+model AdminUser {
+  id           String        @id @default(cuid())
+  name         String
+  username     String        @unique
+  email        String        @unique
+  passwordHash String
+  role         UserRole      @default(ADMIN)
+  status       AccountStatus @default(ACTIVE)
+  lastLoginAt  DateTime?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  auditLogs    AuditLog[]
+}
+
+model DriverAccount {
+  id                    String        @id @default(cuid())
+  name                  String
+  username              String        @unique
+  phone                 String?
+  passwordHash          String?
+  temporaryPasswordHash String?
+  mustChangePassword    Boolean       @default(false)
+  status                AccountStatus @default(ACTIVE)
+  lastLoginAt           DateTime?
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+  orders                Order[]
+}
+
+model Customer {
+  id           String            @id @default(cuid())
+  name         String
+  email        String?
+  phone        String
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  addresses    CustomerAddress[]
+  orders       Order[]
+  reservations Reservation[]
+
+  @@index([phone])
+  @@index([email])
+}
+
+model CustomerAddress {
+  id         String   @id @default(cuid())
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  label      String?
+  street     String
+  zone       String?
+  city       String?  @default("Kissonerga")
+  notes      String?
+  isDefault  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  orders     Order[]
+
+  @@index([customerId])
+}
+
+model DeliveryZone {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  fee         Decimal  @default(0) @db.Decimal(10, 2)
+  minimumFree Decimal? @db.Decimal(10, 2)
+  isActive    Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model MenuCategory {
+  id        String     @id @default(cuid())
+  slug      String     @unique
+  title     String
+  isActive  Boolean    @default(true)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  items     MenuItem[]
+}
+
+model MenuTag {
+  id          String     @id @default(cuid())
+  label       String     @unique
+  description String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  items       MenuItem[]
+}
+
+model MenuItem {
+  id          String       @id @default(cuid())
+  slug        String       @unique
+  name        String
+  nameEn      String?
+  description String?
+  price       Decimal      @db.Decimal(10, 2)
+  image       String?
+  deliverable Boolean      @default(true)
+  isFeatured  Boolean      @default(false)
+  isActive    Boolean      @default(true)
+  sortOrder   Int          @default(0)
+  categoryId  String
+  category    MenuCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  tagId       String?
+  tag         MenuTag?     @relation(fields: [tagId], references: [id], onDelete: SetNull)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  orderItems  OrderItem[]
+
+  @@index([categoryId])
+  @@index([tagId])
+}
+
+model Order {
+  id             String               @id @default(cuid())
+  orderNumber    String               @unique
+  status         OrderStatus          @default(PENDING)
+  paymentMethod  PaymentMethod        @default(CASH)
+  paymentStatus  PaymentStatus        @default(PENDING)
+  paymentNote    String?
+  customerId     String?
+  customer       Customer?            @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  addressId      String?
+  address        CustomerAddress?     @relation(fields: [addressId], references: [id], onDelete: SetNull)
+  driverId       String?
+  driver         DriverAccount?       @relation(fields: [driverId], references: [id], onDelete: SetNull)
+  customerName   String
+  customerPhone  String
+  customerEmail  String?
+  deliveryStreet String
+  deliveryZone   String?
+  deliveryNotes  String?
+  distanceKm     Decimal?             @db.Decimal(8, 2)
+  etaMinutes     Int?
+  subtotal       Decimal              @db.Decimal(10, 2)
+  deliveryFee    Decimal              @default(0) @db.Decimal(10, 2)
+  discountTotal  Decimal              @default(0) @db.Decimal(10, 2)
+  total          Decimal              @db.Decimal(10, 2)
+  prepTargetMins Int?
+  confirmedAt    DateTime?
+  assignedAt     DateTime?
+  pickedUpAt     DateTime?
+  deliveredAt    DateTime?
+  cancelledAt    DateTime?
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+  items          OrderItem[]
+  timeline       OrderTimelineEvent[]
+
+  @@index([customerId])
+  @@index([addressId])
+  @@index([driverId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model OrderItem {
+  id         String    @id @default(cuid())
+  orderId    String
+  order      Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  menuItemId String?
+  menuItem   MenuItem? @relation(fields: [menuItemId], references: [id], onDelete: SetNull)
+  name       String
+  note       String?
+  quantity   Int       @default(1)
+  unitPrice  Decimal   @db.Decimal(10, 2)
+  lineTotal  Decimal   @db.Decimal(10, 2)
+  createdAt  DateTime  @default(now())
+
+  @@index([orderId])
+  @@index([menuItemId])
+}
+
+model OrderTimelineEvent {
+  id        String       @id @default(cuid())
+  orderId   String
+  order     Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  status    OrderStatus?
+  title     String
+  note      String?
+  createdAt DateTime     @default(now())
+
+  @@index([orderId])
+}
+
+model Reservation {
+  id           String            @id @default(cuid())
+  customerId   String?
+  customer     Customer?         @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  customerName String
+  email        String
+  phone        String
+  partySize    Int
+  date         DateTime
+  time         String
+  status       ReservationStatus @default(PENDING)
+  requests     String?
+  internalNote String?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  @@index([customerId])
+  @@index([date])
+  @@index([status])
+}
+
+model MediaAsset {
+  id           String        @id @default(cuid())
+  type         MediaType
+  url          String
+  fileName     String?
+  mimeType     String?
+  sizeBytes    Int?
+  alt          String?
+  createdAt    DateTime      @default(now())
+  galleryPhoto GalleryPhoto?
+  videoSpecial VideoSpecial?
+}
+
+model GalleryPhoto {
+  id        String        @id @default(cuid())
+  assetId   String?       @unique
+  asset     MediaAsset?   @relation(fields: [assetId], references: [id], onDelete: SetNull)
+  src       String
+  alt       String
+  caption   String?
+  category  String?
+  sortOrder Int           @default(0)
+  status    ContentStatus @default(PUBLISHED)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+}
+
+model VideoSpecial {
+  id          String        @id @default(cuid())
+  assetId     String?       @unique
+  asset       MediaAsset?   @relation(fields: [assetId], references: [id], onDelete: SetNull)
+  title       String
+  description String?
+  thumbnail   String?
+  videoUrl    String
+  badge       String?
+  duration    String?
+  sortOrder   Int           @default(0)
+  status      ContentStatus @default(PUBLISHED)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
+
+model StorefrontSettings {
+  id                    String         @id @default("default")
+  festivalEffectEnabled Boolean        @default(false)
+  festivalEffect        FestivalEffect @default(NONE)
+  effectIntensity       String         @default("Medium")
+  effectStartsAt        DateTime?
+  effectEndsAt          DateTime?
+  updatedAt             DateTime       @updatedAt
+}
+
+model StorefrontNotice {
+  id         String         @id @default(cuid())
+  enabled    Boolean        @default(false)
+  type       NoticeType     @default(GENERAL)
+  priority   NoticePriority @default(NORMAL)
+  title      String
+  message    String
+  ctaEnabled Boolean        @default(false)
+  ctaLabel   String?
+  ctaHref    String?
+  startsAt   DateTime?
+  endsAt     DateTime?
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+}
+
+model RestaurantProfile {
+  id        String   @id @default("default")
+  name      String   @default("Hoa Phuong Do")
+  email     String?
+  phone     String?
+  address   String?
+  mapUrl    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model OpeningHour {
+  id        String   @id @default(cuid())
+  day       String
+  hours     String
+  isClosed  Boolean  @default(false)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ContactMessage {
+  id        String               @id @default(cuid())
+  name      String
+  email     String
+  phone     String?
+  message   String
+  status    ContactMessageStatus @default(NEW)
+  createdAt DateTime             @default(now())
+  updatedAt DateTime             @updatedAt
+}
+
+model AuditLog {
+  id          String     @id @default(cuid())
+  actorId     String?
+  actor       AdminUser? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  action      String
+  entityType  String
+  entityId    String?
+  description String?
+  createdAt   DateTime   @default(now())
+
+  @@index([actorId])
+  @@index([entityType, entityId])
+}

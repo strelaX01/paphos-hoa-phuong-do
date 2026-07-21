@@ -1,0 +1,90 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  overflow: hidden;
+  pointer-events: none;
+  contain: strict;
+}
+
+.paused .particle {
+  animation-play-state: paused;
+}
+
+.particle {
+  position: absolute;
+  top: -12vh;
+  left: var(--festival-left);
+  width: var(--festival-size);
+  height: var(--festival-size);
+  opacity: 0;
+  animation: festival-fall var(--festival-duration) linear var(--festival-delay) infinite;
+  will-change: transform, opacity;
+}
+
+.snow {
+  border-radius: 50%;
+  background: rgb(255 255 255 / 0.88);
+  box-shadow: 0 0 3px rgb(255 255 255 / 0.45);
+}
+
+.tet,
+.valentine,
+.summer {
+  border-radius: 75% 15% 70% 25%;
+}
+
+.tet {
+  background: #f4a3ad;
+  box-shadow: inset -2px -1px 0 rgb(139 30 30 / 0.18);
+}
+
+.valentine {
+  background: #c94b63;
+  box-shadow: inset -2px -1px 0 rgb(255 255 255 / 0.2);
+}
+
+.summer {
+  width: calc(var(--festival-size) * 0.72);
+  height: calc(var(--festival-size) * 1.45);
+  background: #4d7b4b;
+  box-shadow: inset 2px 0 0 rgb(255 255 255 / 0.18);
+}
+
+.confetti {
+  width: calc(var(--festival-size) * 0.55);
+  height: calc(var(--festival-size) * 1.35);
+  background: #d4a017;
+  animation-iteration-count: 1;
+}
+
+.variant1.confetti { background: #8b1e1e; }
+.variant2.confetti { background: #2f6f55; }
+.variant3.confetti { background: #f1e4c1; }
+.variant1.tet { background: #d4a017; }
+.variant2.tet { background: #f7c7cd; }
+.variant1.valentine { background: #ef9aaa; }
+.variant2.valentine { background: #8b1e1e; }
+.variant1.summer { background: #7c9f55; }
+.variant2.summer { background: #d4a017; }
+
+@keyframes festival-fall {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, -8vh, 0) rotate(0deg);
+  }
+  9% { opacity: 0.78; }
+  88% { opacity: 0.72; }
+  100% {
+    opacity: 0;
+    transform: translate3d(var(--festival-drift), 124vh, 0) rotate(var(--festival-rotation));
+  }
+}
+
+@media (max-width: 640px) {
+  .particle:nth-child(n + 13) { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .overlay { display: none; }
+}
