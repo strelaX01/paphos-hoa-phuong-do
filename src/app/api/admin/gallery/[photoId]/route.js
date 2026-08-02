@@ -1,9 +1,12 @@
+import { authorizeAdminRequest } from "@/lib/adminApiAuth";
 import { prisma } from "@/lib/prisma";
 import { deleteManagedGalleryImage } from "@/lib/galleryStorage";
 
 export const dynamic = "force-dynamic";
 
-export async function DELETE(_request, context) {
+export async function DELETE(request, context) {
+  const auth = await authorizeAdminRequest(request);
+  if (auth.response) return auth.response;
   const { photoId } = await context.params;
 
   let existing;

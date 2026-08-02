@@ -18,6 +18,16 @@ const DAY_INDEXES = {
   sat: 6,
 }
 
+export const WEEK_DAYS = Object.freeze([
+  'Monday',
+  'Tuesday',
+  'Wednesday',
+  'Thursday',
+  'Friday',
+  'Saturday',
+  'Sunday',
+])
+
 function dayIndex(value) {
   return DAY_INDEXES[String(value || '').trim().toLowerCase().replace(/\./g, '')]
 }

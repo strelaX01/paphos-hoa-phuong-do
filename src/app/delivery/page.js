@@ -1,25 +1,29 @@
-import Image from 'next/image'
 import { Clock, PackageCheck } from 'lucide-react'
 import { connection } from 'next/server'
 
 import Footer from '@/app/components/layout/Footer'
 import Header from '@/app/components/layout/Header'
+import HeroImage from '@/app/components/shared/HeroImage'
 import { DELIVERY_CONFIG } from '@/lib/deliveryConfig'
+import { getDeliveryPricingData } from '@/lib/deliveryPricingData'
 import { getRestaurantProfileData, getTodayOpeningStatus } from '@/lib/restaurantProfileData'
+import { createPageMetadata } from '@/lib/seo'
 import DeliveryOrderClient from './DeliveryOrderClient'
 
-export const metadata = {
-  title: 'Delivery | Hoa Phuong Do Vietnamese Restaurant',
-  description:
-    'Order Vietnamese food delivery from Hoa Phuong Do with pho, rice plates, fresh rolls, vegetarian dishes, and drinks.',
-}
+export const metadata = createPageMetadata({
+  title: 'Vietnamese Food Delivery in Paphos',
+  description: 'Order Vietnamese food delivery from Hoa Phuong Do in Kissonerga, Paphos, including pho, rice dishes, starters, vegetarian options, and drinks.',
+  path: '/delivery',
+  keywords: ['Vietnamese delivery Paphos', 'food delivery Kissonerga', 'order pho Cyprus'],
+})
 
 export default async function DeliveryPage() {
   await connection()
   const restaurantData = await getRestaurantProfileData()
+  const pricing = await getDeliveryPricingData()
   const openingStatus = getTodayOpeningStatus(restaurantData.openingHours)
-  const nearbyFee = formatMoney(DELIVERY_CONFIG.nearbyFeeCents / 100)
-  const fartherFee = formatMoney(DELIVERY_CONFIG.fartherFeeCents / 100)
+  const nearbyFee = formatMoney(pricing.nearbyDeliveryFee)
+  const fartherFee = formatMoney(pricing.fartherDeliveryFee)
 
   return (
     <>
@@ -51,14 +55,11 @@ export default async function DeliveryPage() {
 
 function DeliveryHero() {
   return (
-    <section className="relative isolate min-h-[58svh] overflow-hidden">
-      <Image
+    <section className="relative isolate min-h-[58svh] overflow-hidden bg-[#1E1A18]">
+      <HeroImage
         src="https://images.unsplash.com/photo-1559329007-40df8a9345d8?w=1920&q=90"
         alt="Vietnamese dishes packed for delivery"
-        fill
-        priority
         className="object-cover object-center"
-        sizes="100vw"
       />
       <div className="absolute inset-0 bg-gradient-to-r from-black/82 via-black/58 to-black/25" />
       <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-transparent to-black/25" />

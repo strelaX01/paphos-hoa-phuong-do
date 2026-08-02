@@ -6,6 +6,7 @@ import { ImagePlus, LoaderCircle, Trash2, Upload, X } from "lucide-react"
 import AdminShell from "@/app/admin/_components/AdminShell"
 import AdminToast from "@/app/admin/_components/AdminToast"
 import { CardGridSkeleton } from "@/app/components/shared/SkeletonBlocks"
+import { dedupeClientRequest } from "@/lib/dedupeClientRequest"
 import { Button } from "@/components/ui/button"
 
 const MAX_SOURCE_SIZE = 20 * 1024 * 1024
@@ -88,8 +89,9 @@ export default function GalleryManager() {
 
   useEffect(() => {
     let active = true
-    fetch("/api/admin/gallery")
-      .then(readApi)
+    dedupeClientRequest("/api/admin/gallery", () => {
+      return fetch("/api/admin/gallery").then(readApi)
+    })
       .then((payload) => {
         if (active) setPhotos(payload.data)
       })

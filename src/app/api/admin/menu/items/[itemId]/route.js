@@ -1,5 +1,7 @@
+import { authorizeAdminRequest } from "@/lib/adminApiAuth";
+import { deleteManagedMenuImage, MenuImageStorageError, uploadManagedMenuImage } from "@/lib/menuImageStorage";
+import { readMenuItemRequest } from "@/lib/menuItemRequest";
 import { prisma } from "@/lib/prisma";
-import { deleteManagedMenuImage } from "@/lib/menuImageStorage";
 import { validateMenuItemInput } from "@/lib/validations/menuItem";
 
 export const dynamic = "force-dynamic";
@@ -25,19 +27,16 @@ function itemSelect() {
         slug: true,
       },
     },
-    tagId: true,
-    tag: {
-      select: {
-        id: true,
-        label: true,
-      },
-    },
     createdAt: true,
     updatedAt: true,
     _count: {
       select: {
         orderItems: true,
       },
+    },
+    variants: {
+      orderBy: [{ sortOrder: "asc" }, { label: "asc" }],
+      select: { id: true, label: true, price: true, sortOrder: true, isActive: true },
     },
   };
 }
@@ -58,11 +57,11 @@ function serializeItem(item) {
     categoryId: item.categoryId,
     categoryTitle: item.category?.title || null,
     categorySlug: item.category?.slug || null,
-    tagId: item.tagId,
-    tagLabel: item.tag?.label || null,
     orderCount: item._count.orderItems,
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,
+    pricingMode: item.variants.length ? "variants" : "single",
+    variants: item.variants.map((variant) => ({ ...variant, price: Number(variant.price) })),
   };
 }
 
@@ -71,7 +70,9 @@ async function getItemId(context) {
   return params.itemId;
 }
 
-export async function GET(_request, context) {
+export async function GET(request, context) {
+  const auth = await authorizeAdminRequest(request);
+  if (auth.response) return auth.response;
   const id = await getItemId(context);
   const item = await prisma.menuItem.findUnique({
     where: { id },
@@ -86,34 +87,61 @@ export async function GET(_request, context) {
 }
 
 export async function PATCH(request, context) {
+  const auth = await authorizeAdminRequest(request);
+  if (auth.response) return auth.response;
   const id = await getItemId(context);
-  let body;
+  const parsed = await readMenuItemRequest(request);
+  if (parsed.error) return Response.json({ error: parsed.error }, { status: parsed.status });
 
-  try {
-    body = await request.json();
-  } catch {
-    return Response.json({ error: "Invalid JSON body." }, { status: 400 });
-  }
-
-  const validation = validateMenuItemInput(body, { partial: true });
+  const validation = validateMenuItemInput(parsed.data, { partial: true });
 
   if (!validation.isValid) {
     return Response.json({ errors: validation.errors }, { status: 422 });
   }
 
+  let uploadedImage = null;
   try {
     const previousItem = await prisma.menuItem.findUnique({
       where: { id },
-      select: { image: true },
+      select: {
+        image: true,
+        variants: { select: { id: true, label: true } },
+      },
     });
 
     if (!previousItem) {
       return Response.json({ error: "Menu item not found." }, { status: 404 });
     }
 
+    if (parsed.imageFile) uploadedImage = await uploadManagedMenuImage(parsed.imageFile);
+
+    const { pricingMode, variants, ...itemData } = validation.data;
+    const existingVariantByLabel = new Map(previousItem.variants.map((variant) => [variant.label, variant]));
+    const retainedVariantIds = pricingMode === "variants"
+      ? variants.flatMap((variant) => existingVariantByLabel.get(variant.label)?.id || [])
+      : [];
+    const variantUpdates = pricingMode === "variants"
+      ? variants.flatMap((variant) => {
+          const existing = existingVariantByLabel.get(variant.label);
+          return existing ? [{ where: { id: existing.id }, data: variant }] : [];
+        })
+      : [];
+    const variantCreates = pricingMode === "variants"
+      ? variants.filter((variant) => !existingVariantByLabel.has(variant.label))
+      : [];
     const item = await prisma.menuItem.update({
       where: { id },
-      data: validation.data,
+      data: {
+        ...itemData,
+        ...(uploadedImage ? { image: uploadedImage } : {}),
+        ...(pricingMode ? {
+          variants: {
+            deleteMany: retainedVariantIds.length ? { id: { notIn: retainedVariantIds } } : {},
+            ...(variantUpdates.length ? { update: variantUpdates } : {}),
+            ...(variantCreates.length ? { create: variantCreates } : {}),
+          },
+        } : {}),
+      },
       select: itemSelect(),
     });
 
@@ -133,6 +161,17 @@ export async function PATCH(request, context) {
 
     return Response.json({ data: serializeItem(item) });
   } catch (error) {
+    if (uploadedImage) {
+      try {
+        await deleteManagedMenuImage(uploadedImage);
+      } catch (cleanupError) {
+        console.error("Failed to clean up uncommitted menu image", cleanupError);
+      }
+    }
+
+    if (error instanceof MenuImageStorageError) {
+      return Response.json({ error: error.message }, { status: error.status });
+    }
     if (error.code === "P2025") {
       return Response.json({ error: "Menu item not found." }, { status: 404 });
     }
@@ -156,7 +195,9 @@ export async function PATCH(request, context) {
   }
 }
 
-export async function DELETE(_request, context) {
+export async function DELETE(request, context) {
+  const auth = await authorizeAdminRequest(request);
+  if (auth.response) return auth.response;
   const id = await getItemId(context);
 
   try {

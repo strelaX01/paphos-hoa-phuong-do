@@ -120,10 +120,15 @@ export default async function Footer({ restaurantData }) {
           </div>
         </div>
 
-        <div className="flex items-center justify-center border-t border-white/[0.07] py-5">
+        <div className="flex flex-col items-center justify-between gap-3 border-t border-white/[0.07] py-5 sm:flex-row">
           <p className="text-center text-[11px] text-white/20">
             &copy; {year} {profile.name}. All rights reserved.
           </p>
+          <nav aria-label="Legal" className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2">
+            <Link href="/privacy-policy" className="text-[11px] text-white/35 transition-colors hover:text-white/75">Privacy</Link>
+            <Link href="/terms-and-conditions" className="text-[11px] text-white/35 transition-colors hover:text-white/75">Terms</Link>
+            <Link href="/cookie-policy" className="text-[11px] text-white/35 transition-colors hover:text-white/75">Cookies</Link>
+          </nav>
         </div>
       </div>
     </footer>

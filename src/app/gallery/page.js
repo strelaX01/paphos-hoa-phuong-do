@@ -1,19 +1,21 @@
-import Image from 'next/image'
 import Link from 'next/link'
 import { ChefHat, Sparkles, Utensils } from 'lucide-react'
 import { connection } from 'next/server'
 
 import Footer from '@/app/components/layout/Footer'
 import Header from '@/app/components/layout/Header'
-import { prisma } from '@/lib/prisma'
+import HeroImage from '@/app/components/shared/HeroImage'
+import { getPublishedGalleryPhotosOrEmpty } from '@/lib/publicGalleryData'
 import { getRestaurantProfileData } from '@/lib/restaurantProfileData'
+import { createPageMetadata } from '@/lib/seo'
 import GalleryGridClient from './GalleryGridClient'
 
-export const metadata = {
-  title: 'Gallery | Hoa Phuong Do Vietnamese Restaurant',
-  description:
-    'Explore the Hoa Phuong Do gallery with Vietnamese dishes, warm dining moments, fresh ingredients, and restaurant ambience.',
-}
+export const metadata = createPageMetadata({
+  title: 'Vietnamese Food and Restaurant Gallery',
+  description: 'See Vietnamese dishes, fresh ingredients, dining moments, and the welcoming atmosphere at Hoa Phuong Do in Kissonerga, Paphos.',
+  path: '/gallery',
+  keywords: ['Vietnamese food gallery', 'Hoa Phuong Do photos', 'restaurant Kissonerga'],
+})
 
 const featureNotes = [
   {
@@ -37,7 +39,7 @@ export default async function GalleryPage() {
   await connection()
   const [restaurantData, galleryItems] = await Promise.all([
     getRestaurantProfileData(),
-    getGalleryItems(),
+    getPublishedGalleryPhotosOrEmpty(),
   ])
 
   return (
@@ -55,14 +57,11 @@ export default async function GalleryPage() {
 
 function GalleryHero() {
   return (
-    <section className="relative isolate min-h-[58svh] overflow-hidden">
-      <Image
+    <section className="relative isolate min-h-[58svh] overflow-hidden bg-[#1E1A18]">
+      <HeroImage
         src="https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=1920&q=90"
         alt="Warm restaurant dining room"
-        fill
-        priority
         className="object-cover object-center"
-        sizes="100vw"
       />
       <div className="absolute inset-0 bg-gradient-to-r from-black/82 via-black/58 to-black/25" />
       <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-transparent to-black/25" />
@@ -113,19 +112,6 @@ function GalleryGrid({ items }) {
       </div>
     </section>
   )
-}
-
-async function getGalleryItems() {
-  try {
-    return await prisma.galleryPhoto.findMany({
-      where: { status: 'PUBLISHED' },
-      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-      select: { id: true, src: true, alt: true },
-    })
-  } catch (error) {
-    console.error('Failed to load public gallery', error)
-    return []
-  }
 }
 
 function GalleryNotes() {

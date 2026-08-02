@@ -16,10 +16,7 @@ const createPrismaClient = () => {
       connectionTimeoutMillis: 10000,
       ssl: { rejectUnauthorized: false },
     }),
-    log:
-      process.env.NODE_ENV === "development"
-        ? ["query", "error", "warn"]
-        : ["error"],
+    log: process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"],
   });
 };
 

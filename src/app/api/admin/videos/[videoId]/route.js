@@ -1,3 +1,4 @@
+import { authorizeAdminRequest } from "@/lib/adminApiAuth";
 import { prisma } from "@/lib/prisma";
 import { readVideoAssetMetadata, validateVideoSpecialInput } from "@/lib/validations/videoSpecial";
 import { serializeVideoSpecial, videoSpecialSelect } from "@/lib/videoSpecialData";
@@ -10,7 +11,9 @@ async function getVideoId(context) {
   return params.videoId;
 }
 
-export async function GET(_request, context) {
+export async function GET(request, context) {
+  const auth = await authorizeAdminRequest(request);
+  if (auth.response) return auth.response;
   const id = await getVideoId(context);
   try {
     const video = await prisma.videoSpecial.findUnique({
@@ -27,6 +30,8 @@ export async function GET(_request, context) {
 }
 
 export async function PATCH(request, context) {
+  const auth = await authorizeAdminRequest(request);
+  if (auth.response) return auth.response;
   const id = await getVideoId(context);
   let body;
   try {
@@ -105,7 +110,9 @@ export async function PATCH(request, context) {
   }
 }
 
-export async function DELETE(_request, context) {
+export async function DELETE(request, context) {
+  const auth = await authorizeAdminRequest(request);
+  if (auth.response) return auth.response;
   const id = await getVideoId(context);
   let existing;
   try {

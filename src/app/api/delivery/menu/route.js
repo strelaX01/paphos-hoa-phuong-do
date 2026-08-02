@@ -1,41 +1,40 @@
-import { DELIVERY_CONFIG, getDeliveryAvailability } from "@/lib/deliveryConfig";
-import { prisma } from "@/lib/prisma";
+import { getDeliveryAvailability } from "@/lib/deliveryConfig";
+import { listPublicMenuSections } from "@/lib/publicMenuData";
 import { getRestaurantProfileData } from "@/lib/restaurantProfileData";
+import { getDeliveryPricingData } from "@/lib/deliveryPricingData";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    const [items, restaurantData] = await Promise.all([prisma.menuItem.findMany({
-      where: { isActive: true, deliverable: true, category: { isActive: true } },
-      orderBy: [{ category: { title: "asc" } }, { sortOrder: "asc" }, { name: "asc" }],
-      select: {
-        slug: true,
-        name: true,
-        description: true,
-        price: true,
-        image: true,
-        category: { select: { title: true, slug: true } },
-        tag: { select: { label: true } },
-      },
-    }), getRestaurantProfileData()]);
+    const [sections, restaurantData, pricing] = await Promise.all([
+      listPublicMenuSections({ deliverableOnly: true }),
+      getRestaurantProfileData(),
+      getDeliveryPricingData(),
+    ]);
+
+    const items = sections.flatMap((section) => section.items.map((item) => ({
+      ...item,
+      category: section.title,
+      categorySlug: section.slug,
+    })));
 
     return Response.json({
       data: items.map((item) => ({
-        id: item.slug,
+        id: item.id,
         name: item.name,
-        description: item.description || "",
-        price: Number(item.price),
+        description: item.description,
+        price: item.price,
         image: item.image,
-        category: item.category.title,
-        categorySlug: item.category.slug,
-        tag: item.tag?.label || "",
+        category: item.category,
+        categorySlug: item.categorySlug,
+        variants: item.variants,
       })),
       config: {
-        currency: DELIVERY_CONFIG.currency,
-        nearbyDeliveryFee: DELIVERY_CONFIG.nearbyFeeCents / 100,
-        fartherDeliveryFee: DELIVERY_CONFIG.fartherFeeCents / 100,
+        currency: pricing.currency,
+        nearbyDeliveryFee: pricing.nearbyDeliveryFee,
+        fartherDeliveryFee: pricing.fartherDeliveryFee,
         availability: getDeliveryAvailability(restaurantData.openingHours),
       },
     }, { headers: { "Cache-Control": "no-store" } });

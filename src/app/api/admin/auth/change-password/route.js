@@ -1,22 +1,14 @@
 import { NextResponse } from "next/server";
 
-import { getCurrentAdminSession } from "@/lib/adminAuth";
+import { hasTrustedAdminOrigin } from "@/lib/adminApiAuth";
+import { getAdminPasswordError } from "@/lib/adminPasswordPolicy";
+import { getCurrentAdminAccount, getCurrentAdminSession } from "@/lib/adminAuth";
+import { checkAccountRateLimit } from "@/lib/authRateLimit";
 import { ADMIN_SESSION_COOKIE, ADMIN_SESSION_COOKIE_OPTIONS } from "@/lib/adminSessionToken";
+import { revokeAccountSessions } from "@/lib/adminSessionStore";
 import { hashPassword, verifyPassword } from "@/lib/driverCredentials";
 import { prisma } from "@/lib/prisma";
-import { checkRateLimit } from "@/lib/rateLimit";
-
-const PASSWORD_MAX_LENGTH = 128;
-
-function passwordError(password) {
-  if (typeof password !== "string" || password.length < 10 || password.length > PASSWORD_MAX_LENGTH) {
-    return "New password must contain between 10 and 128 characters.";
-  }
-  if (/\s/.test(password) || !/[a-z]/.test(password) || !/[A-Z]/.test(password) || !/\d/.test(password)) {
-    return "New password must include uppercase, lowercase, and number characters with no spaces.";
-  }
-  return null;
-}
+import { readLimitedJson } from "@/lib/readLimitedJson";
 
 function errorResponse(message, status, headers = {}) {
   return NextResponse.json(
@@ -26,31 +18,27 @@ function errorResponse(message, status, headers = {}) {
 }
 
 export async function POST(request) {
+  if (!hasTrustedAdminOrigin(request)) return errorResponse("Cross-site request blocked.", 403);
   const session = await getCurrentAdminSession();
   if (!session) return errorResponse("Authentication required.", 401);
+  const currentAccount = await getCurrentAdminAccount();
+  if (!currentAccount) return errorResponse("Account is no longer active.", 403);
 
-  const rateLimit = checkRateLimit(request, {
-    key: `change-password:${session.role}:${session.userId}`,
-    limit: 5,
-    windowMs: 15 * 60 * 1000,
-  });
+  const rateLimit = await checkAccountRateLimit(request, currentAccount);
   if (!rateLimit.allowed) {
     return errorResponse("Too many attempts. Please try again later.", 429, rateLimit.headers);
   }
 
-  let body;
-  try {
-    body = await request.json();
-  } catch {
-    return errorResponse("Invalid request body.", 400, rateLimit.headers);
-  }
+  const parsed = await readLimitedJson(request);
+  if (parsed.error) return errorResponse(parsed.error, parsed.status, rateLimit.headers);
+  const body = parsed.data;
 
   const currentPassword = typeof body?.currentPassword === "string" ? body.currentPassword : "";
   const newPassword = typeof body?.newPassword === "string" ? body.newPassword : "";
   if (!currentPassword || currentPassword.length > 256) {
     return errorResponse("Current password is required.", 422, rateLimit.headers);
   }
-  const validationError = passwordError(newPassword);
+  const validationError = getAdminPasswordError(newPassword);
   if (validationError) return errorResponse(validationError, 422, rateLimit.headers);
 
   const account = session.role === "DRIVER"
@@ -78,6 +66,7 @@ export async function POST(request) {
       data: {
         passwordHash,
         temporaryPasswordHash: null,
+        temporaryPasswordExpiresAt: null,
         mustChangePassword: false,
       },
     });
@@ -95,6 +84,8 @@ export async function POST(request) {
       }),
     ]);
   }
+
+  await revokeAccountSessions(session.userId, session.role);
 
   const response = NextResponse.json(
     { success: true },

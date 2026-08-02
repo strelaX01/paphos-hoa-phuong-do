@@ -1,9 +1,12 @@
 import { NextResponse } from "next/server";
 
-import { createAdminSessionToken, ADMIN_SESSION_COOKIE, ADMIN_SESSION_COOKIE_OPTIONS } from "@/lib/adminSessionToken";
-import { verifyPassword } from "@/lib/driverCredentials";
+import { hasTrustedAdminOrigin } from "@/lib/adminApiAuth";
+import { checkLoginRateLimit, clearLoginRateLimit } from "@/lib/authRateLimit";
+import { ADMIN_SESSION_COOKIE, ADMIN_SESSION_COOKIE_OPTIONS } from "@/lib/adminSessionToken";
+import { createStoredAdminSession, revokeAccountSessions } from "@/lib/adminSessionStore";
+import { hashPassword, passwordNeedsRehash, verifyPassword } from "@/lib/driverCredentials";
 import { prisma } from "@/lib/prisma";
-import { checkRateLimit } from "@/lib/rateLimit";
+import { readLimitedJson } from "@/lib/readLimitedJson";
 
 const USERNAME_PATTERN = /^[a-z0-9_-]{3,32}$/;
 const DUMMY_PASSWORD_HASH = `scrypt$00000000000000000000000000000000$${"0".repeat(128)}`;
@@ -16,25 +19,18 @@ function jsonError(message, status, headers = {}) {
 }
 
 export async function POST(request) {
-  const rateLimit = checkRateLimit(request, {
-    key: "admin-login",
-    limit: 5,
-    windowMs: 15 * 60 * 1000,
-  });
+  if (!hasTrustedAdminOrigin(request)) return jsonError("Cross-site request blocked.", 403);
 
-  if (!rateLimit.allowed) {
-    return jsonError("Too many login attempts. Please try again later.", 429, rateLimit.headers);
-  }
-
-  let body;
-  try {
-    body = await request.json();
-  } catch {
-    return jsonError("Invalid request body.", 400, rateLimit.headers);
-  }
+  const parsed = await readLimitedJson(request);
+  if (parsed.error) return jsonError(parsed.error, parsed.status);
+  const body = parsed.data;
 
   const username = typeof body?.username === "string" ? body.username.trim().toLowerCase() : "";
   const password = typeof body?.password === "string" ? body.password : "";
+  const rateLimit = await checkLoginRateLimit(request, USERNAME_PATTERN.test(username) ? username : "");
+  if (!rateLimit.allowed) {
+    return jsonError("Too many login attempts. Please try again later.", 429, rateLimit.headers);
+  }
   if (!USERNAME_PATTERN.test(username) || !password || password.length > 256) {
     return jsonError("Please enter a valid username and password.", 400, rateLimit.headers);
   }
@@ -55,6 +51,8 @@ export async function POST(request) {
         username: true,
         passwordHash: true,
         temporaryPasswordHash: true,
+        temporaryPasswordExpiresAt: true,
+        mustChangePassword: true,
         status: true,
       },
     }),
@@ -62,16 +60,37 @@ export async function POST(request) {
   const account = adminUser || (driverAccount ? { ...driverAccount, role: "DRIVER" } : null);
   const accountPasswordHash = account?.passwordHash || account?.temporaryPasswordHash || DUMMY_PASSWORD_HASH;
   const passwordMatches = await verifyPassword(password, accountPasswordHash);
-  if (!account || !passwordMatches || account.status !== "ACTIVE") {
+  const usesTemporaryPassword = Boolean(account && !account.passwordHash && account.temporaryPasswordHash);
+  const temporaryPasswordExpired = usesTemporaryPassword && (
+    !account.temporaryPasswordExpiresAt
+    || new Date(account.temporaryPasswordExpiresAt) <= new Date()
+  );
+  if (!account || !passwordMatches || account.status !== "ACTIVE" || temporaryPasswordExpired) {
     return jsonError("Invalid username or password.", 401, rateLimit.headers);
   }
+  const upgradedPasswordHash = passwordNeedsRehash(accountPasswordHash)
+    ? await hashPassword(password)
+    : null;
 
   const now = new Date();
   if (account.role === "DRIVER") {
-    await prisma.driverAccount.update({ where: { id: account.id }, data: { lastLoginAt: now } });
+    await prisma.driverAccount.update({
+      where: { id: account.id },
+      data: {
+        lastLoginAt: now,
+        ...(upgradedPasswordHash
+          ? (account.passwordHash
+              ? { passwordHash: upgradedPasswordHash }
+              : { temporaryPasswordHash: upgradedPasswordHash })
+          : {}),
+      },
+    });
   } else {
     await prisma.$transaction([
-      prisma.adminUser.update({ where: { id: account.id }, data: { lastLoginAt: now } }),
+      prisma.adminUser.update({
+        where: { id: account.id },
+        data: { lastLoginAt: now, ...(upgradedPasswordHash ? { passwordHash: upgradedPasswordHash } : {}) },
+      }),
       prisma.auditLog.create({
         data: {
           actorId: account.id,
@@ -84,16 +103,28 @@ export async function POST(request) {
     ]);
   }
 
+  if (account.role === "DRIVER" && account.mustChangePassword) {
+    await revokeAccountSessions(account.id, "DRIVER");
+  }
+  const sessionToken = await createStoredAdminSession(account);
+  await clearLoginRateLimit(request, username);
+
   const response = NextResponse.json(
     {
-      user: { id: account.id, name: account.name, username: account.username, role: account.role },
+      user: {
+        id: account.id,
+        name: account.name,
+        username: account.username,
+        role: account.role,
+        mustChangePassword: Boolean(account.mustChangePassword),
+      },
       redirectTo: account.role === "DRIVER" ? "/admin/orders" : "/admin",
     },
     { headers: { "Cache-Control": "no-store", ...rateLimit.headers } },
   );
   response.cookies.set(
     ADMIN_SESSION_COOKIE,
-    createAdminSessionToken(account),
+    sessionToken,
     ADMIN_SESSION_COOKIE_OPTIONS,
   );
   return response;

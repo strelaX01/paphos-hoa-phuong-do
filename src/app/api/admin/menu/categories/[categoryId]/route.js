@@ -1,3 +1,4 @@
+import { authorizeAdminRequest } from "@/lib/adminApiAuth";
 import { prisma } from "@/lib/prisma";
 import { validateMenuCategoryInput } from "@/lib/validations/menuCategory";
 
@@ -44,7 +45,9 @@ async function getCategoryId(context) {
   return params.categoryId;
 }
 
-export async function GET(_request, context) {
+export async function GET(request, context) {
+  const auth = await authorizeAdminRequest(request);
+  if (auth.response) return auth.response;
   const id = await getCategoryId(context);
   const category = await prisma.menuCategory.findUnique({
     where: { id },
@@ -59,6 +62,8 @@ export async function GET(_request, context) {
 }
 
 export async function PATCH(request, context) {
+  const auth = await authorizeAdminRequest(request);
+  if (auth.response) return auth.response;
   const id = await getCategoryId(context);
   let body;
 
@@ -99,7 +104,9 @@ export async function PATCH(request, context) {
   }
 }
 
-export async function DELETE(_request, context) {
+export async function DELETE(request, context) {
+  const auth = await authorizeAdminRequest(request);
+  if (auth.response) return auth.response;
   const id = await getCategoryId(context);
 
   try {

@@ -34,7 +34,6 @@ const navItems = [
     children: [
       { href: "/admin/menu#items", label: "Items", icon: ClipboardList, key: "items" },
       { href: "/admin/menu#categories", label: "Categories", icon: Tags, key: "categories" },
-      { href: "/admin/menu#tags", label: "Tags", icon: Tags, key: "tags" },
     ],
   },
   { href: "/admin/videos", label: "Video Specials", icon: Video, key: "videos" },
@@ -151,7 +150,7 @@ export default function AdminShell({
           {!isDriver ? <Button asChild variant="ghost" className="w-full justify-start text-white/70 hover:bg-white/10 hover:text-white">
             <Link href="/"><Home className="size-4" />Restaurant site</Link>
           </Button> : null}
-          <ChangePasswordDialog className="mt-1 w-full justify-start text-white/70 hover:bg-white/10 hover:text-white" />
+          <ChangePasswordDialog required={account.mustChangePassword} className="mt-1 w-full justify-start text-white/70 hover:bg-white/10 hover:text-white" />
           <AdminLogoutButton className="mt-1 w-full justify-start text-white/70 hover:bg-white/10 hover:text-white" />
         </div>
       </aside>

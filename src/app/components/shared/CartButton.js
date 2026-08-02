@@ -7,6 +7,7 @@ import { useEffect, useState, useSyncExternalStore } from 'react'
 import { createPortal } from 'react-dom'
 
 import { useCart } from '@/hooks/useCart'
+import { getCartItemKey } from '@/lib/stores/cartStore'
 
 const emptySubscribe = () => () => {}
 const formatMoney = (value) => new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR' }).format(Number(value || 0))
@@ -95,8 +96,10 @@ export function CartPanel({ cart, compact = false, onCheckout }) {
         </p>
       ) : (
         <div className="max-h-[min(412px,calc(100dvh-250px))] space-y-3 overflow-y-auto pr-1">
-          {cart.items.map((item) => (
-            <div key={item.id} className="border border-white/10 bg-white/[0.03] p-3">
+          {cart.items.map((item) => {
+            const cartKey = item.cartKey || getCartItemKey(item)
+            return (
+            <div key={cartKey} className="border border-white/10 bg-white/[0.03] p-3">
               <div className="grid grid-cols-[64px_1fr_auto] gap-3">
                 <div className="relative size-16 overflow-hidden bg-white/10">
                   {item.image && (
@@ -111,19 +114,20 @@ export function CartPanel({ cart, compact = false, onCheckout }) {
                 </div>
                 <div className="min-w-0">
                   <p className="truncate font-display text-lg font-bold leading-tight">{item.name}</p>
+                  {item.variantLabel ? <p className="mt-0.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#D4A017]">{item.variantLabel}</p> : null}
                   <p className="mt-0.5 text-[12px] text-white/45">{formatMoney(item.price)}</p>
                   <div className="mt-3 flex items-center gap-2">
-                    <QtyButton onClick={() => cart.updateQty(item.id, -1)} label={`Decrease ${item.name}`}>
+                    <QtyButton onClick={() => cart.updateQty(cartKey, -1)} label={`Decrease ${item.name}`}>
                       <Minus className="size-3.5" aria-hidden="true" />
                     </QtyButton>
                     <span className="min-w-8 text-center text-[13px] font-semibold">{item.qty}</span>
-                    <QtyButton onClick={() => cart.updateQty(item.id, 1)} label={`Increase ${item.name}`}>
+                    <QtyButton onClick={() => cart.updateQty(cartKey, 1)} label={`Increase ${item.name}`}>
                       <Plus className="size-3.5" aria-hidden="true" />
                     </QtyButton>
                   </div>
                   <input
                     value={item.note || ''}
-                    onChange={(event) => cart.updateNote(item.id, event.target.value)}
+                    onChange={(event) => cart.updateNote(cartKey, event.target.value)}
                     maxLength={300}
                     placeholder="Kitchen note"
                     className="mt-3 h-9 w-full border border-white/15 bg-transparent px-2 text-xs text-white outline-none placeholder:text-white/30 focus:border-[#D4A017]"
@@ -131,7 +135,7 @@ export function CartPanel({ cart, compact = false, onCheckout }) {
                 </div>
                 <button
                   type="button"
-                  onClick={() => cart.removeItem(item.id)}
+                  onClick={() => cart.removeItem(cartKey)}
                   className="text-white/35 transition-colors hover:text-[#D4A017]"
                   aria-label={`Remove ${item.name}`}
                 >
@@ -139,7 +143,8 @@ export function CartPanel({ cart, compact = false, onCheckout }) {
                 </button>
               </div>
             </div>
-          ))}
+            )
+          })}
         </div>
       )}
 

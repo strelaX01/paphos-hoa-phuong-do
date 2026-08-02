@@ -1,18 +1,20 @@
-import Image from 'next/image'
 import Link from 'next/link'
 import { connection } from 'next/server'
 import { Clock, MapPin, Phone, Sparkles, UsersRound, Utensils } from 'lucide-react'
 
 import Footer from '@/app/components/layout/Footer'
 import Header from '@/app/components/layout/Header'
+import HeroImage from '@/app/components/shared/HeroImage'
 import { getRestaurantProfileData, phoneHref, splitPhoneNumbers } from '@/lib/restaurantProfileData'
+import { createPageMetadata } from '@/lib/seo'
 import ReservationForm from './ReservationForm'
 
-export const metadata = {
-  title: 'Book a Table | Hoa Phuong Do Vietnamese Restaurant',
-  description:
-    'Reserve your table at Hoa Phuong Do Vietnamese restaurant in Cyprus for lunch, dinner, groups, and special occasions.',
-}
+export const metadata = createPageMetadata({
+  title: 'Book a Table in Paphos',
+  description: 'Reserve a table at Hoa Phuong Do Vietnamese restaurant in Kissonerga, Paphos for lunch, dinner, groups, and special occasions.',
+  path: '/book-table',
+  keywords: ['book Vietnamese restaurant Paphos', 'reserve table Kissonerga', 'Hoa Phuong Do reservation'],
+})
 
 const diningNotes = [
   {
@@ -51,14 +53,11 @@ export default async function BookTablePage() {
 
 function BookingHero({ profile }) {
   return (
-    <section className="relative isolate min-h-[58svh] overflow-hidden">
-      <Image
+    <section className="relative isolate min-h-[58svh] overflow-hidden bg-[#1E1A18]">
+      <HeroImage
         src="https://images.unsplash.com/photo-1424847651672-bf20a4b0982b?w=1920&q=90"
         alt="Warm restaurant table set for dinner"
-        fill
-        priority
         className="object-cover object-center"
-        sizes="100vw"
       />
       <div className="absolute inset-0 bg-gradient-to-r from-black/82 via-black/58 to-black/30" />
       <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-transparent to-black/25" />

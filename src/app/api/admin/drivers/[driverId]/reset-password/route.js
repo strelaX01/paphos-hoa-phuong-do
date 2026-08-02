@@ -1,11 +1,15 @@
+import { authorizeAdminRequest } from "@/lib/adminApiAuth";
+import { revokeAccountSessions } from "@/lib/adminSessionStore";
 import { prisma } from "@/lib/prisma";
 import { driverAccountSelect, serializeDriverAccount } from "@/lib/driverAccountData";
-import { generateTemporaryPassword, hashPassword } from "@/lib/driverCredentials";
+import { generateTemporaryPassword, getTemporaryPasswordExpiry, hashPassword } from "@/lib/driverCredentials";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function POST(_request, context) {
+export async function POST(request, context) {
+  const auth = await authorizeAdminRequest(request);
+  if (auth.response) return auth.response;
   const { driverId } = await context.params;
   const temporaryPassword = generateTemporaryPassword();
   const temporaryPasswordHash = await hashPassword(temporaryPassword);
@@ -14,11 +18,14 @@ export async function POST(_request, context) {
     const driver = await prisma.driverAccount.update({
       where: { id: driverId },
       data: {
+        passwordHash: null,
         temporaryPasswordHash,
+        temporaryPasswordExpiresAt: getTemporaryPasswordExpiry(),
         mustChangePassword: true,
       },
       select: driverAccountSelect,
     });
+    await revokeAccountSessions(driver.id, "DRIVER");
 
     return Response.json({
       data: serializeDriverAccount(driver),

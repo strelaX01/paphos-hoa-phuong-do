@@ -6,6 +6,7 @@ import { CheckCircle2, Copy, KeyRound, LoaderCircle, LockKeyhole, Plus, Search, 
 import AdminShell from "@/app/admin/_components/AdminShell"
 import AdminToast from "@/app/admin/_components/AdminToast"
 import { CardGridSkeleton } from "@/app/components/shared/SkeletonBlocks"
+import { dedupeClientRequest } from "@/lib/dedupeClientRequest"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -38,8 +39,9 @@ export default function DriversManager() {
 
   useEffect(() => {
     let active = true
-    fetch("/api/admin/drivers")
-      .then(readApi)
+    dedupeClientRequest("/api/admin/drivers", () => {
+      return fetch("/api/admin/drivers").then(readApi)
+    })
       .then((payload) => { if (active) setDrivers(payload.data) })
       .catch((error) => { if (active) showToast(error.message || "Could not load drivers.", "error") })
       .finally(() => { if (active) setLoading(false) })
@@ -76,10 +78,10 @@ export default function DriversManager() {
   const handleStatus = async (driver) => {
     setBusyId(driver.id)
     try {
-      const payload = await fetch("/api/admin/drivers", {
+      const payload = await fetch(`/api/admin/drivers/${driver.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: driver.id, status: driver.status === "ACTIVE" ? "INACTIVE" : "ACTIVE" }),
+        body: JSON.stringify({ status: driver.status === "ACTIVE" ? "INACTIVE" : "ACTIVE" }),
       }).then(readApi)
       setDrivers((previous) => previous.map((entry) => entry.id === driver.id ? payload.data : entry))
       showToast(payload.data.status === "ACTIVE" ? "Driver activated." : "Driver deactivated.")
@@ -93,10 +95,8 @@ export default function DriversManager() {
   const handleReset = async (driver) => {
     setBusyId(driver.id)
     try {
-      const payload = await fetch("/api/admin/drivers", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: driver.id }),
+      const payload = await fetch(`/api/admin/drivers/${driver.id}/reset-password`, {
+        method: "POST",
       }).then(readApi)
       setDrivers((previous) => previous.map((entry) => entry.id === driver.id ? payload.data : entry))
       setModal(null)
@@ -112,10 +112,8 @@ export default function DriversManager() {
   const handleDelete = async (driver) => {
     setBusyId(driver.id)
     try {
-      await fetch("/api/admin/drivers", {
+      await fetch(`/api/admin/drivers/${driver.id}`, {
         method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: driver.id }),
       }).then(readApi)
       setDrivers((previous) => previous.filter((entry) => entry.id !== driver.id))
       setModal(null)
@@ -159,7 +157,7 @@ export default function DriversManager() {
           </div>
 
           {loading ? (
-            <CardGridSkeleton count={4} />
+            <CardGridSkeleton count={4} image={false} />
           ) : filteredDrivers.length ? (
             <div className="grid gap-3 lg:grid-cols-2">
               {filteredDrivers.map((driver) => (

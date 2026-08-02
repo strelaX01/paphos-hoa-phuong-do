@@ -1,21 +1,22 @@
 import { cookies } from "next/headers";
 
 import { prisma } from "@/lib/prisma";
-import { ADMIN_SESSION_COOKIE, verifyAdminSessionToken } from "@/lib/adminSessionToken";
+import { ADMIN_SESSION_COOKIE } from "@/lib/adminSessionToken";
+import { getStoredAdminSession } from "@/lib/adminSessionStore";
 
 export async function getCurrentAdminSession() {
   const cookieStore = await cookies();
-  return verifyAdminSessionToken(cookieStore.get(ADMIN_SESSION_COOKIE)?.value);
+  return getStoredAdminSession(cookieStore.get(ADMIN_SESSION_COOKIE)?.value);
 }
 
-export async function getCurrentAdminAccount() {
-  const session = await getCurrentAdminSession();
+export async function getAdminAccountForToken(token, options) {
+  const session = await getStoredAdminSession(token, options);
   if (!session) return null;
 
   if (session.role === "DRIVER") {
     const driver = await prisma.driverAccount.findFirst({
       where: { id: session.userId, status: "ACTIVE" },
-      select: { id: true, name: true, username: true },
+      select: { id: true, name: true, username: true, mustChangePassword: true },
     });
     return driver ? { ...driver, role: "DRIVER" } : null;
   }
@@ -32,7 +33,12 @@ export async function getCurrentAdminAccount() {
       email: true,
       role: true,
     },
-  });
+  }).then((admin) => admin ? { ...admin, mustChangePassword: false } : null);
+}
+
+export async function getCurrentAdminAccount() {
+  const cookieStore = await cookies();
+  return getAdminAccountForToken(cookieStore.get(ADMIN_SESSION_COOKIE)?.value);
 }
 
 export const getCurrentAdminUser = getCurrentAdminAccount;

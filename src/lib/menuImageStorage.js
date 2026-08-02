@@ -1,5 +1,21 @@
+import { randomUUID } from "node:crypto";
 import { unlink } from "node:fs/promises";
 import path from "node:path";
+
+const allowedImageTypes = new Map([
+  ["image/jpeg", "jpg"],
+  ["image/png", "png"],
+  ["image/webp", "webp"],
+]);
+const MAX_MENU_IMAGE_BYTES = 3 * 1024 * 1024;
+
+export class MenuImageStorageError extends Error {
+  constructor(message, status = 500) {
+    super(message);
+    this.name = "MenuImageStorageError";
+    this.status = status;
+  }
+}
 
 function inferSupabaseUrlFromDatabaseUrl(value) {
   if (!value) return "";
@@ -20,6 +36,56 @@ function getSupabaseStorageConfig() {
     bucket: process.env.SUPABASE_STORAGE_BUCKET || "menu-images",
     serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY || "",
   };
+}
+
+function readJwtPayload(token) {
+  if (!token?.startsWith("eyJ")) return null;
+  try {
+    return JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString("utf8"));
+  } catch {
+    return null;
+  }
+}
+
+export async function uploadManagedMenuImage(file) {
+  if (!file || typeof file === "string" || typeof file.arrayBuffer !== "function") {
+    throw new MenuImageStorageError("Image file is required.", 400);
+  }
+  if (!allowedImageTypes.has(file.type)) {
+    throw new MenuImageStorageError("Only JPG, PNG, or WEBP images are allowed.", 422);
+  }
+  if (file.size > MAX_MENU_IMAGE_BYTES) {
+    throw new MenuImageStorageError("Image must be 3MB or smaller.", 422);
+  }
+
+  const { baseUrl, bucket, serviceRoleKey } = getSupabaseStorageConfig();
+  if (!baseUrl || !serviceRoleKey) {
+    throw new MenuImageStorageError("Supabase Storage is not configured.");
+  }
+  const keyPayload = readJwtPayload(serviceRoleKey);
+  if (keyPayload && keyPayload.role !== "service_role") {
+    throw new MenuImageStorageError("SUPABASE_SERVICE_ROLE_KEY must be the service_role key.");
+  }
+
+  const extension = allowedImageTypes.get(file.type);
+  const objectPath = `menu/${Date.now()}-${randomUUID()}.${extension}`;
+  const response = await fetch(`${baseUrl}/storage/v1/object/${bucket}/${objectPath}`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${serviceRoleKey}`,
+      apikey: serviceRoleKey,
+      "Content-Type": file.type,
+      "x-upsert": "false",
+    },
+    body: Buffer.from(await file.arrayBuffer()),
+  });
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({}));
+    throw new MenuImageStorageError(payload.message || `Supabase Storage returned ${response.status}.`, response.status);
+  }
+
+  return `${baseUrl}/storage/v1/object/public/${bucket}/${objectPath}`;
 }
 
 async function deleteLocalMenuImage(imageUrl) {

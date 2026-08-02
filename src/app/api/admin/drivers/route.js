@@ -1,12 +1,15 @@
+import { authorizeAdminRequest } from "@/lib/adminApiAuth";
 import { prisma } from "@/lib/prisma";
 import { driverAccountSelect, serializeDriverAccount } from "@/lib/driverAccountData";
-import { generateTemporaryPassword, hashPassword } from "@/lib/driverCredentials";
+import { generateTemporaryPassword, getTemporaryPasswordExpiry, hashPassword } from "@/lib/driverCredentials";
 import { validateDriverAccountInput } from "@/lib/validations/driverAccount";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(request) {
+  const auth = await authorizeAdminRequest(request);
+  if (auth.response) return auth.response;
   try {
     const drivers = await prisma.driverAccount.findMany({
       orderBy: { createdAt: "desc" },
@@ -20,6 +23,8 @@ export async function GET() {
 }
 
 export async function POST(request) {
+  const auth = await authorizeAdminRequest(request);
+  if (auth.response) return auth.response;
   let body;
   try {
     body = await request.json();
@@ -44,6 +49,7 @@ export async function POST(request) {
       data: {
         ...validation.data,
         temporaryPasswordHash,
+        temporaryPasswordExpiresAt: getTemporaryPasswordExpiry(),
         mustChangePassword: true,
       },
       select: driverAccountSelect,
@@ -59,83 +65,5 @@ export async function POST(request) {
     }
     console.error("POST /api/admin/drivers", error);
     return Response.json({ error: "Failed to create driver account." }, { status: 500 });
-  }
-}
-
-export async function PATCH(request) {
-  let body;
-  try {
-    body = await request.json();
-  } catch {
-    return Response.json({ error: "Invalid JSON body." }, { status: 400 });
-  }
-
-  const id = typeof body?.id === "string" ? body.id.trim() : "";
-  const status = typeof body?.status === "string" ? body.status.trim().toUpperCase() : "";
-  if (!id) return Response.json({ error: "Driver ID is required." }, { status: 422 });
-  if (!["ACTIVE", "INACTIVE"].includes(status)) return Response.json({ error: "Status must be ACTIVE or INACTIVE." }, { status: 422 });
-
-  try {
-    const driver = await prisma.driverAccount.update({
-      where: { id },
-      data: { status },
-      select: driverAccountSelect,
-    });
-    return Response.json({ data: serializeDriverAccount(driver) });
-  } catch (error) {
-    if (error.code === "P2025") return Response.json({ error: "Driver account not found." }, { status: 404 });
-    console.error("PATCH /api/admin/drivers", error);
-    return Response.json({ error: "Failed to update driver account." }, { status: 500 });
-  }
-}
-
-export async function PUT(request) {
-  let body;
-  try {
-    body = await request.json();
-  } catch {
-    return Response.json({ error: "Invalid JSON body." }, { status: 400 });
-  }
-
-  const id = typeof body?.id === "string" ? body.id.trim() : "";
-  if (!id) return Response.json({ error: "Driver ID is required." }, { status: 422 });
-
-  const temporaryPassword = generateTemporaryPassword();
-  const temporaryPasswordHash = await hashPassword(temporaryPassword);
-  try {
-    const driver = await prisma.driverAccount.update({
-      where: { id },
-      data: { temporaryPasswordHash, mustChangePassword: true },
-      select: driverAccountSelect,
-    });
-    return Response.json({
-      data: serializeDriverAccount(driver),
-      credential: { username: driver.username, temporaryPassword },
-    });
-  } catch (error) {
-    if (error.code === "P2025") return Response.json({ error: "Driver account not found." }, { status: 404 });
-    console.error("PUT /api/admin/drivers", error);
-    return Response.json({ error: "Failed to reset driver password." }, { status: 500 });
-  }
-}
-
-export async function DELETE(request) {
-  let body;
-  try {
-    body = await request.json();
-  } catch {
-    return Response.json({ error: "Invalid JSON body." }, { status: 400 });
-  }
-
-  const id = typeof body?.id === "string" ? body.id.trim() : "";
-  if (!id) return Response.json({ error: "Driver ID is required." }, { status: 422 });
-
-  try {
-    await prisma.driverAccount.delete({ where: { id } });
-    return Response.json({ data: { id } });
-  } catch (error) {
-    if (error.code === "P2025") return Response.json({ error: "Driver account not found." }, { status: 404 });
-    console.error("DELETE /api/admin/drivers", error);
-    return Response.json({ error: "Failed to delete driver account." }, { status: 500 });
   }
 }

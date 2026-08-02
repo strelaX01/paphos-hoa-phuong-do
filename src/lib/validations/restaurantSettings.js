@@ -1,3 +1,6 @@
+import { WEEK_DAYS } from "@/lib/openingHours"
+import { getStorefrontNoticeDestinationByHref } from "@/lib/storefrontNoticeDestinations"
+
 const EFFECTS = ["NONE", "LUNAR_NEW_YEAR", "CHRISTMAS", "NEW_YEAR", "VALENTINE", "SUMMER"]
 const NOTICE_TYPES = ["GENERAL", "PROMOTION", "TEMPORARY_CLOSURE", "HOLIDAY"]
 const NOTICE_PRIORITIES = ["LOW", "NORMAL", "IMPORTANT", "URGENT"]
@@ -25,6 +28,14 @@ function optionalDate(value) {
   return /^\d{4}-\d{2}-\d{2}$/.test(date) && !Number.isNaN(Date.parse(`${date}T00:00:00.000Z`)) ? date : undefined
 }
 
+function moneyCents(value) {
+  if (typeof value !== "string" && typeof value !== "number") return null
+  const normalized = String(value).trim()
+  if (!/^\d+(?:\.\d{1,2})?$/.test(normalized)) return null
+  const cents = Math.round(Number(normalized) * 100)
+  return Number.isSafeInteger(cents) ? cents : null
+}
+
 export function validateRestaurantSettings(body) {
   const errors = {}
   const profile = body?.profile || {}
@@ -46,30 +57,45 @@ export function validateRestaurantSettings(body) {
   if (address.length < 3) errors.address = "Enter the restaurant address."
   if (mapUrl === null) errors.mapUrl = "Map URL must start with http:// or https://."
   if (!openingHours) errors.openingHours = "Opening hours must be a list."
-  if (openingHours?.length > 21) errors.openingHours = "Opening hours can contain at most 21 rows."
+  if (openingHours && openingHours.length !== WEEK_DAYS.length) errors.openingHours = "Opening hours must contain all seven days of the week."
 
+  const seenOpeningDays = new Set()
   const normalizedHours = (openingHours || []).map((entry, index) => {
     const day = text(entry?.day, 50)
     const openTime = text(entry?.openTime, 5)
     const closeTime = text(entry?.closeTime, 5)
     const isClosed = Boolean(entry?.isClosed)
-    if (!day) errors[`openingHours.${index}.day`] = `Row ${index + 1}: enter a day or label.`
+    if (!WEEK_DAYS.includes(day)) {
+      errors[`openingHours.${index}.day`] = `Row ${index + 1}: select a valid weekday.`
+    } else if (seenOpeningDays.has(day)) {
+      errors[`openingHours.${index}.day`] = `Row ${index + 1}: ${day} has already been added.`
+    } else {
+      seenOpeningDays.add(day)
+    }
     if (!isClosed && (!TIME_PATTERN.test(openTime) || !TIME_PATTERN.test(closeTime))) {
       errors[`openingHours.${index}.time`] = `Row ${index + 1}: enter valid opening and closing times.`
+    } else if (!isClosed && openTime >= closeTime) {
+      errors[`openingHours.${index}.time`] = `Row ${index + 1}: closing time must be later than opening time.`
     }
-    return { day, openTime, closeTime, isClosed, sortOrder: index }
-  })
+    return { day, openTime, closeTime, isClosed, sortOrder: WEEK_DAYS.indexOf(day) }
+  }).sort((left, right) => left.sortOrder - right.sortOrder)
+
+  if (WEEK_DAYS.some((day) => !seenOpeningDays.has(day))) errors.openingHours = "Opening hours must include each weekday exactly once."
 
   const festivalEffect = text(storefront.festivalEffect, 30).toUpperCase()
   const effectIntensity = text(storefront.effectIntensity, 20)
   const effectStartsAt = optionalDate(storefront.startsAt)
   const effectEndsAt = optionalDate(storefront.endsAt)
+  const nearbyDeliveryFeeCents = moneyCents(storefront.nearbyDeliveryFee)
+  const fartherDeliveryFeeCents = moneyCents(storefront.fartherDeliveryFee)
   const noticeType = text(notice.type, 30).toUpperCase()
   const noticePriority = text(notice.priority, 30).toUpperCase()
   const noticeTitle = text(notice.title, 160)
   const noticeMessage = text(notice.message, 1200)
   const ctaLabel = text(notice.ctaLabel, 80)
   const ctaHref = text(notice.ctaHref, 500)
+  const ctaDestination = getStorefrontNoticeDestinationByHref(ctaHref)
+  const ctaEnabled = Boolean(notice.ctaEnabled)
   const startsAt = optionalDate(notice.startsAt)
   const endsAt = optionalDate(notice.endsAt)
 
@@ -77,11 +103,14 @@ export function validateRestaurantSettings(body) {
   if (!INTENSITIES.includes(effectIntensity)) errors.effectIntensity = "Invalid effect intensity."
   if (effectStartsAt === undefined || effectEndsAt === undefined) errors.effectDates = "Festival effect dates are invalid."
   if (effectStartsAt && effectEndsAt && effectStartsAt > effectEndsAt) errors.effectDates = "Festival effect end date must be on or after its start date."
+  if (nearbyDeliveryFeeCents === null || nearbyDeliveryFeeCents < 1 || nearbyDeliveryFeeCents > 10000) errors.nearbyDeliveryFee = "Nearby delivery fee must be between €0.01 and €100.00."
+  if (fartherDeliveryFeeCents === null || fartherDeliveryFeeCents < 1 || fartherDeliveryFeeCents > 10000) errors.fartherDeliveryFee = "Farther delivery fee must be between €0.01 and €100.00."
+  if (nearbyDeliveryFeeCents !== null && fartherDeliveryFeeCents !== null && fartherDeliveryFeeCents < nearbyDeliveryFeeCents) errors.fartherDeliveryFee = "Farther delivery fee cannot be lower than the nearby fee."
   if (!NOTICE_TYPES.includes(noticeType)) errors.noticeType = "Invalid notice type."
   if (!NOTICE_PRIORITIES.includes(noticePriority)) errors.noticePriority = "Invalid notice priority."
   if (Boolean(notice.enabled) && noticeTitle.length < 2) errors.noticeTitle = "Notice title is required when enabled."
   if (Boolean(notice.enabled) && noticeMessage.length < 2) errors.noticeMessage = "Notice message is required when enabled."
-  if (Boolean(notice.ctaEnabled) && (!ctaLabel || !ctaHref.startsWith("/"))) errors.noticeCta = "Action button requires a label and an internal link beginning with /."
+  if (ctaEnabled && (!ctaDestination || ctaDestination.label !== ctaLabel)) errors.noticeCta = "Select a valid action button destination."
   if (startsAt === undefined || endsAt === undefined) errors.noticeDates = "Notice dates are invalid."
   if (startsAt && endsAt && startsAt > endsAt) errors.noticeDates = "Notice end date must be on or after its start date."
 
@@ -97,6 +126,8 @@ export function validateRestaurantSettings(body) {
         effectIntensity,
         effectStartsAt: effectStartsAt ? new Date(`${effectStartsAt}T00:00:00.000Z`) : null,
         effectEndsAt: effectEndsAt ? new Date(`${effectEndsAt}T23:59:59.999Z`) : null,
+        nearbyDeliveryFee: (nearbyDeliveryFeeCents / 100).toFixed(2),
+        fartherDeliveryFee: (fartherDeliveryFeeCents / 100).toFixed(2),
       },
       notice: {
         enabled: Boolean(notice.enabled),
@@ -104,9 +135,9 @@ export function validateRestaurantSettings(body) {
         priority: noticePriority,
         title: noticeTitle || "Restaurant notice",
         message: noticeMessage || "Restaurant update.",
-        ctaEnabled: Boolean(notice.ctaEnabled),
-        ctaLabel: ctaLabel || null,
-        ctaHref: ctaHref || null,
+        ctaEnabled,
+        ctaLabel: ctaEnabled ? ctaDestination?.label || null : null,
+        ctaHref: ctaEnabled ? ctaDestination?.href || null : null,
         startsAt: startsAt ? new Date(`${startsAt}T00:00:00.000Z`) : null,
         endsAt: endsAt ? new Date(`${endsAt}T23:59:59.999Z`) : null,
       },

@@ -144,9 +144,10 @@ export async function getAdminDashboardData() {
 
   const statusCounts = Object.fromEntries(statusGroups.map((entry) => [entry.status, entry._count._all]));
   const operationalStatus = {
-    pending: statusCounts.PENDING || 0,
-    kitchen: ["CONFIRMED", "PREPARING", "ASSIGNED", "PENDING_PICKUP"].reduce((sum, status) => sum + (statusCounts[status] || 0), 0),
-    delivery: ["PICKED_UP", "EN_ROUTE"].reduce((sum, status) => sum + (statusCounts[status] || 0), 0),
+    newOrders: statusCounts.PENDING || 0,
+    preparing: statusCounts.PREPARING || 0,
+    ready: statusCounts.PENDING_PICKUP || 0,
+    delivery: statusCounts.EN_ROUTE || 0,
     deliveredToday: todayOrders.filter((order) => order.status === "DELIVERED").length,
   };
 

@@ -9,6 +9,10 @@ export const DELIVERY_CONFIG = Object.freeze({
   maxTotalQuantity: 50,
 });
 
+export function buildDeliveryFeeConsentText(nearbyFeeCents, fartherFeeCents) {
+  return `I understand and agree that the delivery fee is €${centsToMoney(nearbyFeeCents)} for nearby areas or €${centsToMoney(fartherFeeCents)} for farther areas. The restaurant will confirm the applicable fee based on my delivery address before fulfilment.`;
+}
+
 export function getDeliveryAvailability(openingHours, now = new Date()) {
   const parts = new Intl.DateTimeFormat("en-GB", {
     timeZone: "Asia/Nicosia",
@@ -34,10 +38,6 @@ export function getDeliveryAvailability(openingHours, now = new Date()) {
     closesAt,
     timeZone: "Asia/Nicosia",
   };
-}
-
-export function calculateDeliveryFeeCents() {
-  return DELIVERY_CONFIG.nearbyFeeCents;
 }
 
 export function centsToMoney(cents) {

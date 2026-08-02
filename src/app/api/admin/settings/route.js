@@ -1,3 +1,5 @@
+import { authorizeAdminRequest } from "@/lib/adminApiAuth"
+import { getOpeningHoursForDate, WEEK_DAYS } from "@/lib/openingHours"
 import { prisma } from "@/lib/prisma"
 import { validateRestaurantSettings } from "@/lib/validations/restaurantSettings"
 
@@ -13,10 +15,16 @@ const DEFAULT_PROFILE = {
 }
 
 const DEFAULT_HOURS = [
-  { day: "Monday - Friday", openTime: "11:00", closeTime: "22:00", isClosed: false, sortOrder: 0 },
-  { day: "Saturday", openTime: "11:00", closeTime: "23:00", isClosed: false, sortOrder: 1 },
-  { day: "Sunday", openTime: "12:00", closeTime: "21:00", isClosed: false, sortOrder: 2 },
+  { day: "Monday", openTime: "11:00", closeTime: "22:00", isClosed: false, sortOrder: 0 },
+  { day: "Tuesday", openTime: "11:00", closeTime: "22:00", isClosed: false, sortOrder: 1 },
+  { day: "Wednesday", openTime: "11:00", closeTime: "22:00", isClosed: false, sortOrder: 2 },
+  { day: "Thursday", openTime: "11:00", closeTime: "22:00", isClosed: false, sortOrder: 3 },
+  { day: "Friday", openTime: "11:00", closeTime: "22:00", isClosed: false, sortOrder: 4 },
+  { day: "Saturday", openTime: "11:00", closeTime: "23:00", isClosed: false, sortOrder: 5 },
+  { day: "Sunday", openTime: "12:00", closeTime: "21:00", isClosed: false, sortOrder: 6 },
 ]
+
+const WEEK_DAY_DATES = ["2024-01-01", "2024-01-02", "2024-01-03", "2024-01-04", "2024-01-05", "2024-01-06", "2024-01-07"]
 
 function splitHours(hours) {
   const match = typeof hours === "string" ? hours.match(/^(\d{2}:\d{2})\s*[-–]\s*(\d{2}:\d{2})$/) : null
@@ -31,6 +39,22 @@ function dateValue(value) {
   return value ? value.toISOString().slice(0, 10) : ""
 }
 
+function serializeOpeningHours(openingHours) {
+  if (!openingHours.length) return DEFAULT_HOURS
+
+  return WEEK_DAYS.map((day, index) => {
+    const entry = getOpeningHoursForDate(openingHours, WEEK_DAY_DATES[index])
+    const fallback = DEFAULT_HOURS[index]
+    if (!entry) return fallback
+    return {
+      id: String(entry.day).toLowerCase() === day.toLowerCase() ? entry.id : undefined,
+      day,
+      ...splitHours(entry.hours),
+      isClosed: entry.isClosed,
+    }
+  })
+}
+
 function serialize(profile, openingHours, storefront, notice) {
   return {
     profile: profile ? {
@@ -40,18 +64,15 @@ function serialize(profile, openingHours, storefront, notice) {
       address: profile.address || "",
       mapUrl: profile.mapUrl || "",
     } : { ...DEFAULT_PROFILE, phones: splitPhoneNumbers(DEFAULT_PROFILE.phone) },
-    openingHours: openingHours.length ? openingHours.map((entry) => ({
-      id: entry.id,
-      day: entry.day,
-      ...splitHours(entry.hours),
-      isClosed: entry.isClosed,
-    })) : DEFAULT_HOURS,
+    openingHours: serializeOpeningHours(openingHours),
     storefront: {
       festivalEffectEnabled: storefront?.festivalEffectEnabled || false,
       festivalEffect: storefront?.festivalEffect || "NONE",
       effectIntensity: storefront?.effectIntensity || "Medium",
       startsAt: dateValue(storefront?.effectStartsAt),
       endsAt: dateValue(storefront?.effectEndsAt),
+      nearbyDeliveryFee: Number(storefront?.nearbyDeliveryFee ?? 3).toFixed(2),
+      fartherDeliveryFee: Number(storefront?.fartherDeliveryFee ?? 3.5).toFixed(2),
     },
     notice: {
       enabled: notice?.enabled || false,
@@ -68,7 +89,9 @@ function serialize(profile, openingHours, storefront, notice) {
   }
 }
 
-export async function GET() {
+export async function GET(request) {
+  const auth = await authorizeAdminRequest(request)
+  if (auth.response) return auth.response
   try {
     const [profile, openingHours, storefront, notice] = await prisma.$transaction([
       prisma.restaurantProfile.findUnique({ where: { id: "default" } }),
@@ -84,6 +107,8 @@ export async function GET() {
 }
 
 export async function PUT(request) {
+  const auth = await authorizeAdminRequest(request)
+  if (auth.response) return auth.response
   let body
   try { body = await request.json() } catch { return Response.json({ error: "Invalid JSON body." }, { status: 400 }) }
   const validation = validateRestaurantSettings(body)

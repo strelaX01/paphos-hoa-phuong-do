@@ -19,14 +19,6 @@ export default function DishCard({ dish, index }) {
         {/* Very subtle hover darken */}
         <div className="absolute inset-0 bg-black/0 group-hover:bg-black/8 transition-colors duration-400" />
 
-        {/* Tag — only if exists */}
-        {dish.tag && (
-          <div className="absolute top-0 left-0">
-            <span className="block px-3 py-1.5 bg-[#8B1E1E] text-white text-[10px] font-semibold tracking-[0.2em] uppercase">
-              {dish.tag}
-            </span>
-          </div>
-        )}
       </div>
 
       {/* Content */}

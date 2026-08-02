@@ -3,8 +3,9 @@ import Header from '@/app/components/layout/Header'
 import CheckoutClient from './CheckoutClient'
 
 export const metadata = {
-  title: 'Checkout | Hoa Phuong Do Delivery',
+  title: 'Checkout',
   description: 'Complete your Hoa Phuong Do delivery order with contact and address details.',
+  robots: { index: false, follow: false },
 }
 
 export default function CheckoutPage() {

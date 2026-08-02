@@ -1,15 +1,11 @@
-import Image from 'next/image'
 import Link from 'next/link'
 import { ArrowRight } from 'lucide-react'
+import GalleryGridClient from '@/app/gallery/GalleryGridClient'
 
 export default function GalleryPreview({ images = [] }) {
   if (!images.length) return null
 
-  const galleryLayout = images.length === 1
-    ? 'mx-auto max-w-5xl columns-1'
-    : images.length === 2
-      ? 'mx-auto max-w-6xl columns-1 sm:columns-2'
-      : 'columns-1 sm:columns-2 lg:columns-3'
+  const previewImages = images.slice(0, 6)
 
   return (
     <section id="gallery-preview" aria-label="Gallery preview" className="bg-[#F8F3EA] py-20 lg:py-28">
@@ -25,20 +21,7 @@ export default function GalleryPreview({ images = [] }) {
           </Link>
         </div>
 
-        <div className={galleryLayout}>
-          {images.map((image) => (
-            <div key={image.id} className="mb-3 break-inside-avoid overflow-hidden bg-[#E8DFC8]">
-              <Image
-                src={image.src}
-                alt={image.alt || 'Hoa Phuong Do gallery image'}
-                width={1600}
-                height={1200}
-                className="h-auto w-full"
-                sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-              />
-            </div>
-          ))}
-        </div>
+        <GalleryGridClient items={previewImages} layout="preview" paginate={false} />
       </div>
     </section>
   )

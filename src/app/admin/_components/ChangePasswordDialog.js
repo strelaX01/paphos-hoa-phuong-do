@@ -10,11 +10,11 @@ import { Button } from "@/components/ui/button"
 const initialForm = { currentPassword: "", newPassword: "", confirmPassword: "" }
 const initialVisibility = { currentPassword: false, newPassword: false, confirmPassword: false }
 
-export default function ChangePasswordDialog({ compact = false, className = "" }) {
+export default function ChangePasswordDialog({ compact = false, className = "", required = false }) {
   const router = useRouter()
   const currentPasswordRef = useRef(null)
   const redirectTimer = useRef(null)
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(required)
   const [visibility, setVisibility] = useState(initialVisibility)
   const [form, setForm] = useState(initialForm)
   const [error, setError] = useState("")
@@ -37,7 +37,7 @@ export default function ChangePasswordDialog({ compact = false, className = "" }
     document.body.style.overflow = "hidden"
     const focusTimer = window.setTimeout(() => currentPasswordRef.current?.focus(), 50)
     const handleEscape = (event) => {
-      if (event.key === "Escape" && !submitting && !success) setOpen(false)
+      if (event.key === "Escape" && !required && !submitting && !success) setOpen(false)
     }
     window.addEventListener("keydown", handleEscape)
     return () => {
@@ -45,7 +45,7 @@ export default function ChangePasswordDialog({ compact = false, className = "" }
       window.clearTimeout(focusTimer)
       window.removeEventListener("keydown", handleEscape)
     }
-  }, [open, submitting, success])
+  }, [open, required, submitting, success])
 
   const updateField = (field, value) => {
     setError("")
@@ -66,7 +66,7 @@ export default function ChangePasswordDialog({ compact = false, className = "" }
   }
 
   function closeDialog() {
-    if (submitting || success) return
+    if (required || submitting || success) return
     setOpen(false)
     resetDialog()
   }
@@ -129,11 +129,11 @@ export default function ChangePasswordDialog({ compact = false, className = "" }
         <div className="flex shrink-0 items-center justify-between border-b border-[#E4DAC9] bg-white px-4 py-3.5 sm:px-5">
           <div className="min-w-0">
             <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#8B1E1E]">Account security</p>
-            <h2 id="change-password-title" className="mt-0.5 truncate font-display text-xl font-semibold">Change password</h2>
+            <h2 id="change-password-title" className="mt-0.5 truncate font-display text-xl font-semibold">{required ? "Create your password" : "Change password"}</h2>
           </div>
-          <Button type="button" variant="ghost" size="icon" onClick={closeDialog} disabled={submitting || success} aria-label="Close change password">
+          {!required ? <Button type="button" variant="ghost" size="icon" onClick={closeDialog} disabled={submitting || success} aria-label="Close change password">
             <X className="size-4" />
-          </Button>
+          </Button> : null}
         </div>
 
         {success ? <div className="flex min-h-64 flex-1 flex-col items-center justify-center p-6 text-center">
@@ -142,6 +142,7 @@ export default function ChangePasswordDialog({ compact = false, className = "" }
           <p className="mt-1 text-sm text-[#756D62]">Signing you out securely...</p>
         </div> : <form className="flex min-h-0 flex-1 flex-col" onSubmit={handleSubmit}>
           <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4 sm:px-5 sm:py-5">
+            {required ? <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">The temporary password can only be used to create your own password.</p> : null}
             <PasswordField
               ref={currentPasswordRef}
               id="current-password"
@@ -187,8 +188,8 @@ export default function ChangePasswordDialog({ compact = false, className = "" }
             {error ? <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700" aria-live="polite">{error}</div> : null}
           </div>
 
-          <div className="grid shrink-0 grid-cols-2 gap-2 border-t border-[#E4DAC9] bg-white px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 sm:flex sm:justify-end sm:px-5 sm:pb-4">
-            <Button type="button" variant="outline" onClick={closeDialog} disabled={submitting}>Cancel</Button>
+          <div className={`grid shrink-0 gap-2 border-t border-[#E4DAC9] bg-white px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 sm:flex sm:justify-end sm:px-5 sm:pb-4 ${required ? "grid-cols-1" : "grid-cols-2"}`}>
+            {!required ? <Button type="button" variant="outline" onClick={closeDialog} disabled={submitting}>Cancel</Button> : null}
             <Button type="submit" disabled={submitting || !canSubmit}>
               {submitting ? <LoaderCircle className="size-4 animate-spin" /> : <KeyRound className="size-4" />}
               <span>{submitting ? "Changing..." : "Update password"}</span>

@@ -1,6 +1,6 @@
-import Image from 'next/image'
 import Link from 'next/link'
 import { ArrowRight, Clock3, MapPin } from 'lucide-react'
+import HeroImage from '@/app/components/shared/HeroImage'
 
 export default function HeroSection({ openingStatus, restaurantProfile, menuItemCount = 0 }) {
   const dishCountLabel = menuItemCount > 0
@@ -8,15 +8,12 @@ export default function HeroSection({ openingStatus, restaurantProfile, menuItem
     : 'Explore our menu'
 
   return (
-    <section id="hero" aria-label={`Welcome to ${restaurantProfile?.name || 'the restaurant'}`} className="relative isolate flex min-h-[100svh] min-w-0 flex-col overflow-hidden">
+    <section id="hero" aria-label={`Welcome to ${restaurantProfile?.name || 'the restaurant'}`} className="relative isolate flex min-h-[100svh] min-w-0 flex-col overflow-hidden bg-[#1E1A18]">
       <div className="absolute inset-0">
-        <Image
+        <HeroImage
           src="/images/hpd-hero.png"
           alt="A steaming bowl of authentic Vietnamese pho"
-          fill
-          priority
           className="object-cover object-[62%_center] sm:object-[44%_center] lg:object-center"
-          sizes="100vw"
         />
         <div className="absolute inset-0 bg-gradient-to-r from-black/84 via-black/38 to-black/8 sm:from-black/82 sm:via-black/50 lg:from-black/75 lg:via-black/45" />
         <div className="absolute inset-0 bg-gradient-to-t from-black/58 via-black/0 to-black/38 sm:from-black/55 sm:via-transparent sm:to-black/34" />

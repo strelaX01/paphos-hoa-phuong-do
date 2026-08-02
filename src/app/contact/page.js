@@ -5,13 +5,17 @@ import { connection } from 'next/server'
 
 import Footer from '@/app/components/layout/Footer'
 import Header from '@/app/components/layout/Header'
+import HeroImage from '@/app/components/shared/HeroImage'
+import GoogleMapConsent from '@/app/contact/GoogleMapConsent'
 import { getRestaurantProfileData, phoneHref } from '@/lib/restaurantProfileData'
+import { createPageMetadata } from '@/lib/seo'
 
-export const metadata = {
-  title: 'Contact | Hoa Phuong Do Vietnamese Restaurant',
-  description:
-    'Contact Hoa Phuong Do Vietnamese restaurant in Kissonerga, Cyprus for reservations, delivery questions, private dining, and directions.',
-}
+export const metadata = createPageMetadata({
+  title: 'Contact and Opening Hours',
+  description: 'Find Hoa Phuong Do in Kissonerga, Paphos. View opening hours, phone numbers, email, address, and Google Maps directions.',
+  path: '/contact',
+  keywords: ['Hoa Phuong Do contact', 'Vietnamese restaurant opening hours Paphos', 'Kissonerga restaurant directions'],
+})
 
 export default async function ContactPage() {
   await connection()
@@ -32,14 +36,11 @@ export default async function ContactPage() {
 
 function ContactHero({ profile }) {
   return (
-    <section className="relative isolate min-h-[58svh] overflow-hidden">
-      <Image
+    <section className="relative isolate min-h-[58svh] overflow-hidden bg-[#1E1A18]">
+      <HeroImage
         src="https://images.unsplash.com/photo-1559329007-40df8a9345d8?w=1920&q=90"
         alt="Guests dining in a warm restaurant"
-        fill
-        priority
         className="object-cover object-center"
-        sizes="100vw"
       />
       <div className="absolute inset-0 bg-gradient-to-r from-black/82 via-black/58 to-black/25" />
       <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-transparent to-black/25" />
@@ -105,7 +106,12 @@ function ContactSection({ profile }) {
 
           <div className="overflow-hidden border border-[#E8DFC8] bg-[#FAF6EE] shadow-sm">
             <div className="p-5 sm:p-7"><span className="mb-3 block text-[11px] font-semibold uppercase tracking-[0.3em] text-[#D4A017]">Google Map</span><div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><h2 className="font-display text-4xl font-bold leading-tight text-[#2B2B2B]">Find the restaurant.</h2><p className="mt-3 max-w-xl text-[14px] leading-relaxed text-[#6B6560]">{profile.address}</p></div><a href={publicMapUrl(profile)} target="_blank" rel="noreferrer" className="inline-flex shrink-0 items-center justify-center gap-2 bg-[#8B1E1E] px-5 py-3 text-[12px] font-semibold uppercase tracking-[0.12em] text-white"><ExternalLink className="size-4" />Open map</a></div></div>
-            <iframe title={`${profile.name} location on Google Maps`} src={mapEmbedUrl(profile)} loading="lazy" referrerPolicy="no-referrer-when-downgrade" allowFullScreen className="h-[420px] w-full border-0 lg:h-[560px]" />
+            <GoogleMapConsent
+              address={profile.address}
+              embedUrl={mapEmbedUrl(profile)}
+              mapUrl={publicMapUrl(profile)}
+              restaurantName={profile.name}
+            />
           </div>
         </div>
       </div>

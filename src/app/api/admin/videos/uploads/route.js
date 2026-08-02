@@ -1,3 +1,4 @@
+import { authorizeAdminRequest } from "@/lib/adminApiAuth";
 import { prisma } from "@/lib/prisma";
 import { deleteManagedVideo, uploadVideoFile, validateVideoFile } from "@/lib/videoStorage";
 
@@ -5,6 +6,8 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(request) {
+  const auth = await authorizeAdminRequest(request);
+  if (auth.response) return auth.response;
   let formData;
   try {
     formData = await request.formData();
@@ -26,6 +29,8 @@ export async function POST(request) {
 }
 
 export async function DELETE(request) {
+  const auth = await authorizeAdminRequest(request);
+  if (auth.response) return auth.response;
   let body;
   try {
     body = await request.json();

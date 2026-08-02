@@ -93,32 +93,34 @@ enum FestivalEffect {
 }
 
 model AdminUser {
-  id           String        @id @default(cuid())
-  name         String
-  username     String        @unique
-  email        String        @unique
-  passwordHash String
-  role         UserRole      @default(ADMIN)
-  status       AccountStatus @default(ACTIVE)
-  lastLoginAt  DateTime?
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
-  auditLogs    AuditLog[]
+  id                  String               @id @default(cuid())
+  name                String
+  username            String               @unique
+  email               String               @unique
+  passwordHash        String
+  role                UserRole             @default(ADMIN)
+  status              AccountStatus        @default(ACTIVE)
+  lastLoginAt         DateTime?
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  auditLogs           AuditLog[]
+  passwordResetTokens PasswordResetToken[]
 }
 
 model DriverAccount {
-  id                    String        @id @default(cuid())
-  name                  String
-  username              String        @unique
-  phone                 String?
-  passwordHash          String?
-  temporaryPasswordHash String?
-  mustChangePassword    Boolean       @default(false)
-  status                AccountStatus @default(ACTIVE)
-  lastLoginAt           DateTime?
-  createdAt             DateTime      @default(now())
-  updatedAt             DateTime      @updatedAt
-  orders                Order[]
+  id                         String        @id @default(cuid())
+  name                       String
+  username                   String        @unique
+  phone                      String?
+  passwordHash               String?
+  temporaryPasswordHash      String?
+  temporaryPasswordExpiresAt DateTime?
+  mustChangePassword         Boolean       @default(false)
+  status                     AccountStatus @default(ACTIVE)
+  lastLoginAt                DateTime?
+  createdAt                  DateTime      @default(now())
+  updatedAt                  DateTime      @updatedAt
+  orders                     Order[]
 }
 
 model Customer {
@@ -174,74 +176,83 @@ model MenuCategory {
   items     MenuItem[]
 }
 
-model MenuTag {
-  id          String     @id @default(cuid())
-  label       String     @unique
-  description String?
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
-  items       MenuItem[]
-}
-
 model MenuItem {
-  id          String       @id @default(cuid())
-  slug        String       @unique
+  id          String            @id @default(cuid())
+  slug        String            @unique
   name        String
   nameEn      String?
   description String?
-  price       Decimal      @db.Decimal(10, 2)
+  price       Decimal           @db.Decimal(10, 2)
   image       String?
-  deliverable Boolean      @default(true)
-  isFeatured  Boolean      @default(false)
-  isActive    Boolean      @default(true)
-  sortOrder   Int          @default(0)
+  deliverable Boolean           @default(true)
+  isFeatured  Boolean           @default(false)
+  isActive    Boolean           @default(true)
+  sortOrder   Int               @default(0)
   categoryId  String
-  category    MenuCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
-  tagId       String?
-  tag         MenuTag?     @relation(fields: [tagId], references: [id], onDelete: SetNull)
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  category    MenuCategory      @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
   orderItems  OrderItem[]
+  variants    MenuItemVariant[]
 
   @@index([categoryId])
-  @@index([tagId])
+}
+
+model MenuItemVariant {
+  id         String      @id @default(cuid())
+  menuItemId String
+  menuItem   MenuItem    @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  label      String
+  price      Decimal     @db.Decimal(10, 2)
+  sortOrder  Int         @default(0)
+  isActive   Boolean     @default(true)
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+  orderItems OrderItem[]
+
+  @@unique([menuItemId, label])
+  @@index([menuItemId, isActive, sortOrder])
 }
 
 model Order {
-  id             String               @id @default(cuid())
-  orderNumber    String               @unique
-  status         OrderStatus          @default(PENDING)
-  paymentMethod  PaymentMethod        @default(CASH)
-  paymentStatus  PaymentStatus        @default(PENDING)
-  paymentNote    String?
-  customerId     String?
-  customer       Customer?            @relation(fields: [customerId], references: [id], onDelete: SetNull)
-  addressId      String?
-  address        CustomerAddress?     @relation(fields: [addressId], references: [id], onDelete: SetNull)
-  driverId       String?
-  driver         DriverAccount?       @relation(fields: [driverId], references: [id], onDelete: SetNull)
-  customerName   String
-  customerPhone  String
-  customerEmail  String?
-  deliveryStreet String
-  deliveryZone   String?
-  deliveryNotes  String?
-  distanceKm     Decimal?             @db.Decimal(8, 2)
-  etaMinutes     Int?
-  subtotal       Decimal              @db.Decimal(10, 2)
-  deliveryFee    Decimal              @default(0) @db.Decimal(10, 2)
-  discountTotal  Decimal              @default(0) @db.Decimal(10, 2)
-  total          Decimal              @db.Decimal(10, 2)
-  prepTargetMins Int?
-  confirmedAt    DateTime?
-  assignedAt     DateTime?
-  pickedUpAt     DateTime?
-  deliveredAt    DateTime?
-  cancelledAt    DateTime?
-  createdAt      DateTime             @default(now())
-  updatedAt      DateTime             @updatedAt
-  items          OrderItem[]
-  timeline       OrderTimelineEvent[]
+  id                       String               @id @default(cuid())
+  orderNumber              String               @unique
+  status                   OrderStatus          @default(PENDING)
+  paymentMethod            PaymentMethod        @default(CASH)
+  paymentStatus            PaymentStatus        @default(PENDING)
+  paymentNote              String?
+  customerId               String?
+  customer                 Customer?            @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  addressId                String?
+  address                  CustomerAddress?     @relation(fields: [addressId], references: [id], onDelete: SetNull)
+  driverId                 String?
+  driver                   DriverAccount?       @relation(fields: [driverId], references: [id], onDelete: SetNull)
+  customerName             String
+  customerPhone            String
+  customerEmail            String?
+  deliveryStreet           String
+  deliveryZone             String?
+  deliveryNotes            String?
+  deliveryFeeConsentAt     DateTime?
+  deliveryFeeConsentText   String?
+  deliveryFeePolicyNearby  Decimal?             @db.Decimal(10, 2)
+  deliveryFeePolicyFarther Decimal?             @db.Decimal(10, 2)
+  distanceKm               Decimal?             @db.Decimal(8, 2)
+  etaMinutes               Int?
+  subtotal                 Decimal              @db.Decimal(10, 2)
+  deliveryFee              Decimal              @default(0) @db.Decimal(10, 2)
+  discountTotal            Decimal              @default(0) @db.Decimal(10, 2)
+  total                    Decimal              @db.Decimal(10, 2)
+  prepTargetMins           Int?
+  confirmedAt              DateTime?
+  assignedAt               DateTime?
+  pickedUpAt               DateTime?
+  deliveredAt              DateTime?
+  cancelledAt              DateTime?
+  createdAt                DateTime             @default(now())
+  updatedAt                DateTime             @updatedAt
+  items                    OrderItem[]
+  timeline                 OrderTimelineEvent[]
 
   @@index([customerId])
   @@index([addressId])
@@ -251,20 +262,24 @@ model Order {
 }
 
 model OrderItem {
-  id         String    @id @default(cuid())
-  orderId    String
-  order      Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  menuItemId String?
-  menuItem   MenuItem? @relation(fields: [menuItemId], references: [id], onDelete: SetNull)
-  name       String
-  note       String?
-  quantity   Int       @default(1)
-  unitPrice  Decimal   @db.Decimal(10, 2)
-  lineTotal  Decimal   @db.Decimal(10, 2)
-  createdAt  DateTime  @default(now())
+  id           String           @id @default(cuid())
+  orderId      String
+  order        Order            @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  menuItemId   String?
+  menuItem     MenuItem?        @relation(fields: [menuItemId], references: [id], onDelete: SetNull)
+  variantId    String?
+  variant      MenuItemVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
+  variantLabel String?
+  name         String
+  note         String?
+  quantity     Int              @default(1)
+  unitPrice    Decimal          @db.Decimal(10, 2)
+  lineTotal    Decimal          @db.Decimal(10, 2)
+  createdAt    DateTime         @default(now())
 
   @@index([orderId])
   @@index([menuItemId])
+  @@index([variantId])
 }
 
 model OrderTimelineEvent {
@@ -350,6 +365,8 @@ model StorefrontSettings {
   effectIntensity       String         @default("Medium")
   effectStartsAt        DateTime?
   effectEndsAt          DateTime?
+  nearbyDeliveryFee     Decimal        @default(3.00) @db.Decimal(10, 2)
+  fartherDeliveryFee    Decimal        @default(3.50) @db.Decimal(10, 2)
   updatedAt             DateTime       @updatedAt
 }
 
@@ -413,4 +430,42 @@ model AuditLog {
 
   @@index([actorId])
   @@index([entityType, entityId])
+}
+
+model AdminSession {
+  id         String    @id @default(cuid())
+  tokenHash  String    @unique
+  userId     String
+  role       UserRole
+  expiresAt  DateTime
+  lastSeenAt DateTime  @default(now())
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@index([userId, role])
+  @@index([expiresAt])
+}
+
+model AuthRateLimit {
+  key       String   @id
+  count     Int      @default(0)
+  resetAt   DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([resetAt])
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  tokenHash String    @unique
+  userId    String
+  user      AdminUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, usedAt])
+  @@index([expiresAt])
 }

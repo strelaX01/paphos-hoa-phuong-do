@@ -7,6 +7,14 @@ function formatMoney(value) {
   }).format(Number(value))
 }
 
+function formatMenuItemPrice(item) {
+  if (!item.variants?.length) return formatMoney(item.price)
+  const prices = item.variants.map((variant) => Number(variant.price))
+  const minimum = Math.min(...prices)
+  const maximum = Math.max(...prices)
+  return minimum === maximum ? formatMoney(minimum) : `${formatMoney(minimum)} - ${formatMoney(maximum)}`
+}
+
 export async function getHomepageContentData() {
   const activeMenuWhere = {
     isActive: true,
@@ -25,7 +33,11 @@ export async function getHomepageContentData() {
           description: true,
           price: true,
           image: true,
-          tag: { select: { label: true } },
+          variants: {
+            where: { isActive: true },
+            orderBy: [{ sortOrder: 'asc' }, { label: 'asc' }],
+            select: { label: true, price: true },
+          },
         },
       }),
       prisma.menuItem.count({ where: activeMenuWhere }),
@@ -45,9 +57,8 @@ export async function getHomepageContentData() {
           id: item.id,
           name: item.name,
           description: item.description || '',
-          price: formatMoney(item.price),
+          price: formatMenuItemPrice(item),
           image: item.image,
-          tag: item.tag?.label || '',
         })),
       galleryImages,
     }

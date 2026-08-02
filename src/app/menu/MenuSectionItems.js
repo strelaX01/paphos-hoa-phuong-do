@@ -53,11 +53,6 @@ function MenuItemCard({ item }) {
           sizes="(max-width: 1024px) 100vw, 33vw"
         />
         {hasRemoteImage ? <div className="absolute inset-0 bg-gradient-to-t from-black/45 via-transparent to-transparent" /> : null}
-        {item.tag && (
-          <span className="absolute left-4 top-4 bg-[#8B1E1E] px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-white">
-            {item.tag}
-          </span>
-        )}
         <span
           className="absolute bottom-4 right-4 inline-flex items-center justify-center bg-[#D4A017] px-3.5 rounded-full font-sans font-bold tabular-nums text-[#1A1410] text-[13px]"
           style={{ height: '28px', lineHeight: 1 }}

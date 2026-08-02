@@ -1,7 +1,7 @@
 'use client'
 
 import Image from 'next/image'
-import { Plus, RefreshCw, Utensils } from 'lucide-react'
+import { CheckCircle2, Plus, RefreshCw, Utensils } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { createPortal } from 'react-dom'
 import { useSearchParams } from 'next/navigation'
@@ -9,10 +9,21 @@ import { useSearchParams } from 'next/navigation'
 import PaginationControls from '@/app/components/shared/PaginationControls'
 import { CardGridSkeleton } from '@/app/components/shared/SkeletonBlocks'
 import { useCart } from '@/hooks/useCart'
+import { dedupeClientRequest } from '@/lib/dedupeClientRequest'
 import { DELIVERY_CONFIG } from '@/lib/deliveryConfig'
 
 const ITEMS_PER_PAGE = 6
 const emptySubscribe = () => () => {}
+
+function fetchDeliveryMenu() {
+  return dedupeClientRequest('/api/delivery/menu', () => {
+    return fetch('/api/delivery/menu', { cache: 'no-store' }).then(async (response) => {
+        const payload = await response.json().catch(() => ({}))
+        if (!response.ok) throw new Error(payload.error || 'Could not load the delivery menu.')
+        return payload
+      })
+    })
+}
 
 function formatMoney(value) {
   return new Intl.NumberFormat('en-IE', { style: 'currency', currency: DELIVERY_CONFIG.currency }).format(value)
@@ -29,30 +40,34 @@ export default function DeliveryOrderClient() {
   const [isLoading, setIsLoading] = useState(false)
   const [flyItems, setFlyItems] = useState([])
   const [highlightedId, setHighlightedId] = useState(null)
+  const [selectedVariants, setSelectedVariants] = useState({})
   const highlightRef = useRef(null)
   const flyIdRef = useRef(0)
   const cart = useCart()
   const { syncCatalog } = cart
+  const { setDeliveryPricing } = cart
   const mounted = useSyncExternalStore(emptySubscribe, () => true, () => false)
   const categories = useMemo(() => ['All', ...new Set(deliveryItems.map((item) => item.category))], [deliveryItems])
 
   useEffect(() => {
     let active = true
     let highlightTimer
-    fetch('/api/delivery/menu', { cache: 'no-store' })
-      .then(async (response) => {
-        const payload = await response.json().catch(() => ({}))
-        if (!response.ok) throw new Error(payload.error || 'Could not load the delivery menu.')
-        return payload
-      })
+    fetchDeliveryMenu()
       .then((payload) => {
         if (!active) return
         setDeliveryItems(payload.data)
+        setDeliveryPricing(payload.config)
         syncCatalog(payload.data)
         const target = targetId ? payload.data.find((item) => item.id === targetId) : null
         if (target) {
+          const categoryItems = payload.data.filter((item) => item.category === target.category)
+          const targetIndex = categoryItems.findIndex((item) => item.id === target.id)
+          const targetPage = targetIndex >= 0
+            ? Math.floor(targetIndex / ITEMS_PER_PAGE) + 1
+            : 1
+
           setActiveCategory(target.category)
-          setPage(1)
+          setPage(targetPage)
           setHighlightedId(target.id)
           highlightTimer = window.setTimeout(() => setHighlightedId(null), 2500)
         }
@@ -60,16 +75,20 @@ export default function DeliveryOrderClient() {
       .catch((error) => { if (active) setMenuError(error.message || 'Could not load the delivery menu.') })
       .finally(() => { if (active) setMenuLoading(false) })
     return () => { active = false; if (highlightTimer) window.clearTimeout(highlightTimer) }
-  }, [syncCatalog, targetId])
+  }, [setDeliveryPricing, syncCatalog, targetId])
 
   // Scroll to highlighted item after category/page state settles
   useEffect(() => {
-    if (!highlightedId || !highlightRef.current) return
-    const timer = setTimeout(() => {
-      highlightRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-    }, 300)
-    return () => clearTimeout(timer)
-  }, [highlightedId])
+    if (!highlightedId || menuLoading) return
+
+    const timer = window.setTimeout(() => {
+      const targetElement = highlightRef.current
+        ?? document.getElementById(`delivery-item-${highlightedId}`)
+      targetElement?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }, 150)
+
+    return () => window.clearTimeout(timer)
+  }, [activeCategory, highlightedId, menuLoading, page])
 
   const visibleItems = activeCategory === 'All'
     ? deliveryItems
@@ -96,7 +115,15 @@ export default function DeliveryOrderClient() {
     const cartButton = getVisibleCartButton()
     const targetRect = cartButton?.getBoundingClientRect()
 
-    cart.addItem(item)
+    const variant = item.variants?.length
+      ? item.variants.find((entry) => entry.id === selectedVariants[item.id]) || item.variants[0]
+      : null
+    cart.addItem(variant ? {
+      ...item,
+      variantId: variant.id,
+      variantLabel: variant.label,
+      price: variant.price,
+    } : { ...item, variantId: null, variantLabel: null })
 
     if (!targetRect || !item.image) return
 
@@ -156,15 +183,19 @@ export default function DeliveryOrderClient() {
         ) : (
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 md:gap-5">
             {pageItems.map((item) => {
+              const isTargeted = item.id === targetId
               const isHighlighted = item.id === highlightedId
+              const selectedVariantId = selectedVariants[item.id] || item.variants?.[0]?.id || ''
+              const selectedVariant = item.variants?.find((variant) => variant.id === selectedVariantId) || item.variants?.[0]
               return (
                 <article
                   key={item.id}
                   id={`delivery-item-${item.id}`}
-                  ref={isHighlighted ? highlightRef : null}
+                  ref={isTargeted ? highlightRef : null}
+                  aria-label={isTargeted ? `${item.name}, your selected dish` : item.name}
                   className={`group grid grid-cols-[96px_1fr] overflow-hidden border bg-white/65 transition-all hover:border-[#D4A017]/60 sm:grid-cols-[118px_1fr] ${
-                    isHighlighted
-                      ? 'border-[#D4A017] ring-2 ring-[#D4A017]/40 animate-pulse-once'
+                    isTargeted
+                      ? `border-[#8B1E1E] bg-[#FFF9E9] ring-4 ring-[#D4A017]/45 shadow-[0_12px_30px_rgba(139,30,30,0.18)] ${isHighlighted ? 'animate-pulse-once' : ''}`
                       : 'border-[#E8DFC8]'
                   }`}
                 >
@@ -172,17 +203,37 @@ export default function DeliveryOrderClient() {
                   {item.image ? <Image src={item.image} alt={item.name} fill className="object-cover transition-transform duration-500 group-hover:scale-[1.05]" sizes="118px" /> : <div className="flex h-full items-center justify-center text-[#8B1E1E]"><Utensils className="size-7" /></div>}
                 </div>
                 <div className="flex min-w-0 flex-col p-3 sm:p-4">
+                  {isTargeted ? (
+                    <div
+                      role="status"
+                      className="mb-2 inline-flex w-fit items-center gap-1.5 bg-[#8B1E1E] px-2 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-white"
+                    >
+                      <CheckCircle2 className="size-3.5" aria-hidden="true" />
+                      Your selected dish
+                    </div>
+                  ) : null}
                   <div className="mb-2 flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <h3 className="font-display text-lg font-bold leading-tight text-[#2B2B2B] sm:text-xl">{item.name}</h3>
                     </div>
-                    <span className="hidden shrink-0 bg-[#8B1E1E] px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-white sm:block">
-                      {item.tag}
-                    </span>
                   </div>
                   <p className="line-clamp-2 text-[12px] leading-relaxed text-[#6B6560] sm:text-[13px]">{item.description}</p>
+                  {item.variants?.length ? (
+                    <label className="mt-3 block">
+                      <span className="sr-only">Choose a price option for {item.name}</span>
+                      <select
+                        value={selectedVariantId}
+                        onChange={(event) => setSelectedVariants((current) => ({ ...current, [item.id]: event.target.value }))}
+                        className="h-9 w-full border border-[#E8DFC8] bg-white px-2 text-[12px] font-semibold text-[#2B2B2B] outline-none focus:border-[#D4A017]"
+                      >
+                        {item.variants.map((variant) => (
+                          <option key={variant.id} value={variant.id}>{variant.label} - {formatMoney(variant.price)}</option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : null}
                   <div className="mt-auto flex items-center justify-between gap-2 pt-3 sm:gap-3 sm:pt-4">
-                    <span className="inline-flex items-center font-sans font-bold tabular-nums text-[#8B1E1E] text-[14px] sm:text-[15px]" style={{ lineHeight: 1 }}>{formatMoney(item.price)}</span>
+                    <span className="inline-flex items-center font-sans font-bold tabular-nums text-[#8B1E1E] text-[14px] sm:text-[15px]" style={{ lineHeight: 1 }}>{formatMoney(selectedVariant?.price ?? item.price)}</span>
                     <button
                       type="button"
                       onClick={(event) => addWithAnimation(event, item)}

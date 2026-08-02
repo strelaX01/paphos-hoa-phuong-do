@@ -1,37 +1,33 @@
 import { NextResponse } from "next/server";
 
-import { ADMIN_SESSION_COOKIE, verifyAdminSessionToken } from "@/lib/adminSessionToken";
-import { prisma } from "@/lib/prisma";
+import { getAdminAccountForToken } from "@/lib/adminAuth";
+import { ADMIN_SESSION_COOKIE } from "@/lib/adminSessionToken";
 
 const LOGIN_PAGE = "/admin/login";
+const PUBLIC_ADMIN_PAGES = new Set([
+  LOGIN_PAGE,
+  "/admin/forgot-password",
+  "/admin/reset-password",
+]);
 const PUBLIC_ADMIN_API_PATHS = new Set([
   "/api/admin/auth/login",
   "/api/admin/auth/logout",
+  "/api/admin/auth/forgot-password",
+  "/api/admin/auth/reset-password",
 ]);
 
 async function getActiveAccount(request) {
-  const session = verifyAdminSessionToken(request.cookies.get(ADMIN_SESSION_COOKIE)?.value);
-  if (!session) return null;
-
-  if (session.role === "DRIVER") {
-    const driver = await prisma.driverAccount.findFirst({
-      where: { id: session.userId, status: "ACTIVE" },
-      select: { id: true },
-    });
-    return driver ? { ...driver, role: "DRIVER" } : null;
-  }
-
-  const admin = await prisma.adminUser.findFirst({
-    where: { id: session.userId, role: "ADMIN", status: "ACTIVE" },
-    select: { id: true, role: true },
-  });
-  return admin;
+  return getAdminAccountForToken(
+    request.cookies.get(ADMIN_SESSION_COOKIE)?.value,
+    { touch: false },
+  );
 }
 
 export async function proxy(request) {
   const { pathname, search } = request.nextUrl;
 
-  if (pathname === LOGIN_PAGE) {
+  if (PUBLIC_ADMIN_PAGES.has(pathname)) {
+    if (pathname !== LOGIN_PAGE) return NextResponse.next();
     const account = await getActiveAccount(request);
     return account
       ? NextResponse.redirect(new URL(account.role === "DRIVER" ? "/admin/orders" : "/admin", request.url))
@@ -46,8 +42,11 @@ export async function proxy(request) {
       return NextResponse.redirect(new URL("/admin/orders", request.url));
     }
     if (pathname.startsWith("/api/admin/")) {
+      const isOrderMember = /^\/api\/admin\/orders\/[^/]+$/.test(pathname);
       const allowedRequest =
-        (pathname === "/api/admin/orders" && ["GET", "PATCH"].includes(request.method)) ||
+        (pathname === "/api/admin/orders" && request.method === "GET") ||
+        (pathname === "/api/admin/orders/summary" && request.method === "GET") ||
+        (isOrderMember && request.method === "PATCH") ||
         (pathname === "/api/admin/auth/change-password" && request.method === "POST");
       if (!allowedRequest) {
         return NextResponse.json(

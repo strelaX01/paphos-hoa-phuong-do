@@ -1,4 +1,3 @@
-import { Cormorant_Garamond, Inter } from 'next/font/google'
 import { connection } from 'next/server'
 
 import PhoneCallPopup from './components/shared/PhoneCallPopup'
@@ -7,30 +6,51 @@ import StorefrontNoticePopup from './components/shared/StorefrontNoticePopup'
 import { getRestaurantProfileData, splitPhoneNumbers } from '@/lib/restaurantProfileData'
 import { getActiveStorefrontEffect } from '@/lib/storefrontEffectData'
 import { getActiveStorefrontNotice } from '@/lib/storefrontNoticeData'
+import { DEFAULT_DESCRIPTION, DEFAULT_TITLE, getSiteUrl, SITE_NAME, SOCIAL_IMAGE } from '@/lib/seo'
 import './globals.css'
 
-const cormorant = Cormorant_Garamond({
-  variable: '--font-display',
-  subsets: ['latin'],
-  weight: ['300', '400', '500', '600', '700'],
-  display: 'swap',
-})
-
-const inter = Inter({
-  variable: '--font-sans',
-  subsets: ['latin'],
-  display: 'swap',
-})
-
 export const metadata = {
-  title: 'Hoa Phuong Do | Authentic Vietnamese Restaurant in Paphos',
-  description: 'Experience authentic Vietnamese cuisine, fresh ingredients, and warm hospitality in Paphos, Cyprus.',
-  keywords: ['Vietnamese restaurant', 'Cyprus', 'Paphos', 'Kissonerga', 'Hoa Phuong Do', 'pho', 'Vietnamese food'],
+  metadataBase: new URL(getSiteUrl()),
+  title: {
+    default: DEFAULT_TITLE,
+    template: `%s | ${SITE_NAME}`,
+  },
+  description: DEFAULT_DESCRIPTION,
+  applicationName: SITE_NAME,
+  creator: SITE_NAME,
+  publisher: SITE_NAME,
+  category: 'food and drink',
+  keywords: ['Vietnamese restaurant Paphos', 'Vietnamese food Cyprus', 'Kissonerga restaurant', 'pho Paphos', 'Hoa Phuong Do'],
+  formatDetection: {
+    email: false,
+    address: false,
+    telephone: false,
+  },
   openGraph: {
-    title: 'Hoa Phuong Do | Vietnamese Restaurant in Paphos',
-    description: 'Authentic Vietnamese cuisine in Paphos, Cyprus. Book a table or order delivery.',
+    title: DEFAULT_TITLE,
+    description: DEFAULT_DESCRIPTION,
+    url: '/',
+    siteName: SITE_NAME,
     locale: 'en_CY',
     type: 'website',
+    images: [{ url: SOCIAL_IMAGE, width: 1672, height: 941, alt: 'Vietnamese food at Hoa Phuong Do in Paphos' }],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: DEFAULT_TITLE,
+    description: DEFAULT_DESCRIPTION,
+    images: [SOCIAL_IMAGE],
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      'max-image-preview': 'large',
+      'max-snippet': -1,
+      'max-video-preview': -1,
+    },
   },
 }
 
@@ -44,7 +64,7 @@ export default async function RootLayout({ children }) {
   const phoneNumbers = splitPhoneNumbers(restaurantData.profile.phone)
 
   return (
-    <html lang="en" className={`${cormorant.variable} ${inter.variable} h-full antialiased`}>
+    <html lang="en" className="h-full antialiased">
       <body className="flex min-h-full flex-col">
         {children}
         <FestivalEffect config={storefrontEffect} />

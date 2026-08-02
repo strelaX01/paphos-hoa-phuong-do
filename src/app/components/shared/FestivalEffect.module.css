@@ -1,10 +1,19 @@
-.overlay {
-  position: fixed;
+.overlay,
+.previewOverlay {
+  position: absolute;
   inset: 0;
-  z-index: 40;
   overflow: hidden;
   pointer-events: none;
   contain: strict;
+}
+
+.overlay {
+  position: fixed;
+  z-index: 40;
+}
+
+.previewOverlay {
+  z-index: 1;
 }
 
 .paused .particle {
@@ -18,71 +27,169 @@
   width: var(--festival-size);
   height: var(--festival-size);
   opacity: 0;
-  animation: festival-fall var(--festival-duration) linear var(--festival-delay) infinite;
-  will-change: transform, opacity;
+  animation-duration: var(--festival-duration);
+  animation-timing-function: linear;
+  animation-delay: var(--festival-delay);
+  animation-iteration-count: infinite;
 }
 
 .snow {
-  border-radius: 50%;
-  background: rgb(255 255 255 / 0.88);
-  box-shadow: 0 0 3px rgb(255 255 255 / 0.45);
+  width: 2px;
+  height: calc(var(--festival-size) * 1.8);
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.92);
+  animation-name: snow-fall;
 }
 
-.tet,
-.valentine,
-.summer {
-  border-radius: 75% 15% 70% 25%;
+.snow::before,
+.snow::after {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: inherit;
+  content: '';
 }
+
+.snow::before { transform: rotate(60deg); }
+.snow::after { transform: rotate(-60deg); }
+.variant1.snow { height: calc(var(--festival-size) * 1.4); opacity: 0.72; }
+.variant2.snow { height: calc(var(--festival-size) * 2.15); }
 
 .tet {
-  background: #f4a3ad;
-  box-shadow: inset -2px -1px 0 rgb(139 30 30 / 0.18);
+  --blossom-color: #f4a3ad;
+  --blossom-center: #d4a017;
+  width: calc(var(--festival-size) * 1.65);
+  height: calc(var(--festival-size) * 1.65);
+  background:
+    radial-gradient(circle at 50% 13%, var(--blossom-color) 0 20%, transparent 22%),
+    radial-gradient(circle at 86% 40%, var(--blossom-color) 0 20%, transparent 22%),
+    radial-gradient(circle at 72% 82%, var(--blossom-color) 0 20%, transparent 22%),
+    radial-gradient(circle at 28% 82%, var(--blossom-color) 0 20%, transparent 22%),
+    radial-gradient(circle at 14% 40%, var(--blossom-color) 0 20%, transparent 22%),
+    radial-gradient(circle at 50% 50%, var(--blossom-center) 0 13%, transparent 15%);
+  animation-name: blossom-fall;
+  animation-timing-function: ease-in-out;
 }
 
-.valentine {
-  background: #c94b63;
-  box-shadow: inset -2px -1px 0 rgb(255 255 255 / 0.2);
-}
-
-.summer {
-  width: calc(var(--festival-size) * 0.72);
-  height: calc(var(--festival-size) * 1.45);
-  background: #4d7b4b;
-  box-shadow: inset 2px 0 0 rgb(255 255 255 / 0.18);
-}
+.variant1.tet { --blossom-color: #f7c7cd; --blossom-center: #b4830d; }
+.variant2.tet { --blossom-color: #e98e9d; --blossom-center: #f3c54b; }
+.variant3.tet { --blossom-color: #d96c7c; --blossom-center: #d4a017; }
 
 .confetti {
-  width: calc(var(--festival-size) * 0.55);
-  height: calc(var(--festival-size) * 1.35);
+  top: 50%;
+  left: 50%;
+  width: calc(var(--festival-size) * 0.52);
+  height: calc(var(--festival-size) * 1.45);
+  border-radius: 1px;
   background: #d4a017;
+  animation-name: confetti-burst;
+  animation-timing-function: cubic-bezier(0.18, 0.72, 0.28, 1);
   animation-iteration-count: 1;
 }
 
 .variant1.confetti { background: #8b1e1e; }
 .variant2.confetti { background: #2f6f55; }
 .variant3.confetti { background: #f1e4c1; }
-.variant1.tet { background: #d4a017; }
-.variant2.tet { background: #f7c7cd; }
-.variant1.valentine { background: #ef9aaa; }
-.variant2.valentine { background: #8b1e1e; }
-.variant1.summer { background: #7c9f55; }
-.variant2.summer { background: #d4a017; }
 
-@keyframes festival-fall {
-  0% {
-    opacity: 0;
-    transform: translate3d(0, -8vh, 0) rotate(0deg);
-  }
-  9% { opacity: 0.78; }
-  88% { opacity: 0.72; }
-  100% {
-    opacity: 0;
-    transform: translate3d(var(--festival-drift), 124vh, 0) rotate(var(--festival-rotation));
-  }
+.valentine {
+  top: auto;
+  bottom: -12vh;
+  width: var(--festival-size);
+  height: var(--festival-size);
+  background: #c94b63;
+  transform: rotate(45deg);
+  animation-name: heart-rise;
+  animation-timing-function: ease-in-out;
 }
 
-@media (max-width: 640px) {
-  .particle:nth-child(n + 13) { display: none; }
+.valentine::before,
+.valentine::after {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: inherit;
+  content: '';
+}
+
+.valentine::before { left: -50%; }
+.valentine::after { top: -50%; }
+.variant1.valentine { background: #ef9aaa; }
+.variant2.valentine { background: #8b1e1e; }
+.variant3.valentine { background: #d97b8c; }
+
+.summer {
+  width: calc(var(--festival-size) * 0.68);
+  height: calc(var(--festival-size) * 1.58);
+  border-radius: 90% 12% 88% 16%;
+  background: #4d7b4b;
+  transform-origin: 50% 10%;
+  animation-name: leaf-sway;
+  animation-timing-function: ease-in-out;
+}
+
+.variant1.summer { background: #7c9f55; }
+.variant2.summer { background: #d4a017; }
+.variant3.summer { background: #2f6f55; }
+
+@keyframes snow-fall {
+  0% { opacity: 0; transform: translate3d(0, -8vh, 0) rotate(0deg); }
+  12% { opacity: 0.88; }
+  88% { opacity: 0.8; }
+  100% { opacity: 0; transform: translate3d(var(--festival-small-drift), var(--festival-travel), 0) rotate(180deg); }
+}
+
+@keyframes blossom-fall {
+  0% { opacity: 0; transform: translate3d(0, -8vh, 0) rotate(0deg); }
+  10% { opacity: 0.82; }
+  38% { transform: translate3d(var(--festival-mid-drift), var(--festival-travel-one), 0) rotate(150deg); }
+  72% { transform: translate3d(var(--festival-drift), var(--festival-travel-two), 0) rotate(290deg); }
+  100% { opacity: 0; transform: translate3d(var(--festival-small-drift), var(--festival-travel), 0) rotate(var(--festival-rotation)); }
+}
+
+@keyframes confetti-burst {
+  0% { opacity: 0; transform: translate3d(0, var(--festival-burst-start), 0) rotate(0deg); }
+  18% { opacity: 1; transform: translate3d(var(--festival-burst-mid-x), var(--festival-burst-y), 0) rotate(180deg); }
+  68% { opacity: 0.92; }
+  100% { opacity: 0; transform: translate3d(var(--festival-burst-x), var(--festival-burst-end), 0) rotate(var(--festival-rotation)); }
+}
+
+@keyframes heart-rise {
+  0% { opacity: 0; transform: translate3d(0, 8vh, 0) rotate(45deg) scale(0.72); }
+  12% { opacity: 0.72; }
+  46% { transform: translate3d(var(--festival-mid-drift), var(--festival-rise-one), 0) rotate(40deg) scale(1); }
+  78% { opacity: 0.62; transform: translate3d(var(--festival-drift), var(--festival-rise-two), 0) rotate(50deg) scale(0.9); }
+  100% { opacity: 0; transform: translate3d(var(--festival-small-drift), var(--festival-rise), 0) rotate(45deg) scale(0.76); }
+}
+
+@keyframes leaf-sway {
+  0% { opacity: 0; transform: translate3d(0, -8vh, 0) rotate(-22deg); }
+  12% { opacity: 0.72; }
+  30% { transform: translate3d(var(--festival-mid-drift), var(--festival-travel-one), 0) rotate(34deg); }
+  62% { transform: translate3d(var(--festival-drift), var(--festival-travel-two), 0) rotate(-28deg); }
+  84% { opacity: 0.68; }
+  100% { opacity: 0; transform: translate3d(var(--festival-small-drift), var(--festival-travel), 0) rotate(46deg); }
+}
+
+.reduced .particle {
+  animation: none;
+  top: var(--festival-static-top);
+  bottom: auto;
+  left: var(--festival-left);
+  opacity: 0.42;
+  transform: translate3d(0, 0, 0);
+}
+
+.reduced .valentine { transform: rotate(45deg); }
+.reduced .tet { transform: rotate(24deg); }
+.reduced .summer { transform: rotate(-18deg); }
+
+@media (max-width: 768px) {
+  .particle {
+    animation-duration: 14s;
+  }
+
+  .confetti { animation-duration: 4.8s; }
 }
 
 @media (prefers-reduced-motion: reduce) {

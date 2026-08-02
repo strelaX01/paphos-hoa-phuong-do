@@ -7,14 +7,12 @@ import { CheckCircle2, LoaderCircle, Minus, Plus, ShoppingBag, Trash2, X } from 
 import { useEffect, useRef, useState } from "react"
 
 import { useCart } from "@/hooks/useCart"
-import { DELIVERY_CONFIG } from "@/lib/deliveryConfig"
+import { buildDeliveryFeeConsentText, DELIVERY_CONFIG } from "@/lib/deliveryConfig"
+import { getCartItemKey } from "@/lib/stores/cartStore"
 
 function formatMoney(value) {
   return new Intl.NumberFormat("en-IE", { style: "currency", currency: DELIVERY_CONFIG.currency }).format(Number(value || 0))
 }
-
-const nearbyDeliveryFee = DELIVERY_CONFIG.nearbyFeeCents / 100
-const fartherDeliveryFee = DELIVERY_CONFIG.fartherFeeCents / 100
 
 async function readApi(response) {
   const payload = await response.json().catch(() => ({}))
@@ -22,6 +20,8 @@ async function readApi(response) {
     const firstError = payload.errors ? Object.values(payload.errors)[0] : null
     const error = new Error(firstError || payload.error || "Could not place the order.")
     error.unavailableItems = payload.unavailableItems || []
+    error.code = payload.code || ""
+    error.deliveryPricing = payload.deliveryPricing || null
     throw error
   }
   return payload
@@ -33,10 +33,13 @@ export default function CheckoutClient() {
   const formRef = useRef(null)
   const [isPending, setIsPending] = useState(false)
   const [result, setResult] = useState(null)
+  const [deliveryFeeAccepted, setDeliveryFeeAccepted] = useState(false)
+  const pricingReady = cart.deliveryPricingStatus === "ready"
+  const deliveryFeeConsentText = buildDeliveryFeeConsentText(Math.round(cart.nearbyDeliveryFee * 100), Math.round(cart.fartherDeliveryFee * 100))
 
   async function handleSubmit(event) {
     event.preventDefault()
-    if (isPending || !cart.items.length) return
+    if (isPending || !cart.items.length || !deliveryFeeAccepted || !pricingReady) return
     setIsPending(true)
     setResult(null)
 
@@ -49,7 +52,10 @@ export default function CheckoutClient() {
       area: formData.get("area"),
       notes: formData.get("notes"),
       website: formData.get("website"),
-      items: cart.items.map((item) => ({ slug: item.id, quantity: item.qty, note: item.note || "" })),
+      deliveryFeeConsent: deliveryFeeAccepted,
+      acceptedNearbyDeliveryFee: cart.nearbyDeliveryFee,
+      acceptedFartherDeliveryFee: cart.fartherDeliveryFee,
+      items: cart.items.map((item) => ({ slug: item.id, variantId: item.variantId || null, quantity: item.qty, note: item.note || "" })),
     }
 
     try {
@@ -61,8 +67,13 @@ export default function CheckoutClient() {
       setResult({ success: true, ...payload.data })
       cart.clearCart()
       formRef.current?.reset()
+      setDeliveryFeeAccepted(false)
     } catch (error) {
-      error.unavailableItems?.forEach((slug) => cart.removeItem(slug))
+      error.unavailableItems?.forEach((cartKey) => cart.removeItem(cartKey))
+      if (error.code === "DELIVERY_PRICING_CHANGED" && error.deliveryPricing) {
+        cart.setDeliveryPricing(error.deliveryPricing)
+        setDeliveryFeeAccepted(false)
+      }
       setResult({ success: false, error: error.message || "Could not place the order." })
     } finally {
       setIsPending(false)
@@ -90,11 +101,15 @@ export default function CheckoutClient() {
             <Input name="street" label="Street, building, apartment" minLength={5} maxLength={200} autoComplete="street-address" />
             <Input name="area" label="Area / village" minLength={2} maxLength={100} autoComplete="address-level2" />
             <p className="border-l-2 border-[#D4A017] bg-[#F2EAD8] px-4 py-3 text-[13px] leading-relaxed text-[#5F5547]">
-              Delivery is {formatMoney(nearbyDeliveryFee)} for nearby areas and {formatMoney(fartherDeliveryFee)} for farther areas. The restaurant will confirm the final fee based on your address.
+              Delivery is {formatMoney(cart.nearbyDeliveryFee)} for nearby areas and {formatMoney(cart.fartherDeliveryFee)} for farther areas. The restaurant will confirm the final fee based on your address.
             </p>
             <label className="block"><span className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.2em] text-[#8B6F47]">Delivery notes</span><textarea name="notes" rows={4} maxLength={1000} placeholder="Door code, floor, landmark, or preferred call instructions" className="w-full resize-y border border-[#E8DFC8] bg-white/70 px-4 py-3 text-[14px] leading-relaxed text-[#2B2B2B] outline-none placeholder:text-[#9C9489] focus:border-[#D4A017] focus:ring-2 focus:ring-[#D4A017]/20" /></label>
             <div className="border border-[#E8DFC8] bg-white/55 px-4 py-3"><p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#8B6F47]">Payment</p><p className="mt-1 text-sm font-semibold text-[#2B2B2B]">Cash on delivery</p></div>
-            <button type="submit" disabled={isPending || !cart.items.length} className="flex w-full items-center justify-center gap-2 bg-[#8B1E1E] px-7 py-4 text-[13px] font-semibold uppercase tracking-[0.14em] text-white transition-colors hover:bg-[#A02424] disabled:cursor-not-allowed disabled:opacity-60">{isPending ? <LoaderCircle className="size-4 animate-spin" /> : null}{isPending ? "Placing Order..." : `Place Order - ${formatMoney(cart.total)}`}</button>
+            <label className="flex cursor-pointer items-start gap-3 border border-[#D4A017]/45 bg-[#FFF9E9] p-4 text-[#2B2B2B] transition-colors hover:border-[#D4A017]">
+              <input type="checkbox" name="deliveryFeeConsent" required checked={deliveryFeeAccepted} onChange={(event) => setDeliveryFeeAccepted(event.target.checked)} disabled={!pricingReady} className="mt-0.5 size-5 shrink-0 accent-[#8B1E1E] disabled:cursor-not-allowed" aria-describedby="delivery-fee-consent-copy" />
+              <span id="delivery-fee-consent-copy" className="text-[13px] leading-relaxed"><span className="block font-semibold">I agree to the delivery fee policy.</span><span className="mt-1 block text-[#6B6560]">{pricingReady ? deliveryFeeConsentText : cart.deliveryPricingStatus === "error" ? "Delivery pricing could not be loaded. Refresh the page before ordering." : "Loading current delivery pricing..."}</span></span>
+            </label>
+            <button type="submit" disabled={isPending || !cart.items.length || !deliveryFeeAccepted || !pricingReady} className="flex w-full items-center justify-center gap-2 bg-[#8B1E1E] px-7 py-4 text-[13px] font-semibold uppercase tracking-[0.14em] text-white transition-colors hover:bg-[#A02424] disabled:cursor-not-allowed disabled:opacity-60">{isPending ? <LoaderCircle className="size-4 animate-spin" /> : null}{isPending ? "Placing Order..." : `Place Order - ${formatMoney(cart.total)}`}</button>
           </form>
         </section>
         <OrderSummary cart={cart} locked={isPending} />
@@ -120,28 +135,32 @@ function OrderSummary({ cart, locked }) {
       </div>
 
       <div className="max-h-[440px] space-y-3 overflow-y-auto pr-1">
-        {cart.items.map((item) => (
-          <div key={item.id} className="border border-white/10 bg-white/[0.03] p-3">
+        {cart.items.map((item) => {
+          const cartKey = item.cartKey || getCartItemKey(item)
+          return (
+          <div key={cartKey} className="border border-white/10 bg-white/[0.03] p-3">
             <div className="grid grid-cols-[64px_1fr_auto] gap-3">
               <div className="relative size-16 overflow-hidden bg-white/10">
                 {item.image ? <Image src={item.image} alt={item.name} fill className="object-cover" sizes="64px" /> : null}
               </div>
               <div className="min-w-0">
                 <p className="truncate font-display text-lg font-bold leading-tight">{item.name}</p>
+                {item.variantLabel ? <p className="mt-0.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#D4A017]">{item.variantLabel}</p> : null}
                 <p className="mt-0.5 text-[12px] text-white/45">{formatMoney(item.price)}</p>
                 <div className="mt-3 flex items-center gap-2">
-                  <QtyButton disabled={locked} onClick={() => cart.updateQty(item.id, -1)} label={`Decrease ${item.name}`}><Minus className="size-3.5" /></QtyButton>
+                  <QtyButton disabled={locked} onClick={() => cart.updateQty(cartKey, -1)} label={`Decrease ${item.name}`}><Minus className="size-3.5" /></QtyButton>
                   <span className="min-w-8 text-center text-[13px] font-semibold">{item.qty}</span>
-                  <QtyButton disabled={locked || item.qty >= DELIVERY_CONFIG.maxItemQuantity} onClick={() => cart.updateQty(item.id, 1)} label={`Increase ${item.name}`}><Plus className="size-3.5" /></QtyButton>
+                  <QtyButton disabled={locked || item.qty >= DELIVERY_CONFIG.maxItemQuantity} onClick={() => cart.updateQty(cartKey, 1)} label={`Increase ${item.name}`}><Plus className="size-3.5" /></QtyButton>
                 </div>
               </div>
-              <button type="button" disabled={locked} onClick={() => cart.removeItem(item.id)} className="text-white/35 transition-colors hover:text-[#D4A017] disabled:opacity-30" aria-label={`Remove ${item.name}`}>
+              <button type="button" disabled={locked} onClick={() => cart.removeItem(cartKey)} className="text-white/35 transition-colors hover:text-[#D4A017] disabled:opacity-30" aria-label={`Remove ${item.name}`}>
                 <Trash2 className="size-4" />
               </button>
             </div>
-            <input value={item.note || ""} onChange={(event) => cart.updateNote(item.id, event.target.value)} disabled={locked} maxLength={300} placeholder="Kitchen note for this dish" className="mt-3 h-9 w-full border border-white/15 bg-transparent px-2 text-xs text-white outline-none placeholder:text-white/30 focus:border-[#D4A017]" />
+            <input value={item.note || ""} onChange={(event) => cart.updateNote(cartKey, event.target.value)} disabled={locked} maxLength={300} placeholder="Kitchen note for this dish" className="mt-3 h-9 w-full border border-white/15 bg-transparent px-2 text-xs text-white outline-none placeholder:text-white/30 focus:border-[#D4A017]" />
           </div>
-        ))}
+          )
+        })}
       </div>
 
       <div className="mt-5 space-y-2 border-t border-white/10 pt-4 text-[13px]">
@@ -152,7 +171,7 @@ function OrderSummary({ cart, locked }) {
           <span className="font-sans tabular-nums">{formatMoney(cart.total)}</span>
         </div>
         <p className="pt-2 text-[11px] leading-relaxed text-white/40">
-          Farther areas cost {formatMoney(fartherDeliveryFee)}. Final prices, availability, and delivery fee are verified by the restaurant.
+          Farther areas cost {formatMoney(cart.fartherDeliveryFee)}. Final prices, availability, and delivery fee are verified by the restaurant.
         </p>
       </div>
     </aside>
@@ -169,7 +188,7 @@ function OrderSuccessModal({ onClose, order }) {
     closeRef.current?.focus()
     return () => { document.body.style.overflow = previousOverflow; window.removeEventListener("keydown", onKeyDown) }
   }, [onClose])
-  return <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#1E1A18]/70 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="order-success-title"><div className="w-full max-w-md border border-[#D4A017]/35 bg-[#FAF6EE] shadow-2xl"><div className="flex justify-end p-3 pb-0"><button ref={closeRef} type="button" onClick={onClose} className="flex size-10 items-center justify-center text-[#6B6560] hover:bg-[#F2EAD8]" aria-label="Close order confirmation"><X className="size-5" /></button></div><div className="px-6 pb-8 text-center"><div className="mx-auto flex size-14 items-center justify-center bg-[#4A7C59]/12 text-[#2F5F3D]"><CheckCircle2 className="size-7" /></div><p className="mt-5 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#8B6F47]">Order received</p><h2 id="order-success-title" className="mt-2 font-display text-3xl font-bold text-[#2B2B2B]">Thank you for your order.</h2><p className="mt-3 text-sm leading-relaxed text-[#6B6560]">We will call you shortly to confirm the delivery.</p><div className="mt-5 grid grid-cols-2 border border-[#E8DFC8] bg-white/65"><div className="border-r border-[#E8DFC8] p-3"><p className="text-[10px] font-semibold uppercase text-[#8B6F47]">Reference</p><p className="mt-1 break-all font-mono text-sm font-bold text-[#8B1E1E]">{order.reference}</p></div><div className="p-3"><p className="text-[10px] font-semibold uppercase text-[#8B6F47]">Total</p><p className="mt-1 text-lg font-bold text-[#2B2B2B]">{formatMoney(order.total)}</p></div></div><button type="button" onClick={onClose} className="mt-6 w-full bg-[#8B1E1E] px-6 py-3.5 text-[12px] font-semibold uppercase tracking-[0.14em] text-white hover:bg-[#A02424]">Done</button></div></div></div>
+  return <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#1E1A18]/70 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="order-success-title"><div className="w-full max-w-md border border-[#D4A017]/35 bg-[#FAF6EE] shadow-2xl"><div className="flex justify-end p-3 pb-0"><button ref={closeRef} type="button" onClick={onClose} className="flex size-10 items-center justify-center text-[#6B6560] hover:bg-[#F2EAD8]" aria-label="Close order confirmation"><X className="size-5" /></button></div><div className="px-6 pb-8 text-center"><div className="mx-auto flex size-14 items-center justify-center bg-[#4A7C59]/12 text-[#2F5F3D]"><CheckCircle2 className="size-7" /></div><p className="mt-5 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#8B6F47]">Order received</p><h2 id="order-success-title" className="mt-2 font-display text-3xl font-bold text-[#2B2B2B]">Thank you for your order.</h2><p className="mt-3 text-sm leading-relaxed text-[#6B6560]">We will call you shortly to confirm the delivery fee and final amount.</p><div className="mt-5 border border-[#E8DFC8] bg-white/65 p-4"><p className="text-[10px] font-semibold uppercase text-[#8B6F47]">Order reference</p><p className="mt-1 break-all font-mono text-base font-bold text-[#8B1E1E]">{order.reference}</p><p className="mt-3 border-t border-[#E8DFC8] pt-3 text-xs leading-relaxed text-[#6B6560]">Keep this reference in case you need to contact the restaurant about your order.</p></div><button type="button" onClick={onClose} className="mt-6 w-full bg-[#8B1E1E] px-6 py-3.5 text-[12px] font-semibold uppercase tracking-[0.14em] text-white hover:bg-[#A02424]">Done</button></div></div></div>
 }
 
 function Input({ autoComplete, inputMode, label, maxLength, minLength, name, pattern, required = true, sanitize, type = "text" }) {

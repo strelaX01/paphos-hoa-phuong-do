@@ -11,7 +11,7 @@ export default function MenuAddToCart({ item }) {
   const router = useRouter()
 
   function handleClick() {
-    router.push(`/delivery?item=${item.id}`)
+    router.push(`/delivery?item=${encodeURIComponent(item.id)}`)
   }
 
   return (

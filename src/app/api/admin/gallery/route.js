@@ -1,3 +1,4 @@
+import { authorizeAdminRequest } from "@/lib/adminApiAuth";
 import { prisma } from "@/lib/prisma";
 import { galleryPhotoSelect, serializeGalleryPhoto } from "@/lib/galleryPhotoData";
 import { deleteManagedGalleryImage } from "@/lib/galleryStorage";
@@ -13,7 +14,9 @@ function isValidImageUrl(value) {
   }
 }
 
-export async function GET() {
+export async function GET(request) {
+  const auth = await authorizeAdminRequest(request);
+  if (auth.response) return auth.response;
   try {
     const photos = await prisma.galleryPhoto.findMany({
       orderBy: { createdAt: "desc" },
@@ -27,6 +30,8 @@ export async function GET() {
 }
 
 export async function POST(request) {
+  const auth = await authorizeAdminRequest(request);
+  if (auth.response) return auth.response;
   let body;
   try {
     body = await request.json();

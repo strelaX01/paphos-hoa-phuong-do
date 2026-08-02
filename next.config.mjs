@@ -25,12 +25,14 @@ const supabaseImagePattern = getSupabaseImagePattern()
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  output: 'standalone',
   experimental: {
     turbopackFileSystemCacheForDev: false,
     turbopackFileSystemCacheForBuild: false,
   },
   images: {
-    maximumDiskCacheSize: 0,
+    maximumDiskCacheSize: 64_000_000,
+    minimumCacheTTL: 86_400,
     remotePatterns: [
       {
         protocol: 'https',
@@ -38,6 +40,23 @@ const nextConfig = {
       },
       ...(supabaseImagePattern ? [supabaseImagePattern] : []),
     ],
+  },
+  async headers() {
+    const securityHeaders = [
+      { key: 'X-Content-Type-Options', value: 'nosniff' },
+      { key: 'X-Frame-Options', value: 'DENY' },
+      { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+      { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
+      { key: 'Cross-Origin-Opener-Policy', value: 'same-origin' },
+      ...(process.env.NODE_ENV === 'production'
+        ? [{ key: 'Strict-Transport-Security', value: 'max-age=31536000; includeSubDomains' }]
+        : []),
+    ]
+
+    return [
+      { source: '/:path*', headers: securityHeaders },
+      { source: '/admin/:path*', headers: [{ key: 'Cache-Control', value: 'no-store' }] },
+    ]
   },
 };
 

@@ -1,6 +1,7 @@
 "use client"
 
 import { Eye, EyeOff, LoaderCircle, LockKeyhole, User } from "lucide-react"
+import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useState } from "react"
 
@@ -66,7 +67,12 @@ export default function LoginForm({ nextPath = "/admin" }) {
       </div>
 
       <div className="space-y-2">
-        <label htmlFor="password" className="block text-sm font-semibold text-[#302C27]">Password</label>
+        <div className="flex items-center justify-between gap-3">
+          <label htmlFor="password" className="block text-sm font-semibold text-[#302C27]">Password</label>
+          <Link href="/admin/forgot-password" className="text-xs font-semibold text-[#8B1E1E] underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8B1E1E]">
+            Forgot password?
+          </Link>
+        </div>
         <div className="relative">
           <LockKeyhole className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-[#8B8175]" />
           <input

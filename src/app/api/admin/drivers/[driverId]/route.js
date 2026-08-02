@@ -1,9 +1,13 @@
+import { authorizeAdminRequest } from "@/lib/adminApiAuth";
+import { revokeAccountSessions } from "@/lib/adminSessionStore";
 import { prisma } from "@/lib/prisma";
 import { driverAccountSelect, serializeDriverAccount } from "@/lib/driverAccountData";
 
 export const dynamic = "force-dynamic";
 
 export async function PATCH(request, context) {
+  const auth = await authorizeAdminRequest(request);
+  if (auth.response) return auth.response;
   const { driverId } = await context.params;
   let body;
   try {
@@ -23,6 +27,7 @@ export async function PATCH(request, context) {
       data: { status },
       select: driverAccountSelect,
     });
+    if (status === "INACTIVE") await revokeAccountSessions(driver.id, "DRIVER");
     return Response.json({ data: serializeDriverAccount(driver) });
   } catch (error) {
     if (error.code === "P2025") return Response.json({ error: "Driver account not found." }, { status: 404 });
@@ -31,9 +36,12 @@ export async function PATCH(request, context) {
   }
 }
 
-export async function DELETE(_request, context) {
+export async function DELETE(request, context) {
+  const auth = await authorizeAdminRequest(request);
+  if (auth.response) return auth.response;
   const { driverId } = await context.params;
   try {
+    await revokeAccountSessions(driverId, "DRIVER");
     await prisma.driverAccount.delete({ where: { id: driverId } });
     return Response.json({ data: { id: driverId } });
   } catch (error) {

@@ -7,6 +7,7 @@ import AdminShell from "@/app/admin/_components/AdminShell"
 import AdminToast from "@/app/admin/_components/AdminToast"
 import PaginationControls from "@/app/components/shared/PaginationControls"
 import { CardGridSkeleton } from "@/app/components/shared/SkeletonBlocks"
+import { dedupeClientRequest } from "@/lib/dedupeClientRequest"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -104,6 +105,12 @@ async function readApi(response) {
   return payload
 }
 
+function fetchVideos() {
+  return dedupeClientRequest("/api/admin/videos?limit=100", () => {
+    return fetch("/api/admin/videos?limit=100").then(readApi)
+  })
+}
+
 export default function VideosManager() {
   const [videos, setVideos] = useState([])
   const [loading, setLoading] = useState(true)
@@ -124,7 +131,7 @@ export default function VideosManager() {
   const loadVideos = async () => {
     setLoading(true)
     try {
-      const payload = await fetch("/api/admin/videos?limit=100").then(readApi)
+      const payload = await fetchVideos()
       setVideos(payload.data)
     } catch (error) {
       showToast(error.message || "Could not load videos.", "error")
@@ -135,8 +142,7 @@ export default function VideosManager() {
 
   useEffect(() => {
     let active = true
-    fetch("/api/admin/videos?limit=100")
-      .then(readApi)
+    fetchVideos()
       .then((payload) => {
         if (active) setVideos(payload.data)
       })
@@ -428,12 +434,17 @@ function VideoForm({ video, saving, savingLabel, onCancel, onSave }) {
   }
 
   return (
-    <CardContent className="pt-5">
-      <form className="space-y-4" onSubmit={submit}>
+    <CardContent className="min-w-0 overflow-x-hidden pt-5">
+      <form className="min-w-0 space-y-4" onSubmit={submit}>
         <FormField label="Video file">
-          <label className="flex min-h-24 cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-[#D4A017]/70 bg-[#FAF7F0] px-4 py-4 text-center hover:bg-[#F6F1E8]">
+          <label className="flex min-h-24 min-w-0 cursor-pointer flex-col items-center justify-center overflow-hidden rounded-lg border border-dashed border-[#D4A017]/70 bg-[#FAF7F0] px-4 py-4 text-center hover:bg-[#F6F1E8]">
             <Upload className="mb-2 size-6 text-[#8B1E1E]" />
-            <span className="text-sm font-semibold">{file?.name || video?.asset?.fileName || "Choose MP4, MOV, or WebM"}</span>
+            <span
+              className="block w-full min-w-0 truncate text-sm font-semibold"
+              title={file?.name || video?.asset?.fileName || undefined}
+            >
+              {file?.name || video?.asset?.fileName || "Choose MP4, MOV, or WebM"}
+            </span>
             <span className="mt-1 text-xs text-[#756D62]">Source up to 100MB; large files are compressed before upload</span>
             <input className="sr-only" type="file" accept="video/mp4,video/quicktime,video/webm" onChange={chooseFile} />
           </label>
@@ -509,7 +520,7 @@ function EmptyState({ hasVideos, onCreate }) {
 function Modal({ children, onClose, title }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#2B2B2B]/55 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label={title}>
-      <div className="max-h-[calc(100svh-2rem)] w-full max-w-3xl overflow-y-auto rounded-lg border border-[#E4DAC9] bg-white shadow-2xl">
+      <div className="max-h-[calc(100svh-2rem)] w-full max-w-3xl overflow-x-hidden overflow-y-auto rounded-lg border border-[#E4DAC9] bg-white shadow-2xl">
         <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[#E4DAC9] bg-white px-5 py-4">
           <h2 className="font-display text-xl font-semibold">{title}</h2>
           <Button type="button" variant="ghost" size="icon" onClick={onClose} aria-label={`Close ${title}`}><X className="size-4" /></Button>
@@ -522,9 +533,9 @@ function Modal({ children, onClose, title }) {
 
 function FormField({ children, label, required = false }) {
   return (
-    <label className="block">
+    <label className="block min-w-0">
       <span className="text-xs font-semibold uppercase tracking-[0.12em] text-[#756D62]">{label}{required ? <span className="text-[#8B1E1E]"> *</span> : null}</span>
-      <span className="mt-1 block">{children}</span>
+      <span className="mt-1 block min-w-0">{children}</span>
     </label>
   )
 }

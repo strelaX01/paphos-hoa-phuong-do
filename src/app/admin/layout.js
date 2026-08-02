@@ -2,6 +2,14 @@ import { AdminNotificationsProvider } from "@/app/admin/_components/AdminNotific
 import { AdminSessionProvider } from "@/app/admin/_components/AdminSession"
 import { getCurrentAdminAccount } from "@/lib/adminAuth"
 
+export const metadata = {
+  robots: {
+    index: false,
+    follow: false,
+    nocache: true,
+  },
+}
+
 export default async function AdminLayout({ children }) {
   const account = await getCurrentAdminAccount()
 

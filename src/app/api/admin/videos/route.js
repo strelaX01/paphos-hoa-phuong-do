@@ -1,3 +1,4 @@
+import { authorizeAdminRequest } from "@/lib/adminApiAuth";
 import { prisma } from "@/lib/prisma";
 import { readVideoAssetMetadata, validateVideoSpecialInput } from "@/lib/validations/videoSpecial";
 import { serializeVideoSpecial, videoSpecialSelect } from "@/lib/videoSpecialData";
@@ -6,6 +7,8 @@ import { deleteManagedVideo } from "@/lib/videoStorage";
 export const dynamic = "force-dynamic";
 
 export async function GET(request) {
+  const auth = await authorizeAdminRequest(request);
+  if (auth.response) return auth.response;
   const { searchParams } = new URL(request.url);
   const query = searchParams.get("q")?.trim() || "";
   const status = searchParams.get("status")?.trim().toUpperCase() || "";
@@ -49,6 +52,8 @@ export async function GET(request) {
 }
 
 export async function POST(request) {
+  const auth = await authorizeAdminRequest(request);
+  if (auth.response) return auth.response;
   let body;
   try {
     body = await request.json();

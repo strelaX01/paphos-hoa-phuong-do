@@ -18,18 +18,16 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Progress } from "@/components/ui/progress"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { getAdminDashboardData } from "@/lib/adminDashboardData"
+import { formatOrderStatus } from "@/lib/orderStatus"
 
 export const metadata = { title: "Admin Dashboard | Hoa Phuong Do" }
 export const dynamic = "force-dynamic"
 
 const statusVariant = {
   PENDING: "warning",
-  CONFIRMED: "confirmed",
   PREPARING: "preparing",
-  ASSIGNED: "info",
   PENDING_PICKUP: "info",
-  PICKED_UP: "info",
-  EN_ROUTE: "info",
+  EN_ROUTE: "default",
   DELIVERED: "success",
   CANCELLED: "destructive",
 }
@@ -55,7 +53,7 @@ export default async function AdminDashboardPage() {
     {
       label: "Orders today",
       value: data.ordersToday,
-      detail: `${data.pendingToday} awaiting confirmation`,
+      detail: `${data.pendingToday} new ${data.pendingToday === 1 ? "order" : "orders"}`,
       tone: data.pendingToday ? "warning" : "neutral",
       icon: PackageCheck,
     },
@@ -77,10 +75,11 @@ export default async function AdminDashboardPage() {
   const maxRevenue = Math.max(1, ...data.chart.map((entry) => entry.revenue))
   const maxSold = Math.max(1, ...data.popularItems.map((item) => item.sold))
   const operationalRows = [
-    { label: "Pending", value: data.operationalStatus.pending, color: "bg-amber-500" },
-    { label: "In kitchen", value: data.operationalStatus.kitchen, color: "bg-orange-500" },
-    { label: "On delivery", value: data.operationalStatus.delivery, color: "bg-sky-600" },
-    { label: "Delivered today", value: data.operationalStatus.deliveredToday, color: "bg-emerald-600" },
+    { label: "New", value: data.operationalStatus.newOrders, color: "bg-amber-500" },
+    { label: "Preparing", value: data.operationalStatus.preparing, color: "bg-orange-500" },
+    { label: "Ready", value: data.operationalStatus.ready, color: "bg-sky-600" },
+    { label: "Delivering", value: data.operationalStatus.delivery, color: "bg-zinc-800" },
+    { label: "Completed today", value: data.operationalStatus.deliveredToday, color: "bg-emerald-600" },
   ]
   const operationalTotal = Math.max(1, ...operationalRows.map((entry) => entry.value))
 
@@ -172,7 +171,7 @@ export default async function AdminDashboardPage() {
                 <TableCell className="max-w-40 truncate font-medium">{order.customerName}</TableCell>
                 <TableCell className="max-w-56 truncate text-[#756D62]">{order.items.map((item) => `${item.name} x${item.quantity}`).join(", ")}</TableCell>
                 <TableCell className="text-right font-semibold">{formatMoney(order.total)}</TableCell>
-                <TableCell><Badge variant={statusVariant[order.status]}>{formatStatus(order.status)}</Badge></TableCell>
+                <TableCell><Badge variant={statusVariant[order.status]}>{formatOrderStatus(order.status)}</Badge></TableCell>
               </TableRow>)}</TableBody>
             </Table></div> : <EmptyData message="No orders have been placed yet." />}
           </CardContent>

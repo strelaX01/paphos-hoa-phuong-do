@@ -5,6 +5,8 @@ import { useEffect } from 'react'
 
 import { getCartSummary, useCartStore } from '@/lib/stores/cartStore'
 
+let deliveryPricingRequest = null
+
 /**
  * useCart - shared cart state hook backed by Zustand.
  */
@@ -22,7 +24,23 @@ export function useCart() {
   const updateNote = useCartStore((state) => state.updateNote)
   const clearCart = useCartStore((state) => state.clearCart)
   const syncCatalog = useCartStore((state) => state.syncCatalog)
-  const summary = getCartSummary(items)
+  const deliveryPricing = useCartStore((state) => state.deliveryPricing)
+  const beginDeliveryPricingLoad = useCartStore((state) => state.beginDeliveryPricingLoad)
+  const failDeliveryPricingLoad = useCartStore((state) => state.failDeliveryPricingLoad)
+  const setDeliveryPricing = useCartStore((state) => state.setDeliveryPricing)
+  const summary = getCartSummary(items, deliveryPricing.nearbyDeliveryFee)
+
+  useEffect(() => {
+    if (deliveryPricing.status !== 'idle') return
+    beginDeliveryPricingLoad()
+    deliveryPricingRequest ||= fetch('/api/delivery/config', { cache: 'no-store' })
+      .then(async (response) => {
+        const payload = await response.json().catch(() => ({}))
+        if (!response.ok) throw new Error(payload.error || 'Could not load delivery pricing.')
+        return payload.data
+      })
+    deliveryPricingRequest.then(setDeliveryPricing).catch(failDeliveryPricingLoad)
+  }, [beginDeliveryPricingLoad, deliveryPricing.status, failDeliveryPricingLoad, setDeliveryPricing])
 
   return {
     items,
@@ -33,5 +51,9 @@ export function useCart() {
     updateNote,
     clearCart,
     syncCatalog,
+    setDeliveryPricing,
+    nearbyDeliveryFee: deliveryPricing.nearbyDeliveryFee,
+    fartherDeliveryFee: deliveryPricing.fartherDeliveryFee,
+    deliveryPricingStatus: deliveryPricing.status,
   }
 }

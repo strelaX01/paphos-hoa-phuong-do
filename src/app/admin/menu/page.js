@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   Check,
+  ChevronDown,
   Edit3,
   Eye,
   EyeOff,
@@ -11,7 +12,6 @@ import {
   Plus,
   RefreshCw,
   Search,
-  Tag,
   Trash2,
   Upload,
   Utensils,
@@ -20,34 +20,52 @@ import {
 
 import AdminShell from "@/app/admin/_components/AdminShell";
 import AdminToast from "@/app/admin/_components/AdminToast";
+import PaginationControls from "@/app/components/shared/PaginationControls";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { dedupeClientRequest } from "@/lib/dedupeClientRequest";
 
 const emptyCategoryForm = {
   title: "",
   isActive: true,
 };
 
-const emptyTagForm = {
-  label: "",
-  description: "",
-};
-
 const emptyItemForm = {
   name: "",
   description: "",
   price: "",
+  pricingMode: "single",
+  variants: [],
   image: "",
   categoryId: "",
-  tagId: "",
   isActive: true,
 };
 
 const inputClass =
   "w-full rounded-md border border-[#E4DAC9] bg-white px-3 py-2 text-sm text-[#2B2B2B] outline-none transition-colors placeholder:text-[#A89E91] focus:border-[#8B1E1E] focus:ring-2 focus:ring-[#8B1E1E]/10";
 
-const menuSections = new Set(["items", "categories", "tags"]);
+const euroInputFormatter = new Intl.NumberFormat("en-IE", {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
+function isValidEuroPrice(value) {
+  const price = Number(value);
+  return Number.isFinite(price) && price >= 0.01 && price <= 10000;
+}
+
+function sanitizeEuroInput(value) {
+  const normalized = String(value || "").replace(",", ".").replace(/[^\d.]/g, "");
+  const dotIndex = normalized.indexOf(".");
+  const whole = (dotIndex === -1 ? normalized : normalized.slice(0, dotIndex)).replace(/^0+(?=\d)/, "");
+  if (dotIndex === -1) return whole;
+  const decimals = normalized.slice(dotIndex + 1).replaceAll(".", "").slice(0, 2);
+  return `${whole || "0"}.${decimals}`;
+}
+
+const menuSections = new Set(["items", "categories"]);
+const ITEM_PAGE_SIZE = 10;
 
 function getSectionFromHash() {
   if (typeof window === "undefined") return "items";
@@ -68,11 +86,30 @@ async function readApi(response) {
 }
 
 function fetchMenuData() {
-  return Promise.all([
-    fetch("/api/admin/menu/items").then(readApi),
-    fetch("/api/admin/menu/categories").then(readApi),
-    fetch("/api/admin/menu/tags").then(readApi),
-  ]);
+  return dedupeClientRequest("/api/admin/menu/categories", () => {
+    return fetch("/api/admin/menu/categories").then(readApi);
+  });
+}
+
+async function fetchMenuItems({ page, query, categoryFilter }) {
+  const params = new URLSearchParams({ page: String(page), pageSize: String(ITEM_PAGE_SIZE) });
+  if (query.trim()) params.set("q", query.trim());
+  if (categoryFilter !== "all") params.set("categoryId", categoryFilter);
+
+  const url = `/api/admin/menu/items?${params.toString()}`;
+  return dedupeClientRequest(url, async () => {
+    const response = await fetch(url, { cache: "no-store" });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const firstError = payload.errors ? Object.values(payload.errors)[0] : null;
+      throw new Error(firstError || payload.error || "Could not load menu items.");
+    }
+    return {
+      items: payload.data || [],
+      pagination: payload.pagination || { page: 1, pageSize: ITEM_PAGE_SIZE, total: 0, totalPages: 1 },
+      summary: payload.summary || { total: 0, available: 0 },
+    };
+  });
 }
 
 function formatMoney(value) {
@@ -82,16 +119,26 @@ function formatMoney(value) {
   }).format(Number(value || 0));
 }
 
+function formatItemPrice(item) {
+  if (!item?.variants?.length) return formatMoney(item?.price);
+  const prices = item.variants.map((variant) => Number(variant.price));
+  const minimum = Math.min(...prices);
+  const maximum = Math.max(...prices);
+  return minimum === maximum ? formatMoney(minimum) : `${formatMoney(minimum)} - ${formatMoney(maximum)}`;
+}
+
 export default function AdminMenuPage() {
   const [items, setItems] = useState([]);
   const [categories, setCategories] = useState([]);
-  const [tags, setTags] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [query, setQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
+  const [itemPage, setItemPage] = useState(1);
+  const [itemPagination, setItemPagination] = useState({ page: 1, pageSize: ITEM_PAGE_SIZE, total: 0, totalPages: 1 });
+  const [menuSummary, setMenuSummary] = useState({ total: 0, available: 0 });
+  const [refreshVersion, setRefreshVersion] = useState(0);
   const [categoryQuery, setCategoryQuery] = useState("");
-  const [tagQuery, setTagQuery] = useState("");
   const [activeSection, setActiveSection] = useState("items");
   const [modal, setModal] = useState(null);
   const [toast, setToast] = useState(null);
@@ -103,16 +150,12 @@ export default function AdminMenuPage() {
   };
 
   const loadMenuData = async () => {
-    setLoading(true);
     try {
-      const [nextItems, nextCategories, nextTags] = await fetchMenuData();
-      setItems(nextItems);
+      const nextCategories = await fetchMenuData();
       setCategories(nextCategories);
-      setTags(nextTags);
+      setRefreshVersion((version) => version + 1);
     } catch (error) {
       showToast(error.message || "Could not load menu data.", "error");
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -120,11 +163,9 @@ export default function AdminMenuPage() {
     let active = true;
 
     fetchMenuData()
-      .then(([nextItems, nextCategories, nextTags]) => {
+      .then((nextCategories) => {
         if (!active) return;
-        setItems(nextItems);
         setCategories(nextCategories);
-        setTags(nextTags);
       })
       .catch((error) => {
         if (!active) return;
@@ -135,15 +176,37 @@ export default function AdminMenuPage() {
           id: toastIdRef.current,
         });
       })
-      .finally(() => {
-        if (!active) return;
-        setLoading(false);
-      });
-
     return () => {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    const timer = window.setTimeout(() => {
+      setLoading(true);
+      fetchMenuItems({ page: itemPage, query, categoryFilter })
+        .then((result) => {
+          if (!active) return;
+          setItems(result.items);
+          setItemPagination(result.pagination);
+          setMenuSummary(result.summary);
+          if (result.pagination.page !== itemPage) setItemPage(result.pagination.page);
+        })
+        .catch((error) => {
+          if (!active) return;
+          showToast(error.message || "Could not load menu items.", "error");
+        })
+        .finally(() => {
+          if (active) setLoading(false);
+        });
+    }, query.trim() ? 300 : 0);
+
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [categoryFilter, itemPage, query, refreshVersion]);
 
   useEffect(() => {
     const syncMenuSection = () => setActiveSection(getSectionFromHash());
@@ -158,20 +221,6 @@ export default function AdminMenuPage() {
     };
   }, []);
 
-  const filteredItems = useMemo(() => {
-    const search = query.trim().toLowerCase();
-
-    return items.filter((item) => {
-      const matchesSearch = !search
-        || item.name.toLowerCase().includes(search)
-        || item.categoryTitle?.toLowerCase().includes(search)
-        || item.tagLabel?.toLowerCase().includes(search);
-      const matchesCategory = categoryFilter === "all" || item.categoryId === categoryFilter;
-
-      return matchesSearch && matchesCategory;
-    });
-  }, [categoryFilter, items, query]);
-
   const filteredCategories = useMemo(() => {
     const search = categoryQuery.trim().toLowerCase();
     if (!search) return categories;
@@ -181,18 +230,6 @@ export default function AdminMenuPage() {
       || category.slug?.toLowerCase().includes(search)
     ));
   }, [categories, categoryQuery]);
-
-  const filteredTags = useMemo(() => {
-    const search = tagQuery.trim().toLowerCase();
-    if (!search) return tags;
-
-    return tags.filter((tag) => (
-      tag.label.toLowerCase().includes(search)
-      || tag.description?.toLowerCase().includes(search)
-    ));
-  }, [tagQuery, tags]);
-
-  const availableCount = items.filter((item) => item.isActive).length;
 
   const handleSaveCategory = async (form, category) => {
     setSaving(true);
@@ -234,62 +271,25 @@ export default function AdminMenuPage() {
     }
   };
 
-  const handleSaveTag = async (form, tag) => {
+  const handleSaveItem = async (form, item, imageFile) => {
     setSaving(true);
     try {
-      const data = await fetch(tag ? `/api/admin/menu/tags/${tag.id}` : "/api/admin/menu/tags", {
-        method: tag ? "PATCH" : "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
-      }).then(readApi);
+      const payload = {
+        ...form,
+        price: form.pricingMode === "single" ? Number(form.price) : 0,
+        variants: form.pricingMode === "variants"
+          ? form.variants.map(({ label, price, isActive = true }) => ({ label, price, isActive }))
+          : [],
+        deliverable: true,
+        isFeatured: false,
+      };
+      const requestBody = new FormData();
+      requestBody.append("payload", JSON.stringify(payload));
+      if (imageFile) requestBody.append("image", imageFile);
 
-      setTags((prev) => (
-        tag
-          ? prev.map((entry) => (entry.id === data.id ? data : entry))
-          : [...prev, data].sort((a, b) => a.label.localeCompare(b.label))
-      ));
-      setItems((prev) => prev.map((item) => (
-        item.tagId === data.id ? { ...item, tagLabel: data.label } : item
-      )));
-      setModal(null);
-      showToast(tag ? "Tag updated." : "Tag created.");
-    } catch (error) {
-      showToast(error.message, "error");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleDeleteTag = async (tag) => {
-    setSaving(true);
-    try {
-      await fetch(`/api/admin/menu/tags/${tag.id}`, { method: "DELETE" }).then(readApi);
-      setTags((prev) => prev.filter((entry) => entry.id !== tag.id));
-      setItems((prev) => prev.map((item) => (
-        item.tagId === tag.id ? { ...item, tagId: null, tagLabel: null } : item
-      )));
-      setModal(null);
-      showToast("Tag deleted.");
-    } catch (error) {
-      showToast(error.message, "error");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleSaveItem = async (form, item) => {
-    setSaving(true);
-    try {
       const data = await fetch(item ? `/api/admin/menu/items/${item.id}` : "/api/admin/menu/items", {
         method: item ? "PATCH" : "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...form,
-          price: Number(form.price),
-          tagId: form.tagId || null,
-          deliverable: true,
-          isFeatured: false,
-        }),
+        body: requestBody,
       }).then(readApi);
 
       setItems((prev) => (
@@ -299,6 +299,7 @@ export default function AdminMenuPage() {
       ));
       setModal(null);
       showToast(item ? "Item updated." : "Item created.");
+      if (!item) setItemPage(1);
       loadMenuData();
     } catch (error) {
       showToast(error.message, "error");
@@ -329,7 +330,7 @@ export default function AdminMenuPage() {
       onMenuSectionChange={setActiveSection}
       eyebrow="Menu manager"
       title="Menu"
-      description="Manage dishes, delivery visibility, categories, and customer-facing menu tags."
+      description="Manage dishes, prices, availability, and categories."
       action={
         <Button onClick={() => setModal({ type: "item" })}>
           <Plus className="size-4" />
@@ -345,11 +346,10 @@ export default function AdminMenuPage() {
       />
 
       <div className="space-y-5">
-        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-label="Menu summary">
-          <StatCard label="Menu items" value={items.length} detail="Stored in the menu database" icon={Utensils} />
-          <StatCard label="Available items" value={availableCount} detail={`${items.length - availableCount} unavailable`} icon={Check} />
+        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3" aria-label="Menu summary">
+          <StatCard label="Menu items" value={menuSummary.total} detail="Stored in the menu database" icon={Utensils} />
+          <StatCard label="Available items" value={menuSummary.available} detail={`${menuSummary.total - menuSummary.available} unavailable`} icon={Check} />
           <StatCard label="Categories" value={categories.length} detail="No description fields needed" icon={ImageIcon} />
-          <StatCard label="Tags" value={tags.length} detail="Selectable on menu items" icon={Tag} />
         </section>
 
         {activeSection === "items" ? (
@@ -364,21 +364,29 @@ export default function AdminMenuPage() {
                   <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[#756D62]" />
                   <input
                     value={query}
-                    onChange={(event) => setQuery(event.target.value)}
+                    onChange={(event) => {
+                      setQuery(event.target.value);
+                      setItemPage(1);
+                    }}
                     className="h-9 w-full rounded-md border border-[#E4DAC9] bg-white pl-9 pr-3 text-sm outline-none focus:border-[#8B1E1E] sm:w-64"
                     placeholder="Search items"
                   />
                 </div>
-                <select
-                  value={categoryFilter}
-                  onChange={(event) => setCategoryFilter(event.target.value)}
-                  className="h-9 rounded-md border border-[#E4DAC9] bg-white px-3 text-sm outline-none focus:border-[#8B1E1E]"
-                >
-                  <option value="all">All categories</option>
-                  {categories.map((category) => (
-                    <option key={category.id} value={category.id}>{category.title}</option>
-                  ))}
-                </select>
+                <div className="min-w-0 sm:w-52">
+                  <FormSelect
+                    value={categoryFilter}
+                    placeholder="All categories"
+                    options={[
+                      { value: "all", label: "All categories" },
+                      ...categories.map((category) => ({ value: category.id, label: category.title })),
+                    ]}
+                    onChange={(value) => {
+                      setCategoryFilter(value);
+                      setItemPage(1);
+                    }}
+                    searchable
+                  />
+                </div>
                 <Button variant="outline" onClick={loadMenuData} disabled={loading}>
                   <RefreshCw className={`size-4 ${loading ? "animate-spin" : ""}`} />
                   Refresh
@@ -387,22 +395,22 @@ export default function AdminMenuPage() {
             </CardHeader>
             <CardContent>
               {loading ? (
-                <EmptyState title="Loading menu items..." />
-              ) : filteredItems.length ? (
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[940px] text-left text-sm">
+                <MenuItemsTableSkeleton rows={ITEM_PAGE_SIZE} />
+              ) : items.length ? (
+                <div className="space-y-4">
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[820px] text-left text-sm">
                     <thead className="border-b border-[#E4DAC9] text-xs uppercase text-[#756D62]">
                       <tr>
                         <th className="px-3 py-3 font-semibold">Item</th>
                         <th className="px-3 py-3 font-semibold">Category</th>
-                        <th className="px-3 py-3 font-semibold">Tag</th>
                         <th className="px-3 py-3 font-semibold">Price</th>
                         <th className="px-3 py-3 font-semibold">Status</th>
                         <th className="px-3 py-3 text-right font-semibold">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-[#EFE7DA]">
-                      {filteredItems.map((item) => (
+                      {items.map((item) => (
                         <tr
                           key={item.id}
                           className={`align-top transition-colors ${
@@ -434,10 +442,14 @@ export default function AdminMenuPage() {
                             </div>
                           </td>
                           <td className="px-3 py-4 text-[#756D62]">{item.categoryTitle || "Uncategorized"}</td>
-                          <td className="px-3 py-4">
-                            {item.tagLabel ? <Badge variant="warning">{item.tagLabel}</Badge> : <span className="text-[#756D62]">-</span>}
+                          <td className="px-3 py-4 font-semibold">
+                            <span className="block tabular-nums">{formatItemPrice(item)}</span>
+                            {item.variants?.length ? (
+                              <span className="mt-1 block text-xs font-normal text-[#756D62]">
+                                {item.variants.map((variant) => variant.label).join(" / ")}
+                              </span>
+                            ) : null}
                           </td>
-                          <td className="px-3 py-4 font-semibold">{formatMoney(item.price)}</td>
                           <td className="px-3 py-4">
                             <div className="flex flex-wrap gap-1.5">
                               <Badge variant={item.isActive ? "success" : "secondary"}>
@@ -460,7 +472,18 @@ export default function AdminMenuPage() {
                         </tr>
                       ))}
                     </tbody>
-                  </table>
+                    </table>
+                  </div>
+                  <div className="flex flex-col items-center justify-between gap-3 border-t border-[#E4DAC9] pt-4 sm:flex-row">
+                    <p className="text-xs text-[#756D62]">
+                      Showing {(itemPagination.page - 1) * itemPagination.pageSize + 1}-{Math.min(itemPagination.page * itemPagination.pageSize, itemPagination.total)} of {itemPagination.total} items
+                    </p>
+                    <PaginationControls
+                      page={itemPagination.page}
+                      totalPages={itemPagination.totalPages}
+                      onPageChange={setItemPage}
+                    />
+                  </div>
                 </div>
               ) : (
                 <EmptyState title="No items found." actionLabel="Create item" onAction={() => setModal({ type: "item" })} />
@@ -515,52 +538,6 @@ export default function AdminMenuPage() {
           </Card>
         ) : null}
 
-        {activeSection === "tags" ? (
-          <Card id="tags" className="border-[#E4DAC9] bg-white">
-            <CardHeader className="gap-4 md:flex-row md:items-center md:justify-between">
-              <div>
-                <CardTitle className="font-display text-xl">Tags</CardTitle>
-                <CardDescription>Create labels, then select them when adding an item.</CardDescription>
-              </div>
-              <div className="flex flex-col gap-2 sm:flex-row">
-                <div className="relative">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[#756D62]" />
-                  <input
-                    value={tagQuery}
-                    onChange={(event) => setTagQuery(event.target.value)}
-                    className="h-9 w-full rounded-md border border-[#E4DAC9] bg-white pl-9 pr-3 text-sm outline-none focus:border-[#8B1E1E] sm:w-56"
-                    placeholder="Search tags"
-                  />
-                </div>
-                <Button variant="outline" onClick={() => setModal({ type: "tag" })}>
-                  <Plus className="size-4" />
-                  Add tag
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {filteredTags.map((tag) => (
-                <ManagerRow
-                  key={tag.id}
-                  title={tag.label}
-                  subtitle={tag.description || `${tag.count || 0} items`}
-                  badge={`${tag.count || 0} items`}
-                  badgeVariant="warning"
-                  onEdit={() => setModal({ type: "tag", tag })}
-                  onDelete={() => setModal({ type: "delete-tag", tag })}
-                />
-              ))}
-              {!filteredTags.length ? (
-                <EmptyState
-                  title={tags.length ? "No tags match your search." : "No tags yet."}
-                  actionLabel={tags.length ? undefined : "Create tag"}
-                  onAction={tags.length ? undefined : () => setModal({ type: "tag" })}
-                />
-              ) : null}
-            </CardContent>
-          </Card>
-        ) : null}
-
       </div>
 
       {modal?.type === "item" ? (
@@ -568,10 +545,9 @@ export default function AdminMenuPage() {
           <ItemForm
             item={modal.item}
             categories={categories}
-            tags={tags}
             saving={saving}
             onCancel={() => setModal(null)}
-            onSave={(form) => handleSaveItem(form, modal.item)}
+            onSave={(form, imageFile) => handleSaveItem(form, modal.item, imageFile)}
           />
         </Modal>
       ) : null}
@@ -583,17 +559,6 @@ export default function AdminMenuPage() {
             saving={saving}
             onCancel={() => setModal(null)}
             onSave={(form) => handleSaveCategory(form, modal.category)}
-          />
-        </Modal>
-      ) : null}
-
-      {modal?.type === "tag" ? (
-        <Modal title={modal.tag ? "Edit tag" : "Add tag"} onClose={() => setModal(null)}>
-          <TagForm
-            tag={modal.tag}
-            saving={saving}
-            onCancel={() => setModal(null)}
-            onSave={(form) => handleSaveTag(form, modal.tag)}
           />
         </Modal>
       ) : null}
@@ -630,16 +595,6 @@ export default function AdminMenuPage() {
         />
       ) : null}
 
-      {modal?.type === "delete-tag" ? (
-        <ConfirmDelete
-          title="Delete tag?"
-          name={modal.tag.label}
-          message="Items using this tag will keep working and lose the tag."
-          saving={saving}
-          onCancel={() => setModal(null)}
-          onConfirm={() => handleDeleteTag(modal.tag)}
-        />
-      ) : null}
     </AdminShell>
   );
 }
@@ -684,39 +639,89 @@ function Modal({ title, children, onClose }) {
   );
 }
 
-function ItemForm({ item, categories, tags, saving, onCancel, onSave }) {
-  const [uploading, setUploading] = useState(false);
-  const [uploadError, setUploadError] = useState("");
+function ItemForm({ item, categories, saving, onCancel, onSave }) {
+  const previewObjectUrlRef = useRef("");
+  const [imageFile, setImageFile] = useState(null);
+  const [imagePreview, setImagePreview] = useState(item?.image || "");
+  const [imageError, setImageError] = useState("");
+  const [categoryError, setCategoryError] = useState("");
+  const [priceError, setPriceError] = useState("");
   const [form, setForm] = useState(() => ({
     ...emptyItemForm,
     ...item,
     price: item?.price === undefined ? "" : String(item.price),
-    tagId: item?.tagId || "",
+    pricingMode: item?.variants?.length ? "variants" : "single",
+    variants: (item?.variants || []).map((variant, index) => ({
+      ...variant,
+      price: String(variant.price),
+      clientId: variant.id || `saved-${index}`,
+    })),
   }));
 
   const update = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
 
-  const uploadImage = async (file) => {
+  const setPricingMode = (pricingMode) => {
+    setForm((prev) => ({
+      ...prev,
+      pricingMode,
+      variants: pricingMode === "variants" && prev.variants.length < 2
+        ? [
+            { clientId: `new-${Date.now()}-1`, label: "", price: "", isActive: true },
+            { clientId: `new-${Date.now()}-2`, label: "", price: "", isActive: true },
+          ]
+        : prev.variants,
+    }));
+  };
+
+  const updateVariant = (clientId, key, value) => {
+    setForm((prev) => ({
+      ...prev,
+      variants: prev.variants.map((variant) => (
+        variant.clientId === clientId ? { ...variant, [key]: value } : variant
+      )),
+    }));
+  };
+
+  const addVariant = () => {
+    setForm((prev) => prev.variants.length >= 10 ? prev : ({
+      ...prev,
+      variants: [...prev.variants, {
+        clientId: `new-${Date.now()}-${prev.variants.length}`,
+        label: "",
+        price: "",
+        isActive: true,
+      }],
+    }));
+  };
+
+  const removeVariant = (clientId) => {
+    setForm((prev) => prev.variants.length <= 2 ? prev : ({
+      ...prev,
+      variants: prev.variants.filter((variant) => variant.clientId !== clientId),
+    }));
+  };
+
+  useEffect(() => () => {
+    if (previewObjectUrlRef.current) URL.revokeObjectURL(previewObjectUrlRef.current);
+  }, []);
+
+  const selectImage = (file) => {
     if (!file) return;
-
-    setUploading(true);
-    setUploadError("");
-
-    const body = new FormData();
-    body.append("file", file);
-
-    try {
-      const data = await fetch("/api/admin/menu/uploads", {
-        method: "POST",
-        body,
-      }).then(readApi);
-
-      update("image", data.url);
-    } catch (error) {
-      setUploadError(error.message || "Could not upload image.");
-    } finally {
-      setUploading(false);
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+      setImageError("Only JPG, PNG, or WEBP images are allowed.");
+      return;
     }
+    if (file.size > 3 * 1024 * 1024) {
+      setImageError("Image must be 3MB or smaller.");
+      return;
+    }
+
+    if (previewObjectUrlRef.current) URL.revokeObjectURL(previewObjectUrlRef.current);
+    const previewUrl = URL.createObjectURL(file);
+    previewObjectUrlRef.current = previewUrl;
+    setImageFile(file);
+    setImagePreview(previewUrl);
+    setImageError("");
   };
 
   return (
@@ -724,57 +729,97 @@ function ItemForm({ item, categories, tags, saving, onCancel, onSave }) {
       className="space-y-4"
       onSubmit={(event) => {
         event.preventDefault();
-        onSave(form);
+        if (!form.categoryId) {
+          setCategoryError("Select a category.");
+          return;
+        }
+        const prices = form.pricingMode === "variants" ? form.variants.map((variant) => variant.price) : [form.price];
+        if (prices.some((price) => !isValidEuroPrice(price))) {
+          setPriceError("Enter a price from EUR 0.01 to EUR 10,000.00.");
+          return;
+        }
+        onSave(form, imageFile);
       }}
     >
       <div className="grid gap-4 md:grid-cols-2">
-        <Field label="Dish name">
+        <Field label="Dish name" required>
           <input className={inputClass} value={form.name} onChange={(event) => update("name", event.target.value)} required />
         </Field>
-        <Field label="Price">
-          <input className={inputClass} type="number" min="0" step="0.01" value={form.price} onChange={(event) => update("price", event.target.value)} required />
+        <Field label="Pricing" required>
+          <div className="grid grid-cols-2 rounded-md border border-[#E4DAC9] bg-[#F6F1E8] p-1">
+            <button type="button" onClick={() => setPricingMode("single")} className={`rounded px-3 py-1.5 text-sm font-semibold ${form.pricingMode === "single" ? "bg-white text-[#8B1E1E] shadow-sm" : "text-[#756D62]"}`}>Single price</button>
+            <button type="button" onClick={() => setPricingMode("variants")} className={`rounded px-3 py-1.5 text-sm font-semibold ${form.pricingMode === "variants" ? "bg-white text-[#8B1E1E] shadow-sm" : "text-[#756D62]"}`}>Price options</button>
+          </div>
         </Field>
-        <Field label="Category">
-          <select className={inputClass} value={form.categoryId} onChange={(event) => update("categoryId", event.target.value)} required>
-            <option value="">Select category</option>
-            {categories.map((category) => (
-              <option key={category.id} value={category.id}>{category.title}</option>
+        {form.pricingMode === "single" ? (
+          <Field label="Price (EUR)" required>
+            <EuroInput value={form.price} onChange={(value) => { update("price", value); setPriceError(""); }} ariaLabel="Price in euro" error={priceError} required />
+            {priceError ? <p className="text-xs font-medium text-red-700">{priceError}</p> : null}
+          </Field>
+        ) : (
+          <div className="space-y-2 md:col-span-2">
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-sm font-medium text-[#2B2B2B]">Price options <RequiredMark /></span>
+              <button type="button" onClick={addVariant} disabled={form.variants.length >= 10} className="inline-flex items-center gap-1.5 text-sm font-semibold text-[#8B1E1E] disabled:opacity-40">
+                <Plus className="size-4" /> Add option
+              </button>
+            </div>
+            {form.variants.map((variant, index) => (
+              <div key={variant.clientId} className="grid grid-cols-[minmax(0,1fr)_36px] gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(110px,0.65fr)_36px]">
+                <input className={inputClass} value={variant.label} maxLength={60} onChange={(event) => updateVariant(variant.clientId, "label", event.target.value)} placeholder={`Option ${index + 1}, e.g. Small`} aria-label={`Price option ${index + 1} label`} required />
+                <EuroInput className="col-start-1 row-start-2 sm:col-start-2 sm:row-start-1" value={variant.price} onChange={(value) => { updateVariant(variant.clientId, "price", value); setPriceError(""); }} ariaLabel={`Price option ${index + 1} price in euro`} error={priceError} required />
+                <button type="button" onClick={() => removeVariant(variant.clientId)} disabled={form.variants.length <= 2} className="col-start-2 row-span-2 row-start-1 inline-flex size-9 items-center justify-center self-center rounded-md border border-[#E4DAC9] text-[#8B1E1E] disabled:cursor-not-allowed disabled:opacity-30 sm:col-start-3 sm:row-span-1" aria-label={`Remove price option ${index + 1}`}>
+                  <Trash2 className="size-4" />
+                </button>
+              </div>
             ))}
-          </select>
-        </Field>
-        <Field label="Tag">
-          <select className={inputClass} value={form.tagId || ""} onChange={(event) => update("tagId", event.target.value)}>
-            <option value="">No tag</option>
-            {tags.map((tag) => (
-              <option key={tag.id} value={tag.id}>{tag.label}</option>
-            ))}
-          </select>
-        </Field>
+            {priceError ? <p className="text-xs font-medium text-red-700">{priceError}</p> : null}
+            <p className="text-xs text-[#756D62]">Use 2 to 10 options such as Small / Large or Half / Full.</p>
+          </div>
+        )}
+        <div className="space-y-1.5 text-sm font-medium text-[#2B2B2B]">
+          <span>Category <RequiredMark /></span>
+          <FormSelect
+            value={form.categoryId}
+            placeholder="Select category"
+            options={categories.map((category) => ({ value: category.id, label: category.title }))}
+            onChange={(value) => {
+              update("categoryId", value);
+              setCategoryError("");
+            }}
+            searchable
+            error={categoryError}
+          />
+          {categoryError ? <p className="text-xs font-medium text-red-700">{categoryError}</p> : null}
+        </div>
         <div className="space-y-1.5 text-sm font-medium text-[#2B2B2B] md:col-span-2">
           <span>Dish photo</span>
           <div className="grid gap-3 sm:grid-cols-[120px_minmax(0,1fr)]">
             <div className="flex aspect-square items-center justify-center overflow-hidden rounded-lg border border-[#E4DAC9] bg-[#FDFAF4]">
-              {form.image ? (
+              {imagePreview ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={form.image} alt={form.name || "Dish preview"} className="size-full object-cover" />
+                <img src={imagePreview} alt={form.name || "Dish preview"} className="size-full object-cover" />
               ) : (
                 <ImageIcon className="size-8 text-[#A89E91]" />
               )}
             </div>
             <div className="flex flex-col justify-center gap-2">
               <label className="inline-flex h-9 w-fit cursor-pointer items-center justify-center gap-2 rounded-md border border-[#E4DAC9] bg-white px-3 text-sm font-semibold text-[#2B2B2B] shadow-xs hover:bg-[#F6F1E8]">
-                <Upload className={`size-4 ${uploading ? "animate-pulse" : ""}`} />
-                {uploading ? "Uploading..." : "Upload image"}
+                <Upload className="size-4" />
+                Choose image
                 <input
                   type="file"
                   accept="image/jpeg,image/png,image/webp"
                   className="sr-only"
-                  disabled={uploading}
-                  onChange={(event) => uploadImage(event.target.files?.[0])}
+                  disabled={saving}
+                  onChange={(event) => {
+                    selectImage(event.target.files?.[0]);
+                    event.target.value = "";
+                  }}
                 />
               </label>
               <p className="text-xs text-[#756D62]">JPG, PNG, or WEBP, up to 3MB.</p>
-              {uploadError ? <p className="text-xs font-medium text-red-700">{uploadError}</p> : null}
+              {imageError ? <p className="text-xs font-medium text-red-700">{imageError}</p> : null}
             </div>
           </div>
         </div>
@@ -785,7 +830,7 @@ function ItemForm({ item, categories, tags, saving, onCancel, onSave }) {
       <div className="max-w-xs">
         <Toggle label="Available" checked={form.isActive} onChange={(value) => update("isActive", value)} />
       </div>
-      <FormActions saving={saving || uploading} submitLabel={item ? "Save item" : "Create item"} onCancel={onCancel} />
+      <FormActions saving={saving} submitLabel={item ? "Save item" : "Create item"} onCancel={onCancel} />
     </form>
   );
 }
@@ -819,37 +864,6 @@ function CategoryForm({ category, saving, onCancel, onSave }) {
   );
 }
 
-function TagForm({ tag, saving, onCancel, onSave }) {
-  const [form, setForm] = useState(() => ({ ...emptyTagForm, ...tag }));
-
-  return (
-    <form
-      className="space-y-4"
-      onSubmit={(event) => {
-        event.preventDefault();
-        onSave(form);
-      }}
-    >
-      <Field label="Tag label">
-        <input
-          className={inputClass}
-          value={form.label}
-          onChange={(event) => setForm((prev) => ({ ...prev, label: event.target.value }))}
-          required
-        />
-      </Field>
-      <Field label="Description">
-        <textarea
-          className={`${inputClass} min-h-20 resize-y`}
-          value={form.description || ""}
-          onChange={(event) => setForm((prev) => ({ ...prev, description: event.target.value }))}
-        />
-      </Field>
-      <FormActions saving={saving} submitLabel={tag ? "Save tag" : "Create tag"} onCancel={onCancel} />
-    </form>
-  );
-}
-
 function ConfirmDelete({ title, name, message, disabled = false, saving, onCancel, onConfirm }) {
   return (
     <Modal title={title} onClose={onCancel}>
@@ -874,10 +888,144 @@ function ConfirmDelete({ title, name, message, disabled = false, saving, onCance
   );
 }
 
-function Field({ label, children }) {
+function FormSelect({ value, placeholder, options, onChange, searchable = false, error = "" }) {
+  const rootRef = useRef(null);
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const selected = options.find((option) => option.value === value);
+  const normalizedSearch = search.trim().toLowerCase();
+  const visibleOptions = normalizedSearch
+    ? options.filter((option) => option.label.toLowerCase().includes(normalizedSearch))
+    : options;
+
+  useEffect(() => {
+    if (!open) return undefined;
+
+    const closeOnOutsidePress = (event) => {
+      if (!rootRef.current?.contains(event.target)) {
+        setOpen(false);
+        setSearch("");
+      }
+    };
+    const closeOnEscape = (event) => {
+      if (event.key === "Escape") {
+        setOpen(false);
+        setSearch("");
+      }
+    };
+    document.addEventListener("pointerdown", closeOnOutsidePress);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutsidePress);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [open]);
+
+  return (
+    <div ref={rootRef} className="relative">
+      <button
+        type="button"
+        onClick={() => {
+          setOpen((current) => !current);
+          if (open) setSearch("");
+        }}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        className={`flex h-10 w-full items-center justify-between gap-3 rounded-md border bg-white px-3 text-left text-sm font-normal outline-none transition-colors focus:ring-2 focus:ring-[#8B1E1E]/10 ${
+          error ? "border-red-600 focus:border-red-600" : "border-[#E4DAC9] focus:border-[#8B1E1E]"
+        }`}
+      >
+        <span className={`min-w-0 truncate ${selected ? "text-[#2B2B2B]" : "text-[#A89E91]"}`}>
+          {selected?.label || placeholder}
+        </span>
+        <ChevronDown className={`size-4 shrink-0 text-[#756D62] transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open ? (
+        <div className="absolute left-0 right-0 top-full z-50 mt-1 overflow-hidden rounded-md border border-[#E4DAC9] bg-white shadow-lg">
+          {searchable ? (
+            <div className="border-b border-[#EFE7DA] p-2">
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-[#756D62]" />
+                <input
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  className="h-9 w-full rounded-md border border-[#E4DAC9] bg-[#FDFAF4] pl-8 pr-3 text-sm font-normal outline-none focus:border-[#8B1E1E]"
+                  placeholder="Search categories"
+                  aria-label="Search categories"
+                />
+              </div>
+            </div>
+          ) : null}
+          <div className="max-h-52 overflow-y-auto p-1" role="listbox">
+            {visibleOptions.length ? visibleOptions.map((option) => {
+              const isSelected = option.value === value;
+              return (
+                <button
+                  key={option.value || "empty"}
+                  type="button"
+                  role="option"
+                  aria-selected={isSelected}
+                  onClick={() => {
+                    onChange(option.value);
+                    setOpen(false);
+                    setSearch("");
+                  }}
+                  className={`flex min-h-10 w-full items-center justify-between gap-3 rounded px-3 py-2 text-left text-sm font-normal ${
+                    isSelected ? "bg-[#F6F1E8] font-semibold text-[#8B1E1E]" : "text-[#2B2B2B] active:bg-[#F6F1E8]"
+                  }`}
+                >
+                  <span>{option.label}</span>
+                  {isSelected ? <Check className="size-4 shrink-0" /> : null}
+                </button>
+              );
+            }) : (
+              <p className="px-3 py-4 text-center text-xs font-normal text-[#756D62]">No categories found.</p>
+            )}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function EuroInput({ value, onChange, ariaLabel, className = "", error = "", required = false }) {
+  const [focused, setFocused] = useState(false);
+  const numericValue = Number(value);
+  const displayValue = focused || value === "" || value === null || value === undefined
+    ? String(value ?? "")
+    : Number.isFinite(numericValue) ? euroInputFormatter.format(numericValue) : String(value);
+
+  return (
+    <div className={`relative ${className}`}>
+      <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 font-semibold text-[#756D62]" aria-hidden="true">€</span>
+      <input
+        className={`${inputClass} pl-8 font-medium tabular-nums ${error ? "border-red-600 focus:border-red-600" : ""}`}
+        type="text"
+        inputMode="decimal"
+        autoComplete="off"
+        maxLength={12}
+        value={displayValue}
+        onFocus={() => setFocused(true)}
+        onBlur={() => {
+          setFocused(false);
+          if (isValidEuroPrice(value)) onChange(Number(value).toFixed(2));
+        }}
+        onChange={(event) => onChange(sanitizeEuroInput(event.target.value))}
+        aria-label={ariaLabel}
+        required={required}
+      />
+    </div>
+  );
+}
+
+function RequiredMark() {
+  return <span className="font-semibold text-red-700" aria-hidden="true">*</span>;
+}
+
+function Field({ label, children, required = false }) {
   return (
     <label className="block space-y-1.5 text-sm font-medium text-[#2B2B2B]">
-      <span>{label}</span>
+      <span>{label}{required ? <> <RequiredMark /></> : null}</span>
       {children}
     </label>
   );
@@ -946,6 +1094,40 @@ function EmptyState({ title, actionLabel, onAction }) {
           {actionLabel}
         </Button>
       ) : null}
+    </div>
+  );
+}
+
+function MenuItemsTableSkeleton({ rows = 10 }) {
+  return (
+    <div className="overflow-x-auto" role="status" aria-label="Loading menu items">
+      <div className="min-w-[820px] animate-pulse" aria-hidden="true">
+        <div className="grid grid-cols-[2.2fr_1fr_1fr_0.8fr_1.4fr] gap-4 border-b border-[#E4DAC9] px-3 py-3">
+          {Array.from({ length: 5 }, (_, index) => (
+            <div key={index} className="h-3 rounded bg-[#E8DFC8]" />
+          ))}
+        </div>
+        <div className="divide-y divide-[#EFE7DA]">
+          {Array.from({ length: rows }, (_, row) => (
+            <div key={row} className="grid min-h-[88px] grid-cols-[2.2fr_1fr_1fr_0.8fr_1.4fr] items-center gap-4 px-3 py-4">
+              <div className="flex items-center gap-3">
+                <div className="size-14 shrink-0 rounded-lg bg-[#E8DFC8]" />
+                <div className="w-full space-y-2">
+                  <div className="h-4 w-2/3 rounded bg-[#E8DFC8]" />
+                  <div className="h-3 w-4/5 rounded bg-[#F0E8DC]" />
+                </div>
+              </div>
+              <div className="h-4 w-3/4 rounded bg-[#F0E8DC]" />
+              <div className="h-4 w-20 rounded bg-[#E8DFC8]" />
+              <div className="h-6 w-20 rounded bg-[#E6F2EA]" />
+              <div className="flex justify-end gap-2">
+                <div className="h-9 w-20 rounded-md bg-[#F0E8DC]" />
+                <div className="h-9 w-20 rounded-md bg-[#F4DDDA]" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

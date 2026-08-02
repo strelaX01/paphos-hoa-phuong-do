@@ -10,10 +10,14 @@ export function parsePrice(price) {
   return numeric ? Number(numeric[0]) : 0
 }
 
-export function getCartSummary(items) {
+export function getCartItemKey(item) {
+  return `${item.id}:${item.variantId || 'base'}`
+}
+
+export function getCartSummary(items, nearbyDeliveryFee = DELIVERY_CONFIG.nearbyFeeCents / 100) {
   const subtotal = items.reduce((sum, item) => sum + parsePrice(item.price) * item.qty, 0)
   const itemCount = items.reduce((sum, item) => sum + item.qty, 0)
-  const deliveryFee = subtotal === 0 ? 0 : DELIVERY_CONFIG.nearbyFeeCents / 100
+  const deliveryFee = subtotal === 0 ? 0 : nearbyDeliveryFee
   const total = subtotal + deliveryFee
 
   return { subtotal, itemCount, deliveryFee, total }
@@ -23,31 +27,38 @@ export const useCartStore = create(
   persist(
     (set) => ({
       items: [],
+      deliveryPricing: { nearbyDeliveryFee: DELIVERY_CONFIG.nearbyFeeCents / 100, fartherDeliveryFee: DELIVERY_CONFIG.fartherFeeCents / 100, status: 'idle' },
+      beginDeliveryPricingLoad: () => set((state) => ({ deliveryPricing: { ...state.deliveryPricing, status: 'loading' } })),
+      failDeliveryPricingLoad: () => set((state) => ({ deliveryPricing: { ...state.deliveryPricing, status: 'error' } })),
+      setDeliveryPricing: ({ nearbyDeliveryFee, fartherDeliveryFee }) => set({ deliveryPricing: { nearbyDeliveryFee: Number(nearbyDeliveryFee), fartherDeliveryFee: Number(fartherDeliveryFee), status: 'ready' } }),
       addItem: (dish) =>
         set((state) => {
-          const existing = state.items.find((item) => item.id === dish.id)
+          const cartKey = getCartItemKey(dish)
+          const existing = state.items.find((item) => (item.cartKey || getCartItemKey(item)) === cartKey)
           if (existing) {
             return {
               items: state.items.map((item) =>
-                item.id === dish.id ? { ...item, qty: Math.min(item.qty + 1, DELIVERY_CONFIG.maxItemQuantity) } : item
+                (item.cartKey || getCartItemKey(item)) === cartKey
+                  ? { ...item, ...dish, cartKey, qty: Math.min(item.qty + 1, DELIVERY_CONFIG.maxItemQuantity) }
+                  : item
               ),
             }
           }
-          return { items: [...state.items, { ...dish, qty: 1, note: '' }] }
+          return { items: [...state.items, { ...dish, cartKey, qty: 1, note: '' }] }
         }),
-      removeItem: (id) =>
+      removeItem: (cartKey) =>
         set((state) => ({
-          items: state.items.filter((item) => item.id !== id),
+          items: state.items.filter((item) => (item.cartKey || getCartItemKey(item)) !== cartKey),
         })),
-      updateQty: (id, delta) =>
+      updateQty: (cartKey, delta) =>
         set((state) => ({
           items: state.items
-            .map((item) => item.id === id ? { ...item, qty: Math.min(item.qty + delta, DELIVERY_CONFIG.maxItemQuantity) } : item)
+            .map((item) => (item.cartKey || getCartItemKey(item)) === cartKey ? { ...item, qty: Math.min(item.qty + delta, DELIVERY_CONFIG.maxItemQuantity) } : item)
             .filter((item) => item.qty > 0),
         })),
-      updateNote: (id, note) =>
+      updateNote: (cartKey, note) =>
         set((state) => ({
-          items: state.items.map((item) => item.id === id ? { ...item, note: String(note).slice(0, 300) } : item),
+          items: state.items.map((item) => (item.cartKey || getCartItemKey(item)) === cartKey ? { ...item, note: String(note).slice(0, 300) } : item),
         })),
       syncCatalog: (catalog) =>
         set((state) => {
@@ -55,7 +66,16 @@ export const useCartStore = create(
           return {
             items: state.items.flatMap((item) => {
               const current = catalogById.get(item.id)
-              return current ? [{ ...current, qty: Math.min(Math.max(item.qty, 1), DELIVERY_CONFIG.maxItemQuantity), note: item.note || '' }] : []
+              if (!current) return []
+              const activeVariants = current.variants || []
+              if (activeVariants.length) {
+                const variant = activeVariants.find((entry) => entry.id === item.variantId)
+                if (!variant) return []
+                const synced = { ...current, variantId: variant.id, variantLabel: variant.label, price: variant.price }
+                return [{ ...synced, cartKey: getCartItemKey(synced), qty: Math.min(Math.max(item.qty, 1), DELIVERY_CONFIG.maxItemQuantity), note: item.note || '' }]
+              }
+              const synced = { ...current, variantId: null, variantLabel: null }
+              return [{ ...synced, cartKey: getCartItemKey(synced), qty: Math.min(Math.max(item.qty, 1), DELIVERY_CONFIG.maxItemQuantity), note: item.note || '' }]
             }),
           }
         }),
@@ -65,7 +85,8 @@ export const useCartStore = create(
       name: 'hoa-phuong-do-cart',
       partialize: (state) => ({ items: state.items }),
       skipHydration: true,
-      version: 1,
+      version: 2,
+      migrate: (persistedState) => persistedState,
     }
   )
 )

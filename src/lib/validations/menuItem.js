@@ -15,7 +15,9 @@ export function validateMenuItemInput(input, { partial = false } = {}) {
   const description = typeof input?.description === "string" ? input.description.trim() : "";
   const image = typeof input?.image === "string" ? input.image.trim() : "";
   const categoryId = typeof input?.categoryId === "string" ? input.categoryId.trim() : "";
-  const tagId = typeof input?.tagId === "string" ? input.tagId.trim() : "";
+  const rawVariants = Array.isArray(input?.variants) ? input.variants : [];
+  const hasPricingInput = Object.hasOwn(input || {}, "pricingMode") || Object.hasOwn(input || {}, "variants");
+  const pricingMode = partial && !hasPricingInput ? undefined : input?.pricingMode === "variants" ? "variants" : "single";
 
   // --- name ---
   if (!partial || Object.hasOwn(input || {}, "name")) {
@@ -54,12 +56,31 @@ export function validateMenuItemInput(input, { partial = false } = {}) {
 
   // --- price ---
   let price;
-  if (Object.hasOwn(input || {}, "price")) {
+  const variants = [];
+  if (pricingMode === "variants") {
+    if (rawVariants.length < 2 || rawVariants.length > 10) {
+      errors.variants = "Add between 2 and 10 price options.";
+    }
+    const labels = new Set();
+    rawVariants.slice(0, 10).forEach((variant, index) => {
+      const label = typeof variant?.label === "string" ? variant.label.trim() : "";
+      const parsedPrice = typeof variant?.price === "string" ? Number(variant.price.trim()) : Number(variant?.price);
+      const normalizedLabel = label.toLowerCase();
+      if (!label || label.length > 60) errors[`variants.${index}.label`] = "Each price option needs a label of 60 characters or fewer.";
+      if (labels.has(normalizedLabel)) errors[`variants.${index}.label`] = "Price option labels must be unique.";
+      if (!Number.isFinite(parsedPrice) || parsedPrice <= 0 || parsedPrice > 10000) errors[`variants.${index}.price`] = "Each option price must be between 0.01 and 10,000.";
+      if (label) labels.add(normalizedLabel);
+      if (label && Number.isFinite(parsedPrice) && parsedPrice > 0 && parsedPrice <= 10000) {
+        variants.push({ label, price: parsedPrice, sortOrder: index, isActive: variant?.isActive !== false });
+      }
+    });
+    if (variants.length) price = Math.min(...variants.map((variant) => variant.price));
+  } else if (Object.hasOwn(input || {}, "price")) {
     const raw = input.price;
     const parsed = typeof raw === "string" ? parseFloat(raw) : Number(raw);
 
-    if (Number.isNaN(parsed) || parsed < 0) {
-      errors.price = "Price must be a valid non-negative number.";
+    if (!Number.isFinite(parsed) || parsed <= 0 || parsed > 10000) {
+      errors.price = "Price must be between 0.01 and 10,000.";
     } else {
       price = parsed;
     }
@@ -111,11 +132,11 @@ export function validateMenuItemInput(input, { partial = false } = {}) {
       ...(image !== undefined ? { image: image || null } : {}),
       ...(price !== undefined ? { price } : {}),
       ...(categoryId ? { categoryId } : {}),
-      ...(tagId !== undefined ? { tagId: tagId || null } : {}),
       ...(deliverable !== undefined ? { deliverable } : {}),
       ...(isFeatured !== undefined ? { isFeatured } : {}),
       ...(isActive !== undefined ? { isActive } : {}),
       ...(sortOrder !== undefined ? { sortOrder } : {}),
+      ...(pricingMode ? { pricingMode, variants } : {}),
     },
   };
 }

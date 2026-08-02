@@ -36,7 +36,12 @@ export default function VideoSpecialsSection({ videos = [] }) {
 
         <div className={`grid grid-cols-1 gap-6 lg:gap-8 ${gridLayout}`}>
           {videos.map((special, index) => (
-            <SpecialVideoCard key={special.id} special={special} index={index} />
+            <SpecialVideoCard
+              key={special.id}
+              special={special}
+              index={index}
+              highlightLabel={index === 0 ? (special.isRecentlyPublished ? 'New' : 'Latest') : null}
+            />
           ))}
         </div>
       </div>

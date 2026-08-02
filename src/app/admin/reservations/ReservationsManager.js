@@ -5,9 +5,11 @@ import { CalendarCheck, ChevronLeft, ChevronRight, Clock3, LoaderCircle, Pencil,
 
 import AdminShell from "@/app/admin/_components/AdminShell"
 import AdminToast from "@/app/admin/_components/AdminToast"
+import { MetricGridSkeleton, ResponsiveListSkeleton } from "@/app/components/shared/SkeletonBlocks"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { dedupeClientRequest } from "@/lib/dedupeClientRequest"
 
 const STATUSES = ["PENDING", "CONFIRMED", "SEATED", "COMPLETED", "CANCELLED", "NO_SHOW"]
 const statusVariant = { PENDING: "warning", CONFIRMED: "confirmed", SEATED: "info", COMPLETED: "success", CANCELLED: "destructive", NO_SHOW: "secondary" }
@@ -55,25 +57,27 @@ export default function ReservationsManager() {
   }, [])
 
   useEffect(() => {
-    const controller = new AbortController()
+    let active = true
     const params = new URLSearchParams({ page: String(page), limit: "12" })
     if (deferredQuery) params.set("q", deferredQuery)
     if (status) params.set("status", status)
-    fetch(`/api/admin/reservations?${params}`, { signal: controller.signal })
-      .then(readApi)
-      .then((payload) => { setReservations(payload.data); setPagination(payload.pagination); setSummary(payload.summary) })
-      .catch((error) => { if (error.name !== "AbortError") showToast(error.message || "Could not load reservations.", "error") })
-      .finally(() => { if (!controller.signal.aborted) setLoading(false) })
-    return () => controller.abort()
+    const url = `/api/admin/reservations?${params}`
+    dedupeClientRequest(url, () => {
+      return fetch(url).then(readApi)
+    })
+      .then((payload) => { if (active) { setReservations(payload.data); setPagination(payload.pagination); setSummary(payload.summary) } })
+      .catch((error) => { if (active) showToast(error.message || "Could not load reservations.", "error") })
+      .finally(() => { if (active) setLoading(false) })
+    return () => { active = false }
   }, [deferredQuery, page, refreshKey, status])
 
   const patchStatus = async (reservation, nextStatus) => {
     setBusyId(reservation.id)
     try {
-      const payload = await fetch("/api/admin/reservations", {
+      const payload = await fetch(`/api/admin/reservations/${reservation.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: reservation.id, status: nextStatus }),
+        body: JSON.stringify({ status: nextStatus }),
       }).then(readApi)
       setReservations((current) => current.map((entry) => entry.id === reservation.id ? payload.data : entry))
       setRefreshKey((key) => key + 1)
@@ -89,10 +93,10 @@ export default function ReservationsManager() {
   const saveReservation = async (reservation, changes) => {
     setBusyId(reservation.id)
     try {
-      const payload = await fetch("/api/admin/reservations", {
+      const payload = await fetch(`/api/admin/reservations/${reservation.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: reservation.id, ...changes }),
+        body: JSON.stringify(changes),
       }).then(readApi)
       setReservations((current) => current.map((entry) => entry.id === reservation.id ? payload.data : entry))
       setSelected(null)
@@ -110,10 +114,8 @@ export default function ReservationsManager() {
   const deleteReservation = async (reservation) => {
     setBusyId(reservation.id)
     try {
-      await fetch("/api/admin/reservations", {
+      await fetch(`/api/admin/reservations/${reservation.id}`, {
         method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: reservation.id }),
       }).then(readApi)
       setDeleting(null)
       if (reservations.length === 1 && page > 1) setPage((current) => current - 1)
@@ -138,7 +140,7 @@ export default function ReservationsManager() {
     <AdminShell active="reservations" eyebrow="Dining room" title="Reservations" description="Review, edit, and manage table bookings." action={<Button variant="outline" onClick={() => { setLoading(true); setRefreshKey((key) => key + 1) }} disabled={loading}><RefreshCw className={`size-4 ${loading ? "animate-spin" : ""}`} />Refresh</Button>}>
       <AdminToast key={toast?.id} message={toast?.message} tone={toast?.tone} onDismiss={() => setToast(null)} />
       <div className="space-y-5">
-        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-label="Reservation metrics">{metrics.map((metric) => <MetricCard key={metric.label} {...metric} />)}</section>
+        {loading ? <MetricGridSkeleton /> : <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-label="Reservation metrics">{metrics.map((metric) => <MetricCard key={metric.label} {...metric} />)}</section>}
         <section className="space-y-4">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
             <div><h2 className="font-display text-xl font-semibold">Reservation list</h2><p className="text-sm text-[#756D62]">{pagination.total} matching bookings</p></div>
@@ -147,7 +149,7 @@ export default function ReservationsManager() {
               <label><span className="sr-only">Filter by status</span><select value={status} onChange={(event) => { setLoading(true); setStatus(event.target.value); setPage(1) }} className="h-9 w-full rounded-md border border-[#E4DAC9] bg-white px-3 text-sm outline-none focus:border-[#8B1E1E] sm:w-44"><option value="">All statuses</option>{STATUSES.map((option) => <option key={option} value={option}>{formatStatus(option)}</option>)}</select></label>
             </div>
           </div>
-          {loading ? <LoadingState /> : reservations.length ? (
+          {loading ? <ResponsiveListSkeleton rows={6} columns={7} /> : reservations.length ? (
             <ReservationsList reservations={reservations} busyId={busyId} onDelete={setDeleting} onEdit={setSelected} onStatus={patchStatus} />
           ) : <EmptyState />}
           {pagination.totalPages > 1 ? <div className="flex items-center justify-between border-t border-[#E4DAC9] pt-4"><p className="text-sm text-[#756D62]">Page {pagination.page} of {pagination.totalPages}</p><div className="flex gap-2"><PageButton label="Previous page" disabled={loading || page <= 1} icon={ChevronLeft} onClick={() => { setLoading(true); setPage((value) => value - 1) }} /><PageButton label="Next page" disabled={loading || page >= pagination.totalPages} icon={ChevronRight} onClick={() => { setLoading(true); setPage((value) => value + 1) }} /></div></div> : null}
@@ -210,7 +212,6 @@ function EditField({ children, label }) { return <label className="block"><span 
 function MetricCard({ detail, icon: Icon, label, value }) { return <Card className="border-[#E4DAC9] bg-white"><CardHeader className="flex-row items-start justify-between pb-2"><div><CardDescription>{label}</CardDescription><CardTitle className="mt-2 font-sans text-3xl font-semibold leading-none tabular-nums">{value}</CardTitle></div><div className="flex size-10 items-center justify-center rounded-md bg-[#F6F1E8] text-[#8B1E1E]"><Icon className="size-5" /></div></CardHeader><CardContent><p className="text-sm text-[#756D62]">{detail}</p></CardContent></Card> }
 function PageButton({ disabled, icon: Icon, label, onClick }) { return <Button variant="outline" size="icon" onClick={onClick} disabled={disabled} aria-label={label}><Icon className="size-4" /></Button> }
 function Info({ label, value }) { return <div><p className="text-xs font-semibold uppercase text-[#756D62]">{label}</p><p className="mt-1 break-words font-medium">{value}</p></div> }
-function LoadingState() { return <div className="flex min-h-52 items-center justify-center border border-[#E4DAC9] bg-white"><LoaderCircle className="size-7 animate-spin text-[#8B1E1E]" /><span className="ml-2 text-sm text-[#756D62]">Loading reservations...</span></div> }
 function EmptyState() { return <div className="flex min-h-52 flex-col items-center justify-center border border-dashed border-[#E4DAC9] bg-[#FDFAF4] p-6 text-center"><CalendarCheck className="size-8 text-[#8B1E1E]" /><p className="mt-3 font-semibold">No reservations found.</p></div> }
 function sanitizePhone(value) { return value.replace(/[^\d+\s().-]/g, "").replace(/(?!^)\+/g, "") }
 function formatStatus(value) { return value.split("_").map((part) => part.charAt(0) + part.slice(1).toLowerCase()).join(" ") }

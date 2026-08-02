@@ -1,3 +1,4 @@
+import { authorizeAdminRequest } from "@/lib/adminApiAuth";
 import { prisma } from "@/lib/prisma";
 import { validateMenuCategoryInput } from "@/lib/validations/menuCategory";
 
@@ -39,7 +40,9 @@ function serializeCategory(category) {
   };
 }
 
-export async function GET() {
+export async function GET(request) {
+  const auth = await authorizeAdminRequest(request);
+  if (auth.response) return auth.response;
   const categories = await prisma.menuCategory.findMany({
     orderBy: [{ title: "asc" }],
     select: categorySelect(),
@@ -51,6 +54,8 @@ export async function GET() {
 }
 
 export async function POST(request) {
+  const auth = await authorizeAdminRequest(request);
+  if (auth.response) return auth.response;
   let body;
 
   try {

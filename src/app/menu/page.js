@@ -1,19 +1,21 @@
 import Link from 'next/link'
-import Image from 'next/image'
 
 import Footer from '@/app/components/layout/Footer'
 import Header from '@/app/components/layout/Header'
+import HeroImage from '@/app/components/shared/HeroImage'
 import MenuNav from './MenuNav'
 import MenuSectionItems from './MenuSectionItems'
-import { prisma } from '@/lib/prisma'
+import { getPublicMenuPageSections } from '@/lib/publicMenuData'
+import { createPageMetadata } from '@/lib/seo'
 
 export const dynamic = 'force-dynamic'
 
-export const metadata = {
-  title: 'Menu | Hoa Phuong Do Vietnamese Restaurant',
-  description:
-    'Explore Hoa Phuong Do menu with pho, rice plates, fresh rolls, vegetarian dishes, drinks, and desserts in Cyprus.',
-}
+export const metadata = createPageMetadata({
+  title: 'Vietnamese Menu in Paphos',
+  description: 'Explore the Hoa Phuong Do menu with Vietnamese pho, rice dishes, fresh starters, vegetarian options, drinks, and desserts in Paphos.',
+  path: '/menu',
+  keywords: ['Vietnamese menu Paphos', 'pho menu Cyprus', 'Vietnamese dishes Kissonerga'],
+})
 
 export default async function MenuPage() {
   const menuSections = await getMenuSections()
@@ -42,65 +44,20 @@ export default async function MenuPage() {
 
 async function getMenuSections() {
   try {
-    const categories = await prisma.menuCategory.findMany({
-      where: { isActive: true, items: { some: { isActive: true } } },
-      orderBy: { title: 'asc' },
-      select: {
-        slug: true,
-        title: true,
-        items: {
-          where: { isActive: true },
-          orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
-          select: {
-            slug: true,
-            name: true,
-            nameEn: true,
-            description: true,
-            price: true,
-            image: true,
-            deliverable: true,
-            tag: { select: { label: true } },
-          },
-        },
-      },
-    })
-
-    return categories.map((category) => ({
-      id: category.slug,
-      title: category.title,
-      eyebrow: `${category.items.length} ${category.items.length === 1 ? 'dish' : 'dishes'}`,
-      description: 'Prepared fresh to order using carefully selected ingredients and our kitchen recipes.',
-      items: category.items.map((item) => ({
-        id: item.slug,
-        name: item.name,
-        nameEn: item.nameEn || '',
-        description: item.description || '',
-        price: formatMoney(item.price),
-        image: item.image || '',
-        deliverable: item.deliverable,
-        tag: item.tag?.label || '',
-      })),
-    }))
+    return await getPublicMenuPageSections()
   } catch (error) {
     console.error('Failed to load public menu', error)
     return null
   }
 }
 
-function formatMoney(value) {
-  return new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR' }).format(Number(value))
-}
-
 function MenuHero() {
   return (
-    <section className="relative isolate min-h-[62svh] overflow-hidden">
-      <Image
+    <section className="relative isolate min-h-[62svh] overflow-hidden bg-[#1E1A18]">
+      <HeroImage
         src="https://images.unsplash.com/photo-1582878826629-29b7ad1cdc43?w=1920&q=90"
         alt="Vietnamese pho with fresh herbs and noodles"
-        fill
-        priority
         className="object-cover object-center"
-        sizes="100vw"
       />
       <div className="absolute inset-0 bg-gradient-to-r from-black/82 via-black/55 to-black/25" />
       <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-transparent to-black/25" />

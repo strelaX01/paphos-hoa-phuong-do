@@ -107,9 +107,9 @@ export function AdminNotificationsProvider({ children, role }) {
       countRequestInFlightRef.current = true
 
       Promise.allSettled([
-        fetch("/api/admin/orders?summaryOnly=1", { cache: "no-store" }).then((response) => response.ok ? response.json() : Promise.reject()),
+        fetch("/api/admin/orders/summary", { cache: "no-store" }).then((response) => response.ok ? response.json() : Promise.reject()),
         role === "ADMIN"
-          ? fetch("/api/admin/reservations?summaryOnly=1", { cache: "no-store" }).then((response) => response.ok ? response.json() : Promise.reject())
+          ? fetch("/api/admin/reservations/summary", { cache: "no-store" }).then((response) => response.ok ? response.json() : Promise.reject())
           : Promise.resolve(null),
       ]).then(([ordersResult, reservationsResult]) => {
         if (!active) return
