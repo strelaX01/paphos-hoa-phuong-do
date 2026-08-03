@@ -10,7 +10,8 @@ export default function ResetPasswordForm() {
   const [token, setToken] = useState(null)
   const [password, setPassword] = useState("")
   const [confirmation, setConfirmation] = useState("")
-  const [showPassword, setShowPassword] = useState(false)
+  const [showNewPassword, setShowNewPassword] = useState(false)
+  const [showConfirmation, setShowConfirmation] = useState(false)
   const [error, setError] = useState("")
   const [success, setSuccess] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -88,7 +89,7 @@ export default function ResetPasswordForm() {
 
   return (
     <form className="mt-7 space-y-4" onSubmit={handleSubmit} noValidate>
-      <PasswordInput id="new-password" label="New password" value={password} onChange={setPassword} visible={showPassword} onToggle={() => setShowPassword((current) => !current)} autoFocus />
+      <PasswordInput id="new-password" label="New password" value={password} onChange={setPassword} visible={showNewPassword} onToggle={() => setShowNewPassword((current) => !current)} autoFocus />
 
       <div className="grid grid-cols-1 gap-1.5 text-xs sm:grid-cols-2">
         <Requirement met={checks.length}>10-128 characters</Requirement>
@@ -96,7 +97,7 @@ export default function ResetPasswordForm() {
         <Requirement met={checks.numberAndSpacing}>Number, no spaces</Requirement>
       </div>
 
-      <PasswordInput id="confirm-password" label="Confirm new password" value={confirmation} onChange={setConfirmation} visible={showPassword} onToggle={() => setShowPassword((current) => !current)} invalid={Boolean(confirmation) && !matches} />
+      <PasswordInput id="confirm-password" label="Confirm new password" value={confirmation} onChange={setConfirmation} visible={showConfirmation} onToggle={() => setShowConfirmation((current) => !current)} invalid={Boolean(confirmation) && !matches} />
       {confirmation && !matches ? <p className="text-xs font-medium text-[#A11919]">Passwords do not match.</p> : null}
 
       <div aria-live="polite" className="min-h-5">
@@ -118,7 +119,7 @@ function PasswordInput({ autoFocus = false, id, invalid = false, label, onChange
       <div className="relative">
         <LockKeyhole className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-[#8B8175]" />
         <input id={id} type={visible ? "text" : "password"} value={value} onChange={(event) => onChange(event.target.value)} autoComplete="new-password" required minLength={10} maxLength={128} autoFocus={autoFocus} aria-invalid={invalid} className="h-11 w-full rounded-md border border-[#D9CDBB] bg-white pl-10 pr-11 text-sm text-[#202020] outline-none transition focus:border-[#8B1E1E] focus:ring-3 focus:ring-[#8B1E1E]/15 aria-invalid:border-red-500" />
-        <button type="button" onClick={onToggle} className="absolute right-1.5 top-1/2 flex size-8 -translate-y-1/2 items-center justify-center rounded-md text-[#756D62] hover:bg-[#F2EAD8]" aria-label={visible ? "Hide passwords" : "Show passwords"} title={visible ? "Hide passwords" : "Show passwords"}>
+        <button type="button" onClick={onToggle} className="absolute right-1.5 top-1/2 flex size-8 -translate-y-1/2 items-center justify-center rounded-md text-[#756D62] hover:bg-[#F2EAD8]" aria-label={visible ? `Hide ${label.toLowerCase()}` : `Show ${label.toLowerCase()}`} title={visible ? "Hide password" : "Show password"}>
           {visible ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
         </button>
       </div>
