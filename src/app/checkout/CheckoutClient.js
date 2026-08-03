@@ -126,7 +126,7 @@ export default function CheckoutClient({ initialAvailability, openingHours }) {
               <input type="checkbox" name="deliveryFeeConsent" required checked={deliveryFeeAccepted} onChange={(event) => setDeliveryFeeAccepted(event.target.checked)} disabled={!pricingReady} className="mt-0.5 size-5 shrink-0 accent-[#8B1E1E] disabled:cursor-not-allowed" aria-describedby="delivery-fee-consent-copy" />
               <span id="delivery-fee-consent-copy" className="text-[13px] leading-relaxed"><span className="block font-semibold">I agree to the delivery fee policy.</span><span className="mt-1 block text-[#6B6560]">{pricingReady ? deliveryFeeConsentText : cart.deliveryPricingStatus === "error" ? "Delivery pricing could not be loaded. Refresh the page before ordering." : "Loading current delivery pricing..."}</span></span>
             </label>
-            <button type="submit" disabled={!canPlaceOrder} className="flex w-full items-center justify-center gap-2 bg-[#8B1E1E] px-7 py-4 text-[13px] font-semibold uppercase tracking-[0.14em] text-white transition-colors hover:bg-[#A02424] disabled:cursor-not-allowed disabled:opacity-60">{isPending ? <LoaderCircle className="size-4 animate-spin" /> : null}{isPending ? "Placing Order..." : !orderingOpen ? availabilityMessage : `Place Order - ${formatMoney(cart.total)}`}</button>
+            <button type="submit" disabled={!canPlaceOrder} className="flex w-full items-center justify-center gap-2 bg-[#8B1E1E] px-7 py-4 text-[13px] font-semibold uppercase tracking-[0.14em] text-white transition-colors hover:bg-[#A02424] disabled:cursor-not-allowed disabled:opacity-60">{isPending ? <LoaderCircle className="size-4 animate-spin" /> : null}{isPending ? "Placing Order..." : !orderingOpen ? availabilityMessage : "Place Order"}</button>
           </form>
         </section>
         <OrderSummary cart={cart} locked={isPending} />
@@ -182,13 +182,9 @@ function OrderSummary({ cart, locked }) {
 
       <div className="mt-5 space-y-2 border-t border-white/10 pt-4 text-[13px]">
         <PriceRow label="Subtotal" value={formatMoney(cart.subtotal)} />
-        <PriceRow label="Nearby delivery estimate" value={formatMoney(cart.deliveryFee)} />
-        <div className="flex items-center justify-between text-2xl font-bold">
-          <span className="font-display">Estimated total</span>
-          <span className="font-sans tabular-nums">{formatMoney(cart.total)}</span>
-        </div>
+        <PriceRow label="Delivery fee" value="To be confirmed" />
         <p className="pt-2 text-[11px] leading-relaxed text-white/40">
-          Farther areas cost {formatMoney(cart.fartherDeliveryFee)}. Final prices, availability, and delivery fee are verified by the restaurant.
+          Nearby areas cost {formatMoney(cart.nearbyDeliveryFee)} and farther areas cost {formatMoney(cart.fartherDeliveryFee)}. The final total is available after the restaurant confirms your address.
         </p>
       </div>
     </aside>

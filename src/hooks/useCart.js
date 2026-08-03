@@ -28,7 +28,7 @@ export function useCart() {
   const beginDeliveryPricingLoad = useCartStore((state) => state.beginDeliveryPricingLoad)
   const failDeliveryPricingLoad = useCartStore((state) => state.failDeliveryPricingLoad)
   const setDeliveryPricing = useCartStore((state) => state.setDeliveryPricing)
-  const summary = getCartSummary(items, deliveryPricing.nearbyDeliveryFee)
+  const summary = getCartSummary(items)
 
   useEffect(() => {
     if (deliveryPricing.status !== 'idle') return

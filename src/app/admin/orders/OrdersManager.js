@@ -1,6 +1,7 @@
 "use client"
 
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react"
+import { createPortal } from "react-dom"
 import { ChevronLeft, ChevronRight, ClipboardList, LoaderCircle, Minus, PackageCheck, Pencil, Plus, Printer, RefreshCw, Search, Timer, Trash2, Truck, WalletCards, X } from "lucide-react"
 
 import AdminShell from "@/app/admin/_components/AdminShell"
@@ -44,7 +45,14 @@ export default function OrdersManager() {
   const toastId = useRef(0)
 
   const showToast = (message, tone = "success") => { toastId.current += 1; setToast({ id: toastId.current, message, tone }) }
-  const printInvoice = (order) => setInvoice({ order, autoPrint: true })
+  const printInvoice = (order) => {
+    if (!order.deliveryFeeConfirmed) {
+      setSelected(order)
+      showToast("Set the final delivery fee before printing the invoice.", "error")
+      return
+    }
+    setInvoice({ order, autoPrint: true })
+  }
 
   useEffect(() => {
     const refreshNewOrders = () => {
@@ -149,7 +157,7 @@ function OrderRow({ busy, index, isDriver, onAdvance, onCancel, onDetails, onPri
     <td className="px-4 py-4"><p className="max-w-44 truncate font-semibold">{order.customerName}</p><p className="mt-1 whitespace-nowrap text-xs text-[#756D62]">{order.customerPhone}</p></td>
     <td className="px-4 py-4"><p className="max-w-52 truncate font-medium">{order.deliveryZone || "-"}</p><p className="mt-1 max-w-52 truncate text-xs text-[#756D62]">{order.deliveryStreet}</p></td>
     <td className="px-4 py-4 text-center font-semibold">{itemCount}</td>
-    {!isDriver ? <td className="whitespace-nowrap px-4 py-4 text-right font-bold">{formatMoney(order.total)}</td> : null}
+    {!isDriver ? <td className="whitespace-nowrap px-4 py-4 text-right font-bold">{order.deliveryFeeConfirmed ? formatMoney(order.total) : <span className="text-xs font-semibold text-amber-700">Fee pending</span>}</td> : null}
     <td className="whitespace-nowrap px-4 py-4"><Badge variant={statusVariant[order.status]}>{formatOrderStatus(order.status)}</Badge></td>
     <td className="px-4 py-4"><OrderActions order={order} busy={busy} isDriver={isDriver} onAdvance={onAdvance} onCancel={onCancel} onDetails={onDetails} onPrint={onPrint} compact /></td>
   </tr>
@@ -161,7 +169,7 @@ function OrderMobileRow({ busy, isDriver, onAdvance, onCancel, onDetails, onPrin
       <div><p className="font-mono text-sm font-bold text-[#8B1E1E]">{order.orderNumber}</p><p className="mt-1 font-semibold">{order.customerName}</p><p className="text-xs text-[#756D62]">{order.customerPhone} | {formatDateTime(order.createdAt)}</p></div>
       <Badge variant={statusVariant[order.status]}>{formatOrderStatus(order.status)}</Badge>
     </div>
-    <div className={`mt-4 grid gap-3 border-y border-black/8 py-3 ${isDriver ? "grid-cols-2" : "grid-cols-3"}`}><Info label="Items" value={order.items.reduce((sum, item) => sum + item.quantity, 0)} /><Info label="Area" value={order.deliveryZone || "-"} />{!isDriver ? <Info label="Total" value={formatMoney(order.total)} /> : null}</div>
+    <div className={`mt-4 grid gap-3 border-y border-black/8 py-3 ${isDriver ? "grid-cols-2" : "grid-cols-3"}`}><Info label="Items" value={order.items.reduce((sum, item) => sum + item.quantity, 0)} /><Info label="Area" value={order.deliveryZone || "-"} />{!isDriver ? <Info label="Total" value={order.deliveryFeeConfirmed ? formatMoney(order.total) : "Fee pending"} /> : null}</div>
     <p className="mt-3 line-clamp-1 text-sm text-[#756D62]">{order.deliveryStreet}</p>
     {isDriver && order.deliveryNotes ? <p className="mt-2 text-sm"><span className="font-semibold">Note:</span> {order.deliveryNotes}</p> : null}
     <div className="mt-4"><OrderActions order={order} busy={busy} isDriver={isDriver} onAdvance={onAdvance} onCancel={onCancel} onDetails={onDetails} onPrint={onPrint} /></div>
@@ -170,11 +178,11 @@ function OrderMobileRow({ busy, isDriver, onAdvance, onCancel, onDetails, onPrin
 
 function OrderActions({ busy, compact = false, isDriver, onAdvance, onCancel, onDetails, onPrint, order }) {
   const nextStatus = (isDriver ? DRIVER_NEXT_STATUS : ADMIN_NEXT_STATUS)[order.status]
-  const canAdvance = Boolean(nextStatus)
+  const canAdvance = Boolean(nextStatus) && (isDriver || order.status !== "PENDING" || order.deliveryFeeConfirmed)
   const canCancel = ["PENDING", "PREPARING", "PENDING_PICKUP"].includes(order.status)
 
   return <div className="flex flex-wrap items-center justify-end gap-2">
-    {!isDriver ? <Button variant="outline" size="icon-sm" onClick={onPrint} aria-label={`Print invoice ${order.orderNumber}`} title="Print invoice"><Printer className="size-4" /></Button> : null}
+    {!isDriver ? <Button variant="outline" size="icon-sm" onClick={onPrint} disabled={!order.deliveryFeeConfirmed} aria-label={`Print invoice ${order.orderNumber}`} title={order.deliveryFeeConfirmed ? "Print invoice" : "Set delivery fee before printing"}><Printer className="size-4" /></Button> : null}
     {!isDriver ? <Button variant="outline" size={compact ? "icon-sm" : "sm"} onClick={onDetails} aria-label={`View details ${order.orderNumber}`} title="View details"><ClipboardList className="size-4" />{compact ? null : "Details"}</Button> : null}
     {!isDriver && canCancel ? <Button variant="destructive" size="sm" onClick={onCancel} disabled={busy}>Cancel</Button> : null}
     {canAdvance ? <Button size="sm" onClick={onAdvance} disabled={busy}>{busy ? <LoaderCircle className="size-4 animate-spin" /> : null}{ORDER_ACTION_LABELS[nextStatus]}</Button> : null}
@@ -183,10 +191,12 @@ function OrderActions({ busy, compact = false, isDriver, onAdvance, onCancel, on
 
 function OrderDetailModal({ busy, onClose, onPrint, onSaveEdit, onSaveFee, order }) {
   const deliveryFeeOptions = [...new Set([Number(order.deliveryFeePolicyNearby ?? 3), Number(order.deliveryFeePolicyFarther ?? 3.5)])]
-  const [deliveryFee, setDeliveryFee] = useState(Number(order.deliveryFee).toFixed(2))
+  const [deliveryFee, setDeliveryFee] = useState(order.deliveryFeeConfirmed ? Number(order.deliveryFee).toFixed(2) : "")
   const [editing, setEditing] = useState(false)
   const locked = ["EN_ROUTE", "DELIVERED", "CANCELLED"].includes(order.status)
   const canEdit = ["PENDING", "PREPARING", "PENDING_PICKUP"].includes(order.status)
+  const selectedDeliveryFee = deliveryFee ? Number(deliveryFee) : null
+  const previewTotal = selectedDeliveryFee === null ? null : Math.max(0, Number(order.subtotal) - Number(order.discountTotal)) + selectedDeliveryFee
 
   const submitFee = async (event) => {
     event.preventDefault()
@@ -196,7 +206,7 @@ function OrderDetailModal({ busy, onClose, onPrint, onSaveEdit, onSaveFee, order
 
   return <Modal title={order.orderNumber} onClose={onClose} locked={busy}>
     <div className="space-y-5 p-5">
-      <div className="flex flex-wrap justify-end gap-2">{canEdit && !editing ? <Button variant="outline" size="sm" onClick={() => setEditing(true)}><Pencil className="size-4" />Edit order</Button> : null}<Button variant="outline" size="sm" onClick={onPrint}><Printer className="size-4" />Print invoice</Button></div>
+      <div className="flex flex-wrap justify-end gap-2">{canEdit && !editing ? <Button variant="outline" size="sm" onClick={() => setEditing(true)}><Pencil className="size-4" />Edit order</Button> : null}<Button variant="outline" size="sm" onClick={onPrint} disabled={!order.deliveryFeeConfirmed} title={order.deliveryFeeConfirmed ? "Print invoice" : "Set delivery fee before printing"}><Printer className="size-4" />Print invoice</Button></div>
       {editing ? <OrderEditForm order={order} busy={busy} onCancel={() => setEditing(false)} onSave={async (edit) => { const updated = await onSaveEdit(edit); if (updated) setEditing(false) }} /> : <>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"><Info label="Customer" value={order.customerName} /><Info label="Phone" value={order.customerPhone} /><Info label="Address" value={`${order.deliveryStreet}, ${order.deliveryZone}`} /><Info label="Payment" value={`${formatStatus(order.paymentMethod)} / ${formatStatus(order.paymentStatus)}`} /></div>
         {order.deliveryNotes ? <div><p className="text-xs font-semibold uppercase text-[#756D62]">Delivery notes</p><p className="mt-1 whitespace-pre-wrap text-sm">{order.deliveryNotes}</p></div> : null}
@@ -205,10 +215,10 @@ function OrderDetailModal({ busy, onClose, onPrint, onSaveEdit, onSaveFee, order
       <div className="grid items-start gap-4 md:grid-cols-[1fr_20rem]">
         <form onSubmit={submitFee} className="border border-[#E4DAC9] p-4">
           <label htmlFor={`delivery-fee-${order.id}`} className="text-sm font-semibold">Final delivery fee</label>
-          <div className="mt-2 flex gap-2"><select id={`delivery-fee-${order.id}`} required value={deliveryFee} onChange={(event) => setDeliveryFee(event.target.value)} disabled={busy || locked} className="h-9 flex-1 rounded-md border border-[#E4DAC9] bg-white px-3 text-sm outline-none disabled:bg-[#F6F1E8]">{deliveryFeeOptions.map((fee) => <option key={fee} value={fee.toFixed(2)}>€{fee.toFixed(2)}</option>)}</select><Button type="submit" size="sm" disabled={busy || locked}>{busy ? <LoaderCircle className="size-4 animate-spin" /> : null}Save fee</Button></div>
-          <p className="mt-2 text-xs text-[#756D62]">{locked ? "The fee is locked because delivery has started or the order is closed." : "Saving recalculates the total and records the change in the timeline."}</p>
+          <div className="mt-2 flex gap-2"><select id={`delivery-fee-${order.id}`} required value={deliveryFee} onChange={(event) => setDeliveryFee(event.target.value)} disabled={busy || locked} className="h-9 flex-1 rounded-md border border-[#E4DAC9] bg-white px-3 text-sm outline-none disabled:bg-[#F6F1E8]"><option value="" disabled>Select fee</option>{deliveryFeeOptions.map((fee) => <option key={fee} value={fee.toFixed(2)}>EUR {fee.toFixed(2)}</option>)}</select><Button type="submit" size="sm" disabled={busy || locked || !deliveryFee}>{busy ? <LoaderCircle className="size-4 animate-spin" /> : null}Save fee</Button></div>
+          <p className="mt-2 text-xs text-[#756D62]">{locked ? "The fee is locked because delivery has started or the order is closed." : selectedDeliveryFee !== null && !order.deliveryFeeConfirmed ? "The total preview has updated. Save the fee to confirm it on the order." : "Changing the selection updates the total preview. Save to confirm the change."}</p>
         </form>
-        <div className="space-y-2 border border-[#E4DAC9] bg-[#FDFAF4] p-4 text-sm"><Price label="Subtotal" value={order.subtotal} />{Number(order.discountTotal) > 0 ? <Price label="Discount" value={-Number(order.discountTotal)} /> : null}<Price label="Delivery" value={order.deliveryFee} /><Price label="Total" value={order.total} strong /></div>
+        <div className="space-y-2 border border-[#E4DAC9] bg-[#FDFAF4] p-4 text-sm"><Price label="Subtotal" value={order.subtotal} />{Number(order.discountTotal) > 0 ? <Price label="Discount" value={-Number(order.discountTotal)} /> : null}{selectedDeliveryFee !== null ? <><Price label="Delivery" value={selectedDeliveryFee} /><Price label="Total preview" value={previewTotal} strong /></> : <PendingPrice />}</div>
       </div>
       <div><h3 className="font-display text-lg font-semibold">Timeline</h3><div className="mt-3 space-y-3">{order.timeline.map((event) => <div key={event.id} className="border-l-2 border-[#D4A017] pl-3"><p className="text-sm font-semibold">{event.title}</p><p className="text-xs text-[#756D62]">{formatDateTime(event.createdAt)}{event.note ? ` | ${event.note}` : ""}</p></div>)}</div></div>
     </div>
@@ -262,44 +272,69 @@ function InvoiceModal({ autoPrint = false, onClose, order }) {
     }
   }, [autoPrint, onClose])
 
-  return <div className="invoice-overlay fixed inset-0 z-[70] overflow-y-auto bg-[#2B2B2B]/65 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label={`Invoice ${order.orderNumber}`}>
-    <div className="invoice-sheet mx-auto min-h-full w-full max-w-3xl bg-white p-6 text-[#171717] shadow-2xl sm:p-10">
-      <div className="invoice-no-print mb-8 flex items-center justify-end gap-2 border-b border-[#E4DAC9] pb-4">
-        <Button variant="outline" onClick={onClose}>Close</Button>
-        <Button onClick={() => window.print()}><Printer className="size-4" />Print / Save PDF</Button>
+  return createPortal(<div className="invoice-overlay fixed inset-0 z-[70] overflow-y-auto bg-[#2B2B2B]/70 p-3 backdrop-blur-sm sm:p-6" role="dialog" aria-modal="true" aria-label={`Invoice ${order.orderNumber}`}>
+    <div className="invoice-shell mx-auto w-full max-w-sm">
+      <div className="invoice-no-print mb-3 flex items-center justify-end gap-2 rounded-md bg-white p-2 shadow-lg">
+        <Button variant="outline" size="sm" onClick={onClose}>Close</Button>
+        <Button size="sm" onClick={() => window.print()}><Printer className="size-4" />Print receipt</Button>
       </div>
-      <div className="flex flex-col justify-between gap-6 border-b-2 border-black pb-6 sm:flex-row sm:items-start">
-        <div><h2 className="text-2xl font-bold">Hoa Phuong Do</h2><p className="mt-1 max-w-md text-sm">{CONTACT.address}</p><p className="text-sm">{CONTACT.phone}</p></div>
-        <div className="sm:text-right"><p className="text-3xl font-bold">INVOICE</p><p className="mt-2 font-mono font-semibold">{order.orderNumber}</p><p className="text-sm">{formatDateTime(order.createdAt)}</p></div>
-      </div>
-      <div className="grid gap-6 border-b border-black py-6 sm:grid-cols-2">
-        <div><p className="text-xs font-bold uppercase">Customer</p><p className="mt-2 font-semibold">{order.customerName}</p><p className="text-sm">{order.customerPhone}</p>{order.customerEmail ? <p className="break-all text-sm">{order.customerEmail}</p> : null}</div>
-        <div><p className="text-xs font-bold uppercase">Deliver to</p><p className="mt-2 text-sm">{order.deliveryStreet}</p>{order.deliveryZone ? <p className="text-sm">{order.deliveryZone}</p> : null}{order.deliveryNotes ? <p className="mt-2 whitespace-pre-wrap text-sm"><strong>Note:</strong> {order.deliveryNotes}</p> : null}</div>
-      </div>
-      <div className="grid grid-cols-2 gap-4 border-b border-black py-4 text-sm sm:grid-cols-3"><Info label="Status" value={formatOrderStatus(order.status)} /><Info label="Payment" value={formatStatus(order.paymentMethod)} /><Info label="Payment status" value={formatStatus(order.paymentStatus)} /></div>
-      <div className="overflow-x-auto py-6"><table className="w-full min-w-[520px] text-sm"><thead><tr className="border-b-2 border-black text-left text-xs uppercase"><th className="w-12 py-2 pr-3 text-center">No.</th><th className="py-2 pr-3">Item</th><th className="px-3 text-center">Qty</th><th className="px-3 text-right">Unit</th><th className="py-2 pl-3 text-right">Amount</th></tr></thead><tbody>{order.items.map((item, index) => <tr key={item.id} className="border-b border-black/20 align-top"><td className="w-12 py-3 pr-3 text-center tabular-nums">{index + 1}</td><td className="py-3 pr-3"><span className="font-semibold">{item.name}</span>{item.variantLabel ? <span className="mt-0.5 block text-xs font-semibold">{item.variantLabel}</span> : null}{item.note ? <span className="mt-1 block text-xs">Note: {item.note}</span> : null}</td><td className="px-3 py-3 text-center">{item.quantity}</td><td className="px-3 py-3 text-right">{formatMoney(item.unitPrice)}</td><td className="py-3 pl-3 text-right font-semibold">{formatMoney(item.lineTotal)}</td></tr>)}</tbody></table></div>
-      <div className="ml-auto w-full max-w-xs space-y-2 text-sm"><Price label="Subtotal" value={order.subtotal} />{Number(order.discountTotal) > 0 ? <Price label="Discount" value={-Number(order.discountTotal)} /> : null}<Price label="Delivery fee" value={order.deliveryFee} /><Price label="Total" value={order.total} strong /></div>
-      {order.deliveryFeeConsentAt && order.deliveryFeeConsentText ? <div className="mt-6 border border-black p-3 text-xs leading-relaxed"><p className="font-bold uppercase">Delivery fee agreement</p><p className="mt-1">{order.deliveryFeeConsentText}</p><p className="mt-2"><strong>Accepted electronically:</strong> {formatDateTime(order.deliveryFeeConsentAt)}</p><p><strong>Final fee on this invoice:</strong> {formatMoney(order.deliveryFee)}</p></div> : null}
-      <p className="mt-10 border-t border-black pt-4 text-center text-sm">Thank you for your order.</p>
+      <article className="invoice-sheet mx-auto w-[80mm] max-w-full bg-white px-[4mm] py-[5mm] font-mono text-[11px] leading-[1.35] text-black shadow-2xl">
+        <header className="border-b border-dashed border-black pb-3 text-center">
+          <h2 className="text-[17px] font-black uppercase">Hoa Phuong Do</h2>
+          <p className="mt-1">{CONTACT.address}</p>
+          <p>{CONTACT.phone}</p>
+          <p className="mt-2 text-[13px] font-bold">DELIVERY RECEIPT</p>
+          <p className="mt-1 break-all font-bold">{order.orderNumber}</p>
+          <p>{formatDateTime(order.createdAt)}</p>
+        </header>
+
+        <section className="space-y-1 border-b border-dashed border-black py-3">
+          <ReceiptLine label="Customer" value={order.customerName} />
+          <ReceiptLine label="Phone" value={order.customerPhone} />
+          <ReceiptLine label="Address" value={[order.deliveryStreet, order.deliveryZone].filter(Boolean).join(", ")} />
+          {order.deliveryNotes ? <ReceiptLine label="Note" value={order.deliveryNotes} /> : null}
+          <ReceiptLine label="Payment" value={formatStatus(order.paymentMethod)} />
+        </section>
+
+        <section className="py-3">
+          <div className="grid grid-cols-[1.5rem_minmax(0,1fr)_2rem_4.4rem] gap-1 border-b border-black pb-1 font-bold uppercase"><span>No</span><span>Item</span><span className="text-center">Qty</span><span className="text-right">Amount</span></div>
+          {order.items.map((item, index) => <div key={item.id} className="grid grid-cols-[1.5rem_minmax(0,1fr)_2rem_4.4rem] gap-1 border-b border-dotted border-black/50 py-2 align-top"><span>{index + 1}</span><div className="min-w-0 break-words"><span className="font-bold">{item.name}</span>{item.variantLabel ? <span className="block">{item.variantLabel}</span> : null}<span className="block text-[10px]">{formatMoney(item.unitPrice)} each</span>{item.note ? <span className="block text-[10px]">Note: {item.note}</span> : null}</div><span className="text-center">{item.quantity}</span><span className="text-right font-bold">{formatMoney(item.lineTotal)}</span></div>)}
+        </section>
+
+        <section className="space-y-1 border-y border-dashed border-black py-3">
+          <ReceiptAmount label="Subtotal" value={order.subtotal} />
+          {Number(order.discountTotal) > 0 ? <ReceiptAmount label="Discount" value={-Number(order.discountTotal)} /> : null}
+          <ReceiptAmount label="Delivery" value={order.deliveryFee} />
+          <ReceiptAmount label="TOTAL" value={order.total} strong />
+        </section>
+
+        {order.deliveryFeeConsentAt && order.deliveryFeeConsentText ? <section className="border-b border-dashed border-black py-3 text-[9px]"><p className="font-bold uppercase">Delivery fee agreement</p><p className="mt-1">{order.deliveryFeeConsentText}</p><p className="mt-1">Accepted: {formatDateTime(order.deliveryFeeConsentAt)}</p><p>Final fee: {formatMoney(order.deliveryFee)}</p></section> : null}
+        <footer className="pt-4 text-center"><p className="font-bold">Thank you for your order.</p><p className="mt-1">Status: {formatOrderStatus(order.status)}</p></footer>
+      </article>
     </div>
     <style jsx global>{`
       @media print {
-        @page { margin: 12mm; }
-        body * { visibility: hidden !important; }
-        .invoice-overlay, .invoice-overlay * { visibility: visible !important; }
-        .invoice-overlay { position: absolute !important; inset: 0 !important; overflow: visible !important; background: white !important; padding: 0 !important; }
-        .invoice-sheet { min-height: 0 !important; max-width: none !important; padding: 0 !important; box-shadow: none !important; }
+        @page { size: 80mm auto; margin: 0; }
+        html, body { width: 80mm !important; margin: 0 !important; padding: 0 !important; background: white !important; }
+        body > *:not(.invoice-overlay) { display: none !important; }
+        .invoice-overlay { position: absolute !important; inset: 0 auto auto 0 !important; width: 80mm !important; overflow: visible !important; background: white !important; padding: 0 !important; }
+        .invoice-shell { width: 80mm !important; max-width: 80mm !important; }
+        .invoice-sheet { width: 80mm !important; max-width: 80mm !important; min-height: 0 !important; padding: 4mm !important; box-shadow: none !important; print-color-adjust: exact; }
         .invoice-no-print { display: none !important; }
       }
     `}</style>
-  </div>
+  </div>, document.body)
 }
+
+function ReceiptLine({ label, value }) { return <p className="break-words"><strong>{label}:</strong> {value}</p> }
+function ReceiptAmount({ label, strong, value }) { return <div className={`flex items-baseline justify-between gap-3 ${strong ? "mt-2 border-t border-black pt-2 text-[15px] font-black" : ""}`}><span>{label}</span><span className="shrink-0 tabular-nums">{formatMoney(value)}</span></div> }
 
 function CancelModal({ busy, onClose, onConfirm, order }) { return <Modal title="Cancel order?" onClose={onClose} locked={busy} layer="z-[60]"><div className="space-y-5 p-5"><p className="text-sm text-[#756D62]">This keeps the order for audit but stops fulfillment. This action cannot be reversed from the admin queue.</p><p className="font-mono font-bold text-[#8B1E1E]">{order.orderNumber}</p><div className="flex justify-end gap-2"><Button variant="outline" onClick={onClose} disabled={busy}>Keep order</Button><Button variant="destructive" onClick={onConfirm} disabled={busy}>{busy ? <LoaderCircle className="size-4 animate-spin" /> : null}{busy ? "Cancelling..." : "Cancel order"}</Button></div></div></Modal> }
 function Modal({ children, layer = "z-50", locked, onClose, title }) { return <div className={`fixed inset-0 ${layer} flex items-center justify-center bg-[#2B2B2B]/55 p-4 backdrop-blur-sm`} role="dialog" aria-modal="true" aria-label={title}><div className="max-h-[calc(100svh-2rem)] w-full max-w-4xl overflow-y-auto rounded-lg border border-[#E4DAC9] bg-white shadow-2xl"><div className="sticky top-0 z-10 flex items-center justify-between border-b border-[#E4DAC9] bg-white px-5 py-4"><h2 className="font-display text-xl font-semibold">{title}</h2><Button variant="ghost" size="icon" onClick={onClose} disabled={locked} aria-label={`Close ${title}`}><X className="size-4" /></Button></div>{children}</div></div> }
 function MetricCard({ detail, icon: Icon, label, value }) { return <Card className="border-[#E4DAC9] bg-white"><CardHeader className="flex-row items-start justify-between pb-2"><div><CardDescription>{label}</CardDescription><CardTitle className="mt-2 font-sans text-3xl font-semibold leading-none tabular-nums">{value}</CardTitle></div><div className="flex size-10 items-center justify-center rounded-md bg-[#F6F1E8] text-[#8B1E1E]"><Icon className="size-5" /></div></CardHeader><CardContent><p className="text-sm text-[#756D62]">{detail}</p></CardContent></Card> }
 function Info({ label, value }) { return <div><p className="text-xs font-semibold uppercase text-[#756D62]">{label}</p><p className="mt-1 break-words font-medium">{value}</p></div> }
 function Price({ label, strong, value }) { return <div className={`flex justify-between ${strong ? "border-t border-[#E4DAC9] pt-2 font-bold" : "text-[#756D62]"}`}><span>{label}</span><span>{formatMoney(value)}</span></div> }
+function PendingPrice() { return <div className="flex justify-between border-t border-[#E4DAC9] pt-2 font-semibold text-amber-700"><span>Final total</span><span>Fee pending</span></div> }
 function PageButton({ disabled, icon: Icon, label, onClick }) { return <Button variant="outline" size="icon" onClick={onClick} disabled={disabled} aria-label={label}><Icon className="size-4" /></Button> }
 function EmptyState() { return <div className="flex min-h-52 flex-col items-center justify-center border border-dashed border-[#E4DAC9] bg-[#FDFAF4] p-6 text-center"><PackageCheck className="size-8 text-[#8B1E1E]" /><p className="mt-3 font-semibold">No orders found.</p></div> }
 function formatStatus(value) { return value.split("_").map((part) => part.charAt(0) + part.slice(1).toLowerCase()).join(" ") }

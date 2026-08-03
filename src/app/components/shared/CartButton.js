@@ -154,13 +154,10 @@ export function CartPanel({ cart, compact = false, onCheckout }) {
           <span>{formatMoney(cart.subtotal)}</span>
         </div>
         <div className="flex justify-between text-white/45">
-          <span>Delivery</span>
-          <span>{cart.deliveryFee === 0 ? 'Free' : formatMoney(cart.deliveryFee)}</span>
+          <span>Delivery fee</span>
+          <span>To be confirmed</span>
         </div>
-        <div className={`flex justify-between items-center font-bold ${compact ? 'text-xl' : 'text-2xl'}`}>
-          <span className="font-display">Total</span>
-          <span className="font-sans tabular-nums" style={{ lineHeight: 1 }}>{formatMoney(cart.total)}</span>
-        </div>
+        <p className="pt-1 text-[11px] leading-relaxed text-white/40">The restaurant confirms the final delivery fee from your address.</p>
       </div>
 
       <Link

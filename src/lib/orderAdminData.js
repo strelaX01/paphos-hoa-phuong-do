@@ -59,6 +59,7 @@ export function serializeAdminOrder(order) {
     deliveryFeeConsentText: order.deliveryFeeConsentText || "",
     deliveryFeePolicyNearby: order.deliveryFeePolicyNearby === null ? null : Number(order.deliveryFeePolicyNearby),
     deliveryFeePolicyFarther: order.deliveryFeePolicyFarther === null ? null : Number(order.deliveryFeePolicyFarther),
+    deliveryFeeConfirmed: Number(order.deliveryFee) > 0,
     subtotal: Number(order.subtotal),
     deliveryFee: Number(order.deliveryFee),
     discountTotal: Number(order.discountTotal),

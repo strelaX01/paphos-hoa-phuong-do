@@ -14,13 +14,11 @@ export function getCartItemKey(item) {
   return `${item.id}:${item.variantId || 'base'}`
 }
 
-export function getCartSummary(items, nearbyDeliveryFee = DELIVERY_CONFIG.nearbyFeeCents / 100) {
+export function getCartSummary(items) {
   const subtotal = items.reduce((sum, item) => sum + parsePrice(item.price) * item.qty, 0)
   const itemCount = items.reduce((sum, item) => sum + item.qty, 0)
-  const deliveryFee = subtotal === 0 ? 0 : nearbyDeliveryFee
-  const total = subtotal + deliveryFee
 
-  return { subtotal, itemCount, deliveryFee, total }
+  return { subtotal, itemCount }
 }
 
 export const useCartStore = create(

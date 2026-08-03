@@ -107,6 +107,8 @@ export async function PATCH(request, context) {
       const expectedNextStatus = (isDriver ? DRIVER_NEXT_STATUS : ADMIN_NEXT_STATUS)[current.status];
       const canCancel = !isDriver && nextStatus === "CANCELLED" && ["PENDING", "PREPARING", "PENDING_PICKUP"].includes(current.status);
       if (nextStatus && nextStatus !== current.status && nextStatus !== expectedNextStatus && !canCancel) throw Object.assign(new Error(`Cannot move an order from ${current.status} to ${nextStatus}.`), { code: "INVALID_TRANSITION" });
+      const deliveryFeeConfirmed = Number(current.deliveryFee) > 0;
+      if (nextStatus === "PREPARING" && !deliveryFeeConfirmed && !hasDeliveryFee) throw Object.assign(new Error("Set the final delivery fee before confirming this order."), { code: "INVALID_EDIT" });
       const now = new Date();
       const statusChanged = Boolean(nextStatus && nextStatus !== current.status);
       const timestamps = statusChanged ? {
@@ -117,8 +119,10 @@ export async function PATCH(request, context) {
       } : {};
       const timelineCreates = [];
       if (statusChanged) timelineCreates.push({ status: nextStatus, title: STATUS_TITLES[nextStatus], note: isDriver ? `Updated by driver ${account.name}.` : null });
-      if (hasDeliveryFee && deliveryFeeCents !== Math.round(Number(current.deliveryFee) * 100)) {
-        timelineCreates.push({ title: "Delivery fee updated", note: `Changed from EUR ${Number(current.deliveryFee).toFixed(2)} to EUR ${(deliveryFeeCents / 100).toFixed(2)} by admin.` });
+      if (hasDeliveryFee && (!deliveryFeeConfirmed || deliveryFeeCents !== Math.round(Number(current.deliveryFee) * 100))) {
+        timelineCreates.push(deliveryFeeConfirmed
+          ? { title: "Delivery fee updated", note: `Changed from EUR ${Number(current.deliveryFee).toFixed(2)} to EUR ${(deliveryFeeCents / 100).toFixed(2)} by admin.` }
+          : { title: "Delivery fee confirmed", note: `Set to EUR ${(deliveryFeeCents / 100).toFixed(2)} by admin.` });
       }
       const pricing = hasDeliveryFee ? {
         deliveryFee: (deliveryFeeCents / 100).toFixed(2),
@@ -152,7 +156,7 @@ export async function PATCH(request, context) {
             customerPhone: edit.customerPhone,
             customerEmail: edit.customerEmail,
             subtotal: subtotal.toFixed(2),
-            total: (Math.max(0, subtotal - Number(current.discountTotal)) + (hasDeliveryFee ? deliveryFeeCents / 100 : Number(current.deliveryFee))).toFixed(2),
+            total: (Math.max(0, subtotal - Number(current.discountTotal)) + (hasDeliveryFee ? deliveryFeeCents / 100 : deliveryFeeConfirmed ? Number(current.deliveryFee) : 0)).toFixed(2),
             ...(removedIds.length || itemChanges.length ? { items: itemMutations } : {}),
           };
         }
