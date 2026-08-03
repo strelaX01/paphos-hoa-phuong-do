@@ -24,7 +24,7 @@ export default function AboutSection() {
           {/* ── Image side ─────────────────────────────────── */}
           <div className="relative min-h-[380px] lg:min-h-[600px] order-2 lg:order-1 lg:-ml-6">
             <Image
-              src="https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=900&q=85"
+              src="/images/hpd3.png"
               alt="Intimate dining room at Hoa Phượng Đỏ restaurant"
               fill
               className="object-cover"

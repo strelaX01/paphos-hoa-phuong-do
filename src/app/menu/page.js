@@ -53,40 +53,40 @@ async function getMenuSections() {
 
 function MenuHero() {
   return (
-    <section className="relative isolate min-h-[62svh] overflow-hidden bg-[#1E1A18]">
+    <section className="relative isolate min-h-[522px] overflow-hidden bg-[#1E1A18] sm:min-h-[58svh]">
       <HeroImage
-        src="https://images.unsplash.com/photo-1582878826629-29b7ad1cdc43?w=1920&q=90"
+        src="/images/hpd4.png"
         alt="Vietnamese pho with fresh herbs and noodles"
         className="object-cover object-center"
       />
       <div className="absolute inset-0 bg-gradient-to-r from-black/82 via-black/55 to-black/25" />
       <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-transparent to-black/25" />
 
-      <div className="site-container relative z-10 flex min-h-[62svh] items-center pt-24">
-        <div className="max-w-2xl py-20">
+      <div className="site-container relative z-10 flex min-h-[522px] items-center pt-20 sm:min-h-[58svh] sm:pt-24">
+        <div className="max-w-2xl pb-0 pt-6 sm:-translate-y-6 sm:pt-8">
           <div className="mb-5 flex items-center gap-3">
             <span className="h-px w-8 bg-[#D4A017]" />
             <span className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[#D4A017]">
               Vietnamese Menu
             </span>
           </div>
-          <h1 className="font-display text-[42px] font-bold leading-[1.05] text-white sm:text-6xl lg:text-[72px]">
+          <h1 className="font-display text-[42px] font-bold leading-[1.05] text-white sm:text-6xl lg:text-[64px]">
             Fresh Bowls, Hot Broths,
             <span className="block text-[#D4A017]">Family Recipes</span>
           </h1>
           <p className="mt-6 max-w-xl text-[15px] leading-relaxed text-white/65 sm:text-base">
             Explore our full menu of Vietnamese classics, grilled rice plates, fresh starters, vegetarian dishes, and sweet finishes.
           </p>
-          <div className="mt-8 flex flex-wrap items-center gap-3">
+          <div className="mt-6 flex items-center gap-2 sm:mt-8 sm:gap-3">
             <Link
               href="/delivery"
-              className="inline-flex items-center justify-center bg-[#8B1E1E] px-7 py-3.5 text-[13px] font-semibold uppercase tracking-[0.12em] text-white transition-colors hover:bg-[#a02424]"
+              className="inline-flex min-w-0 flex-1 items-center justify-center bg-[#8B1E1E] px-3 py-3.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-white transition-colors hover:bg-[#a02424] sm:flex-none sm:px-7 sm:text-[13px] sm:tracking-[0.12em]"
             >
               Order Delivery
             </Link>
             <Link
               href="/book-table"
-              className="inline-flex items-center justify-center border border-white/35 px-7 py-3.5 text-[13px] font-semibold uppercase tracking-[0.12em] text-white transition-all hover:border-white/70 hover:bg-white/10"
+              className="inline-flex min-w-0 flex-1 items-center justify-center border border-white/35 px-3 py-3.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-white transition-all hover:border-white/70 hover:bg-white/10 sm:flex-none sm:px-7 sm:text-[13px] sm:tracking-[0.12em]"
             >
               Book a Table
             </Link>

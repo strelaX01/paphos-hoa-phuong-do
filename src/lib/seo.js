@@ -1,7 +1,9 @@
 export const SITE_NAME = 'Hoa Phuong Do'
 export const DEFAULT_TITLE = 'Hoa Phuong Do | Vietnamese Restaurant in Paphos'
 export const DEFAULT_DESCRIPTION = 'Authentic Vietnamese food in Kissonerga, Paphos. Explore the menu, order delivery, or reserve a table at Hoa Phuong Do.'
-export const SOCIAL_IMAGE = '/images/hpd-hero.png'
+export const SOCIAL_IMAGE = '/images/hoa-phuong-do-social.jpg'
+export const SOCIAL_IMAGE_WIDTH = 1200
+export const SOCIAL_IMAGE_HEIGHT = 630
 
 export function getSiteUrl() {
   const configuredUrl = process.env.APP_URL
@@ -12,6 +14,9 @@ export function getSiteUrl() {
 
   try {
     const url = new URL(configuredUrl)
+    if (process.env.NODE_ENV === 'production' && url.protocol === 'http:' && !['localhost', '127.0.0.1'].includes(url.hostname)) {
+      url.protocol = 'https:'
+    }
     url.pathname = '/'
     url.search = ''
     url.hash = ''
@@ -43,8 +48,8 @@ export function createPageMetadata({ title, description, path, keywords = [], ab
       images: [
         {
           url: SOCIAL_IMAGE,
-          width: 1672,
-          height: 941,
+          width: SOCIAL_IMAGE_WIDTH,
+          height: SOCIAL_IMAGE_HEIGHT,
           alt: 'Vietnamese food at Hoa Phuong Do in Paphos',
         },
       ],

@@ -16,7 +16,7 @@ export default function BookingCTA({ restaurantProfile, openingStatus }) {
     <section id="booking-cta" aria-label="Reserve your table" className="relative min-h-[560px] overflow-hidden">
       <div className="absolute inset-0">
         <Image
-          src="https://images.unsplash.com/photo-1424847651672-bf20a4b0982b?w=1920&q=85"
+          src="/images/hpd2.png"
           alt="Table ready for restaurant guests"
           fill
           className="object-cover object-center"

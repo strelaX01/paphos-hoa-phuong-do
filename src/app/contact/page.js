@@ -38,7 +38,7 @@ function ContactHero({ profile }) {
   return (
     <section className="relative isolate min-h-[58svh] overflow-hidden bg-[#1E1A18]">
       <HeroImage
-        src="https://images.unsplash.com/photo-1559329007-40df8a9345d8?w=1920&q=90"
+        src="/images/hpd8.png"
         alt="Guests dining in a warm restaurant"
         className="object-cover object-center"
       />

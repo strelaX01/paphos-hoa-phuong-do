@@ -60,7 +60,7 @@ function createJustifiedRows(items, ratios, containerWidth) {
   })
 }
 
-export default function GalleryGridClient({ items, layout = 'full', paginate = true }) {
+export default function GalleryGridClient({ items, paginate = true }) {
   const galleryItems = items
   const [page, setPage] = useState(1)
   const [isLoading, setIsLoading] = useState(false)
@@ -79,14 +79,14 @@ export default function GalleryGridClient({ items, layout = 'full', paginate = t
   )
   const activeItem = activeIndex === null ? null : pageItems[activeIndex]
   const previewRows = useMemo(
-    () => layout === 'preview' && previewRatios
+    () => previewRatios
       ? createJustifiedRows(pageItems, previewRatios, previewWidth)
       : [],
-    [layout, pageItems, previewRatios, previewWidth]
+    [pageItems, previewRatios, previewWidth]
   )
 
   useEffect(() => {
-    if (layout !== 'preview' || !previewVisible) return undefined
+    if (!previewVisible) return undefined
 
     let active = true
     Promise.all(pageItems.map((item) => new Promise((resolve) => {
@@ -99,10 +99,10 @@ export default function GalleryGridClient({ items, layout = 'full', paginate = t
     })
 
     return () => { active = false }
-  }, [layout, pageItems, previewVisible])
+  }, [pageItems, previewVisible])
 
   useEffect(() => {
-    if (layout !== 'preview' || !previewContainerRef.current || previewVisible) return undefined
+    if (!previewContainerRef.current || previewVisible) return undefined
 
     const observer = new IntersectionObserver((entries) => {
       if (!entries[0]?.isIntersecting) return
@@ -112,10 +112,10 @@ export default function GalleryGridClient({ items, layout = 'full', paginate = t
 
     observer.observe(previewContainerRef.current)
     return () => observer.disconnect()
-  }, [layout, previewVisible])
+  }, [previewVisible])
 
   useEffect(() => {
-    if (layout !== 'preview' || !previewContainerRef.current) return undefined
+    if (!previewContainerRef.current) return undefined
 
     const container = previewContainerRef.current
     const updateWidth = () => setPreviewWidth(container.clientWidth)
@@ -123,7 +123,7 @@ export default function GalleryGridClient({ items, layout = 'full', paginate = t
     updateWidth()
     observer.observe(container)
     return () => observer.disconnect()
-  }, [layout])
+  }, [])
 
   const showPrevious = useCallback(() => {
     setActiveIndex((current) => current === null ? null : (current - 1 + pageItems.length) % pageItems.length)
@@ -155,6 +155,7 @@ export default function GalleryGridClient({ items, layout = 'full', paginate = t
   const updatePage = (nextPage) => {
     const safePage = Math.min(Math.max(nextPage, 1), totalPages)
     setActiveIndex(null)
+    setPreviewRatios(null)
     setIsLoading(true)
     setPage(safePage)
     window.setTimeout(() => setIsLoading(false), 220)
@@ -188,7 +189,7 @@ export default function GalleryGridClient({ items, layout = 'full', paginate = t
         </div>
       ) : isLoading ? (
         <CardGridSkeleton count={ITEMS_PER_PAGE} />
-      ) : layout === 'preview' ? (
+      ) : (
         <div ref={previewContainerRef}>
           {!previewRatios || !previewWidth ? (
             <CardGridSkeleton count={4} />
@@ -217,12 +218,6 @@ export default function GalleryGridClient({ items, layout = 'full', paginate = t
               ))}
             </div>
           )}
-        </div>
-      ) : (
-        <div className={`columns-1 gap-3 sm:columns-2 ${layout === 'full' ? 'lg:columns-3' : ''}`}>
-          {pageItems.map((item, index) => (
-            <GalleryButton key={item.id} item={item} index={index} onOpen={setActiveIndex} className="mb-3 w-full break-inside-avoid" />
-          ))}
         </div>
       )}
 

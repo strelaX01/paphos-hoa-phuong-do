@@ -1,19 +1,7 @@
 import { getCurrentAdminAccount } from "@/lib/adminAuth";
+import { hasTrustedAdminOrigin } from "@/lib/adminRequestOrigin.mjs";
 
-const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
-
-export function hasTrustedAdminOrigin(request) {
-  if (SAFE_METHODS.has(request.method)) return true;
-  if (request.headers.get("sec-fetch-site") === "cross-site") return false;
-
-  const origin = request.headers.get("origin");
-  if (!origin) return true;
-  try {
-    return new URL(origin).origin === new URL(request.url).origin;
-  } catch {
-    return false;
-  }
-}
+export { hasTrustedAdminOrigin } from "@/lib/adminRequestOrigin.mjs";
 
 function authError(error, status, code) {
   return Response.json(

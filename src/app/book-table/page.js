@@ -55,7 +55,7 @@ function BookingHero({ profile }) {
   return (
     <section className="relative isolate min-h-[58svh] overflow-hidden bg-[#1E1A18]">
       <HeroImage
-        src="https://images.unsplash.com/photo-1424847651672-bf20a4b0982b?w=1920&q=90"
+        src="/images/hpd5.png"
         alt="Warm restaurant table set for dinner"
         className="object-cover object-center"
       />

@@ -6,7 +6,15 @@ import StorefrontNoticePopup from './components/shared/StorefrontNoticePopup'
 import { getRestaurantProfileData, splitPhoneNumbers } from '@/lib/restaurantProfileData'
 import { getActiveStorefrontEffect } from '@/lib/storefrontEffectData'
 import { getActiveStorefrontNotice } from '@/lib/storefrontNoticeData'
-import { DEFAULT_DESCRIPTION, DEFAULT_TITLE, getSiteUrl, SITE_NAME, SOCIAL_IMAGE } from '@/lib/seo'
+import {
+  DEFAULT_DESCRIPTION,
+  DEFAULT_TITLE,
+  getSiteUrl,
+  SITE_NAME,
+  SOCIAL_IMAGE,
+  SOCIAL_IMAGE_HEIGHT,
+  SOCIAL_IMAGE_WIDTH,
+} from '@/lib/seo'
 import './globals.css'
 
 export const metadata = {
@@ -33,7 +41,12 @@ export const metadata = {
     siteName: SITE_NAME,
     locale: 'en_CY',
     type: 'website',
-    images: [{ url: SOCIAL_IMAGE, width: 1672, height: 941, alt: 'Vietnamese food at Hoa Phuong Do in Paphos' }],
+    images: [{
+      url: SOCIAL_IMAGE,
+      width: SOCIAL_IMAGE_WIDTH,
+      height: SOCIAL_IMAGE_HEIGHT,
+      alt: 'Vietnamese food at Hoa Phuong Do in Paphos',
+    }],
   },
   twitter: {
     card: 'summary_large_image',
