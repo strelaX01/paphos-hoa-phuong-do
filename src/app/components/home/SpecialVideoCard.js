@@ -5,13 +5,11 @@ import { useEffect, useRef, useState } from 'react'
 
 export default function SpecialVideoCard({ special, index, highlightLabel = null }) {
   const videoRef = useRef(null)
+  const previewTimeRef = useRef(0.08)
   const [started, setStarted] = useState(false)
   const [orientation, setOrientation] = useState('unknown')
   const [previewReady, setPreviewReady] = useState(false)
   const [loadFailed, setLoadFailed] = useState(false)
-  const previewUrl = special.videoUrl.includes('#')
-    ? special.videoUrl
-    : `${special.videoUrl}#t=0.001`
 
   useEffect(() => {
     function pauseWhenAnotherStarts(event) {
@@ -22,12 +20,41 @@ export default function SpecialVideoCard({ special, index, highlightLabel = null
     return () => window.removeEventListener('special-video-play', pauseWhenAnotherStarts)
   }, [special.id])
 
+  useEffect(() => {
+    const video = videoRef.current
+    if (!video) return
+
+    if (video.videoWidth && video.videoHeight) {
+      setOrientation(video.videoWidth / video.videoHeight < 0.9 ? 'portrait' : 'landscape')
+    }
+
+    if (Number.isFinite(video.duration)) {
+      previewTimeRef.current = Math.min(Math.max(video.duration * 0.03, 0.08), 0.5)
+    }
+
+    if (video.readyState >= 1 && Math.abs(video.currentTime - previewTimeRef.current) > 0.02) {
+      video.currentTime = previewTimeRef.current
+    }
+
+    if (video.readyState >= 2 && !video.seeking) setPreviewReady(true)
+
+    const fallback = window.setTimeout(() => {
+      if (video.readyState >= 2) setPreviewReady(true)
+    }, 600)
+
+    return () => window.clearTimeout(fallback)
+  }, [special.videoUrl])
+
   function handleMetadata(event) {
     const video = event.currentTarget
     const ratio = video.videoWidth / video.videoHeight
 
     setOrientation(ratio < 0.9 ? 'portrait' : 'landscape')
-    setPreviewReady(true)
+    previewTimeRef.current = Number.isFinite(video.duration)
+      ? Math.min(Math.max(video.duration * 0.03, 0.08), 0.5)
+      : 0.08
+
+    if (!started) video.currentTime = previewTimeRef.current
   }
 
   async function handlePlay() {
@@ -51,25 +78,26 @@ export default function SpecialVideoCard({ special, index, highlightLabel = null
     if (!video) return
 
     video.controls = false
-    video.currentTime = 0.001
+    video.currentTime = previewTimeRef.current
     setStarted(false)
   }
 
   return (
     <article className="group flex min-w-0 flex-col">
-      <div className={`relative isolate aspect-[4/3] overflow-hidden rounded-md border border-white/10 bg-[#100E0D] transition-shadow duration-300 sm:aspect-video ${highlightLabel ? 'shadow-[0_18px_50px_rgba(0,0,0,0.32)]' : ''}`}>
+      <div className={`relative isolate aspect-[4/3] overflow-hidden rounded-md border border-white/10 bg-[#302823] transition-shadow duration-300 sm:aspect-video ${highlightLabel ? 'shadow-[0_18px_50px_rgba(0,0,0,0.32)]' : ''}`}>
         {!previewReady && !loadFailed ? (
           <div className="absolute inset-0 animate-pulse bg-white/5" aria-hidden="true" />
         ) : null}
 
         <video
           ref={videoRef}
-          src={previewUrl}
+          src={special.videoUrl}
           controls={started}
           playsInline
           preload="metadata"
           onLoadedMetadata={handleMetadata}
-          onLoadedData={() => setPreviewReady(true)}
+          onLoadedData={(event) => { if (!event.currentTarget.seeking) setPreviewReady(true) }}
+          onSeeked={() => setPreviewReady(true)}
           onEnded={handleEnded}
           onError={() => setLoadFailed(true)}
           aria-label={special.title}
