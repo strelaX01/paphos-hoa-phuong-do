@@ -20,6 +20,10 @@
   animation-play-state: paused;
 }
 
+.paused .newYearFirework {
+  animation-play-state: paused;
+}
+
 .particle {
   position: absolute;
   top: -12vh;
@@ -77,19 +81,97 @@
 
 .confetti {
   top: 50%;
-  left: 50%;
+  left: var(--festival-burst-left);
   width: calc(var(--festival-size) * 0.52);
   height: calc(var(--festival-size) * 1.45);
-  border-radius: 1px;
+  border-radius: 999px;
   background: #d4a017;
   animation-name: confetti-burst;
   animation-timing-function: cubic-bezier(0.18, 0.72, 0.28, 1);
   animation-iteration-count: 1;
 }
 
-.variant1.confetti { background: #8b1e1e; }
-.variant2.confetti { background: #2f6f55; }
-.variant3.confetti { background: #f1e4c1; }
+.variant1.confetti {
+  width: calc(var(--festival-size) * 0.42);
+  height: calc(var(--festival-size) * 1.7);
+  border-radius: 2px;
+  background: #a42323;
+}
+
+.variant2.confetti {
+  width: calc(var(--festival-size) * 1.05);
+  height: calc(var(--festival-size) * 1.05);
+  border-radius: 0;
+  background: #f6e8bd;
+  clip-path: polygon(50% 0, 62% 36%, 100% 50%, 62% 64%, 50% 100%, 38% 64%, 0 50%, 38% 36%);
+}
+
+.variant3.confetti {
+  width: calc(var(--festival-size) * 0.72);
+  height: calc(var(--festival-size) * 0.72);
+  border-radius: 50%;
+  background: #2f6f55;
+}
+
+.newYearDecoration {
+  position: absolute;
+  inset: 0;
+}
+
+.newYearFirework {
+  --firework-color: #e8bd3f;
+  position: absolute;
+  width: clamp(110px, 15vw, 220px);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle, #fff8d5 0 2%, transparent 3%),
+    repeating-conic-gradient(from 4deg, var(--firework-color) 0deg 1.5deg, transparent 2deg 15deg);
+  opacity: 0;
+  -webkit-mask-image: radial-gradient(circle, transparent 0 27%, #000 29% 32%, transparent 34% 47%, #000 49% 51%, transparent 53%);
+  mask-image: radial-gradient(circle, transparent 0 27%, #000 29% 32%, transparent 34% 47%, #000 49% 51%, transparent 53%);
+  animation: firework-bloom 5.8s ease-out both;
+  will-change: transform, opacity;
+}
+
+.newYearFirework::before,
+.newYearFirework::after {
+  position: absolute;
+  border-radius: 50%;
+  content: '';
+}
+
+.newYearFirework::before {
+  inset: 40%;
+  border: 2px solid #fff1a8;
+  box-shadow: 0 0 0 4px rgb(232 189 63 / 0.16);
+}
+
+.newYearFirework::after {
+  inset: 12%;
+  border: 1px solid rgb(255 240 169 / 0.34);
+}
+
+.newYearFireworkLeft {
+  left: 8%;
+  top: 12%;
+}
+
+.newYearFireworkCenter {
+  --firework-color: #b72a32;
+  left: 50%;
+  top: 28%;
+  width: clamp(90px, 12vw, 180px);
+  animation-delay: 0.8s;
+  transform: translateX(-50%);
+}
+
+.newYearFireworkRight {
+  --firework-color: #4d8066;
+  right: 8%;
+  top: 8%;
+  animation-delay: 1.35s;
+}
 
 .valentine {
   top: auto;
@@ -148,10 +230,29 @@
 }
 
 @keyframes confetti-burst {
-  0% { opacity: 0; transform: translate3d(0, var(--festival-burst-start), 0) rotate(0deg); }
-  18% { opacity: 1; transform: translate3d(var(--festival-burst-mid-x), var(--festival-burst-y), 0) rotate(180deg); }
-  68% { opacity: 0.92; }
-  100% { opacity: 0; transform: translate3d(var(--festival-burst-x), var(--festival-burst-end), 0) rotate(var(--festival-rotation)); }
+  0% { opacity: 0; transform: translate3d(0, var(--festival-burst-start), 0) rotate(0deg) scaleX(0.7); }
+  16% { opacity: 1; transform: translate3d(var(--festival-burst-mid-x), var(--festival-burst-y), 0) rotate(145deg) scaleX(1); }
+  48% { opacity: 0.96; transform: translate3d(var(--festival-burst-x), var(--festival-burst-y-mid), 0) rotate(330deg) scaleX(0.5); }
+  76% { opacity: 0.82; transform: translate3d(var(--festival-burst-x), var(--festival-burst-fall), 0) rotate(510deg) scaleX(1); }
+  100% { opacity: 0; transform: translate3d(var(--festival-burst-x), var(--festival-burst-end), 0) rotate(var(--festival-rotation)) scaleX(0.72); }
+}
+
+@keyframes firework-bloom {
+  0%, 8% { opacity: 0; transform: scale(0.16) rotate(-8deg); }
+  20% { opacity: 0.95; transform: scale(1) rotate(0deg); }
+  34% { opacity: 0.5; transform: scale(1.12) rotate(3deg); }
+  48%, 100% { opacity: 0; transform: scale(1.2) rotate(5deg); }
+}
+
+@keyframes firework-bloom-center {
+  0%, 8% { opacity: 0; transform: translateX(-50%) scale(0.16) rotate(-8deg); }
+  20% { opacity: 0.95; transform: translateX(-50%) scale(1) rotate(0deg); }
+  34% { opacity: 0.5; transform: translateX(-50%) scale(1.12) rotate(3deg); }
+  48%, 100% { opacity: 0; transform: translateX(-50%) scale(1.2) rotate(5deg); }
+}
+
+.newYearFireworkCenter {
+  animation-name: firework-bloom-center;
 }
 
 @keyframes heart-rise {
@@ -183,6 +284,8 @@
 .reduced .valentine { transform: rotate(45deg); }
 .reduced .tet { transform: rotate(24deg); }
 .reduced .summer { transform: rotate(-18deg); }
+.reduced .newYearFirework { animation: none; opacity: 0.4; transform: scale(0.8); }
+.reduced .newYearFireworkCenter { transform: translateX(-50%) scale(0.8); }
 
 @media (max-width: 768px) {
   .particle {
@@ -190,6 +293,16 @@
   }
 
   .confetti { animation-duration: 4.8s; }
+
+  .newYearFirework {
+    width: 104px;
+  }
+
+  .newYearFireworkCenter {
+    top: 32%;
+    width: 82px;
+  }
+
 }
 
 @media (prefers-reduced-motion: reduce) {

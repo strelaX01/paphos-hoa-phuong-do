@@ -1,15 +1,12 @@
 import Image from 'next/image'
 import Link from 'next/link'
-import { ArrowRight, Phone } from 'lucide-react'
-
-import { phoneHref } from '@/lib/restaurantProfileData'
+import { ArrowRight, Utensils } from 'lucide-react'
 
 export default function BookingCTA({ restaurantProfile, openingStatus }) {
   if (!restaurantProfile) return null
 
   const quickInfo = [
     { label: 'Today', value: openingStatus?.text || 'See opening hours' },
-    { label: 'Phone', value: restaurantProfile.phone || 'Not provided' },
   ]
 
   return (
@@ -39,11 +36,9 @@ export default function BookingCTA({ restaurantProfile, openingStatus }) {
             <Link id="booking-cta-btn" href="/book-table" className="group inline-flex items-center gap-2.5 bg-[#D4A017] px-8 py-3.5 text-[13px] font-bold uppercase tracking-[0.12em] text-[#1a0a0a] transition-colors hover:bg-[#e8c228]">
               Book Now <ArrowRight className="size-4 transition-transform group-hover:translate-x-1" aria-hidden="true" />
             </Link>
-            {restaurantProfile.phone ? (
-              <a href={phoneHref(restaurantProfile.phone)} className="inline-flex items-center gap-2 text-[13px] font-medium text-white/65 transition-colors hover:text-white">
-                <Phone className="size-4" aria-hidden="true" /> Call us
-              </a>
-            ) : null}
+            <Link href="/menu" className="inline-flex min-h-11 items-center gap-2 border border-white/20 px-5 text-[12px] font-semibold uppercase tracking-[0.12em] text-white/75 transition-colors hover:border-[#D4A017]/60 hover:text-white">
+              <Utensils className="size-4 text-[#D4A017]" aria-hidden="true" /> View Menu
+            </Link>
           </div>
 
           <div className="mt-8 flex flex-wrap gap-x-8 gap-y-4 border-t border-white/10 pt-6">

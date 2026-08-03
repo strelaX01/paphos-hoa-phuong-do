@@ -28,6 +28,7 @@ const PARTICLE_COUNTS = {
 }
 
 const PREVIEW_COUNTS = { Low: 5, Medium: 8, High: 11 }
+const NEW_YEAR_EFFECT_VERSION = 'v2'
 const emptySubscribe = () => () => {}
 
 function subscribeToVisibility(onStoreChange) {
@@ -67,7 +68,14 @@ function subscribeToPlayed(onStoreChange) {
 
 function particleStyle(index, effect, preview) {
   const drift = -72 + (index * 43) % 145
-  const burstX = -46 + (index * 29) % 93
+  const burstOrigin = index % 3 === 0 ? 18 : index % 3 === 1 ? 82 : 50
+  const burstDistance = 9 + (index * 17) % 34
+  const burstX = burstOrigin === 18
+    ? burstDistance
+    : burstOrigin === 82
+      ? -burstDistance
+      : -34 + (index * 29) % 69
+  const burstHeight = preview ? 75 + (index % 4) * 18 : 22 + (index % 4) * 7
   const previewScale = preview ? 0.85 : 1
   const baseSize = effect === 'CHRISTMAS' ? 5 : effect === 'VALENTINE' ? 8 : 7
 
@@ -75,8 +83,8 @@ function particleStyle(index, effect, preview) {
     '--festival-left': `${(index * 37 + 11) % 101}%`,
     '--festival-static-top': `${12 + (index * 23) % 76}%`,
     '--festival-size': `${Math.round((baseSize + (index % 4) * 2) * previewScale)}px`,
-    '--festival-duration': `${effect === 'NEW_YEAR' ? 4.8 : 9 + (index * 7) % 8}s`,
-    '--festival-delay': effect === 'NEW_YEAR' ? `${(index % 6) * 0.08}s` : `${-((index * 1.17) % 12)}s`,
+    '--festival-duration': `${effect === 'NEW_YEAR' ? 4.3 + (index % 4) * 0.35 : 9 + (index * 7) % 8}s`,
+    '--festival-delay': effect === 'NEW_YEAR' ? `${(index % 7) * 0.09}s` : `${-((index * 1.17) % 12)}s`,
     '--festival-drift': `${preview ? Math.round(drift * 0.55) : drift}px`,
     '--festival-mid-drift': `${preview ? Math.round(drift * -0.22) : Math.round(drift * -0.45)}px`,
     '--festival-small-drift': `${preview ? Math.round(drift * 0.16) : Math.round(drift * 0.28)}px`,
@@ -87,9 +95,12 @@ function particleStyle(index, effect, preview) {
     '--festival-rise': preview ? '-520px' : '-124vh',
     '--festival-rise-one': preview ? '-210px' : '-52vh',
     '--festival-rise-two': preview ? '-390px' : '-92vh',
-    '--festival-burst-x': preview ? `${Math.round(burstX * 3.1)}px` : `${burstX}vw`,
-    '--festival-burst-mid-x': preview ? `${Math.round(burstX * 1.15)}px` : `${Math.round(burstX * 0.38)}vw`,
-    '--festival-burst-y': preview ? `${-75 - (index % 4) * 18}px` : `${-22 - (index % 4) * 7}vh`,
+    '--festival-burst-left': `${burstOrigin}%`,
+    '--festival-burst-x': preview ? `${Math.round(burstX * 2.2)}px` : `${burstX}vw`,
+    '--festival-burst-mid-x': preview ? `${Math.round(burstX * 0.85)}px` : `${Math.round(burstX * 0.42)}vw`,
+    '--festival-burst-y': `${-burstHeight}${preview ? 'px' : 'vh'}`,
+    '--festival-burst-y-mid': `${-Math.round(burstHeight * 0.7)}${preview ? 'px' : 'vh'}`,
+    '--festival-burst-fall': `${Math.round(burstHeight * 0.18)}${preview ? 'px' : 'vh'}`,
     '--festival-burst-start': preview ? '250px' : '56vh',
     '--festival-burst-end': preview ? '290px' : '66vh',
   }
@@ -105,6 +116,7 @@ function ParticleLayer({ count, effect, paused, preview = false, reduced = false
       className={`${preview ? styles.previewOverlay : styles.overlay} ${paused ? styles.paused : ''} ${reduced ? styles.reduced : ''}`}
       aria-hidden="true"
     >
+      {effect === 'NEW_YEAR' ? <NewYearDecoration /> : null}
       {Array.from({ length: count }, (_, index) => (
         <span
           key={index}
@@ -112,6 +124,16 @@ function ParticleLayer({ count, effect, paused, preview = false, reduced = false
           style={particleStyle(index, effect, preview)}
         />
       ))}
+    </div>
+  )
+}
+
+function NewYearDecoration() {
+  return (
+    <div className={styles.newYearDecoration}>
+      <span className={`${styles.newYearFirework} ${styles.newYearFireworkLeft}`} />
+      <span className={`${styles.newYearFirework} ${styles.newYearFireworkCenter}`} />
+      <span className={`${styles.newYearFirework} ${styles.newYearFireworkRight}`} />
     </div>
   )
 }
@@ -131,7 +153,9 @@ export default function FestivalEffect({ config }) {
   const isVisibleTab = useSyncExternalStore(subscribeToVisibility, () => document.visibilityState === 'visible', () => true)
   const reduceMotion = useSyncExternalStore(subscribeToMotion, () => window.matchMedia('(prefers-reduced-motion: reduce)').matches, () => true)
   const performanceProfile = useSyncExternalStore(subscribeToPerformanceProfile, getPerformanceProfile, () => 'constrained')
-  const playKey = config?.effect === 'NEW_YEAR' ? `festival-effect:${config.effect}:${config.updatedAt}` : ''
+  const playKey = config?.effect === 'NEW_YEAR'
+    ? `festival-effect:${NEW_YEAR_EFFECT_VERSION}:${config.effect}:${config.updatedAt}`
+    : ''
   const alreadyPlayed = useSyncExternalStore(
     subscribeToPlayed,
     () => Boolean(playKey && window.sessionStorage.getItem(playKey)),
@@ -143,7 +167,7 @@ export default function FestivalEffect({ config }) {
     const timer = window.setTimeout(() => {
       window.sessionStorage.setItem(playKey, 'played')
       window.dispatchEvent(new Event('festival-effect-played'))
-    }, 5000)
+    }, 6500)
     return () => window.clearTimeout(timer)
   }, [alreadyPlayed, hydrated, playKey, reduceMotion])
 

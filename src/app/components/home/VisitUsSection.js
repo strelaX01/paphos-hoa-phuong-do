@@ -6,11 +6,12 @@ import { phoneHref, splitPhoneNumbers } from '@/lib/restaurantProfileData'
 export default function VisitUsSection({ restaurantData, openingStatus }) {
   const profile = restaurantData?.profile
   if (!profile) return null
+  const phoneNumbers = splitPhoneNumbers(profile.phone)
 
   const visitDetails = [
     { icon: MapPin, label: 'Address', values: [profile.address].filter(Boolean) },
     { icon: Clock, label: 'Today', values: [openingStatus?.text || 'See opening hours'] },
-    { icon: Phone, label: 'Phone', values: splitPhoneNumbers(profile.phone), isPhone: true },
+    { icon: Phone, label: 'Phone', values: phoneNumbers, isPhone: true },
   ]
 
   return (
@@ -26,11 +27,9 @@ export default function VisitUsSection({ restaurantData, openingStatus }) {
               <a href={profile.mapUrl || '/contact'} className="inline-flex items-center justify-center gap-2 bg-[#D4A017] px-6 py-3.5 text-[12px] font-bold uppercase tracking-[0.14em] text-[#1E1A18] transition-colors hover:bg-[#e8c228]">
                 <Navigation className="size-4" aria-hidden="true" /> Open Maps
               </a>
-              {profile.phone ? (
-                <a href={phoneHref(profile.phone)} className="inline-flex items-center justify-center gap-2 border border-white/15 px-6 py-3.5 text-[12px] font-semibold uppercase tracking-[0.14em] text-white transition-colors hover:border-[#D4A017]/60 hover:text-[#D4A017]">
-                  <Phone className="size-4" aria-hidden="true" /> Call Now
-                </a>
-              ) : null}
+              <Link href="/contact" className="inline-flex items-center justify-center gap-2 border border-white/15 px-6 py-3.5 text-[12px] font-semibold uppercase tracking-[0.14em] text-white transition-colors hover:border-[#D4A017]/60 hover:text-[#D4A017]">
+                <Phone className="size-4" aria-hidden="true" /> Contact Details
+              </Link>
               {profile.email ? (
                 <a href={`mailto:${profile.email}`} aria-label={`Email ${profile.email}`} className="inline-flex size-11 items-center justify-center border border-white/15 text-white transition-colors hover:border-[#D4A017]/60 hover:text-[#D4A017]">
                   <Mail className="size-4" aria-hidden="true" />
