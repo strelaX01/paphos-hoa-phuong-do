@@ -28,7 +28,7 @@ export default async function DeliveryPage() {
   return (
     <>
       <Header />
-      <main className="overflow-x-hidden bg-[#F8F3EA]">
+      <main className="overflow-x-clip bg-[#F8F3EA]">
         <DeliveryHero />
         <section className="py-16 lg:py-24">
           <div className="site-container">

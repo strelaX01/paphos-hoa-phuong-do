@@ -65,7 +65,7 @@ export async function GET(request) {
     const [reservations, total, todayBookings, todaySeats, confirmed, pending] = await prisma.$transaction([
       prisma.reservation.findMany({
         where,
-        orderBy: [{ status: "asc" }, { date: "asc" }, { time: "asc" }, { createdAt: "desc" }],
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
         skip: (page - 1) * limit,
         take: limit,
         select: reservationAdminSelect,

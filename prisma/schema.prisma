@@ -313,6 +313,7 @@ model Reservation {
   @@index([customerId])
   @@index([date])
   @@index([status])
+  @@index([createdAt])
 }
 
 model MediaAsset {

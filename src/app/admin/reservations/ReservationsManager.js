@@ -174,8 +174,12 @@ function ReservationsList({ busyId, onDelete, onEdit, onStatus, reservations }) 
 }
 
 function ReservationRow({ busy, index, onDelete, onEdit, onStatus, reservation }) {
-  const rowTone = reservation.status === "PENDING" ? index % 2 ? "bg-amber-50/75" : "bg-amber-50/45" : ["CANCELLED", "NO_SHOW"].includes(reservation.status) ? index % 2 ? "bg-red-50/55" : "bg-red-50/30" : index % 2 ? "bg-[#FBF8F2]" : "bg-white"
-  return <tr className={`${rowTone} align-middle transition-colors hover:bg-[#F3ECDD]`}>
+  const rowTone = reservation.status === "PENDING"
+    ? "bg-[#FFF0C2] hover:bg-[#FFE4A3]"
+    : ["CANCELLED", "NO_SHOW"].includes(reservation.status)
+      ? `${index % 2 ? "bg-red-50/55" : "bg-red-50/30"} hover:bg-red-100/70`
+      : `${index % 2 ? "bg-[#FBF8F2]" : "bg-white"} hover:bg-[#F3ECDD]`
+  return <tr className={`${rowTone} align-middle transition-colors`}>
     <td className={`whitespace-nowrap border-l-4 px-4 py-4 ${statusRowAccent[reservation.status] || "border-l-[#D8CEBD]"}`}><p className="font-semibold">{formatDateOnly(reservation.date)}</p><p className="mt-1 text-sm font-bold text-[#8B1E1E]">{reservation.time}</p></td>
     <td className="px-4 py-4"><button type="button" onClick={onEdit} className="max-w-48 truncate font-semibold hover:text-[#8B1E1E] hover:underline">{reservation.name}</button><p className="mt-1 whitespace-nowrap text-xs text-[#756D62]">{reservation.phone}</p><p className="mt-0.5 max-w-48 truncate text-xs text-[#756D62]">{reservation.email}</p></td>
     <td className="px-4 py-4 text-center"><span className="inline-flex min-w-8 items-center justify-center rounded-md bg-white px-2 py-1 font-bold tabular-nums ring-1 ring-black/8">{reservation.guests}</span></td>
@@ -187,7 +191,7 @@ function ReservationRow({ busy, index, onDelete, onEdit, onStatus, reservation }
 }
 
 function ReservationMobileRow({ busy, onDelete, onEdit, onStatus, reservation }) {
-  const background = reservation.status === "PENDING" ? "border-amber-300 bg-amber-50/55" : ["CANCELLED", "NO_SHOW"].includes(reservation.status) ? "border-red-200 bg-red-50/35" : "border-[#E4DAC9] bg-white"
+  const background = reservation.status === "PENDING" ? "border-[#D4A017] bg-[#FFF0C2] shadow-[inset_4px_0_0_#B7791F]" : ["CANCELLED", "NO_SHOW"].includes(reservation.status) ? "border-red-200 bg-red-50/35" : "border-[#E4DAC9] bg-white"
   return <article className={`border p-4 ${background}`}><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate font-semibold">{reservation.name}</p><p className="mt-1 truncate text-xs text-[#756D62]">{reservation.email} | {reservation.phone}</p></div><Badge variant={statusVariant[reservation.status]}>{formatStatus(reservation.status)}</Badge></div><div className="mt-4 grid grid-cols-3 gap-3 border-y border-black/8 py-3 text-sm"><Info label="Date" value={formatDateOnly(reservation.date)} /><Info label="Time" value={reservation.time} /><Info label="Guests" value={reservation.guests} /></div>{reservation.requests ? <p className="mt-3 line-clamp-2 text-sm text-[#756D62]">{reservation.requests}</p> : null}<div className="mt-4"><ReservationActions reservation={reservation} busy={busy} onDelete={onDelete} onEdit={onEdit} onStatus={onStatus} /></div></article>
 }
 

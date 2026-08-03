@@ -139,12 +139,12 @@ function OrdersList({ busyId, isDriver, onAdvance, onCancel, onDetails, onPrint,
 function OrderRow({ busy, index, isDriver, onAdvance, onCancel, onDetails, onPrint, order }) {
   const itemCount = order.items.reduce((sum, item) => sum + item.quantity, 0)
   const rowTone = order.status === "PENDING"
-    ? index % 2 ? "bg-amber-50/75" : "bg-amber-50/45"
+    ? "bg-[#FFF0C2] hover:bg-[#FFE4A3]"
     : order.status === "CANCELLED"
-      ? index % 2 ? "bg-red-50/60" : "bg-red-50/35"
-      : index % 2 ? "bg-[#FBF8F2]" : "bg-white"
+      ? `${index % 2 ? "bg-red-50/60" : "bg-red-50/35"} hover:bg-red-100/70`
+      : `${index % 2 ? "bg-[#FBF8F2]" : "bg-white"} hover:bg-[#F3ECDD]`
 
-  return <tr className={`${rowTone} align-middle transition-colors hover:bg-[#F3ECDD]`}>
+  return <tr className={`${rowTone} align-middle transition-colors`}>
     <td className={`whitespace-nowrap border-l-4 px-4 py-4 ${statusRowAccent[order.status] || "border-l-[#D8CEBD]"}`}>{isDriver ? <span className="inline-flex rounded-sm bg-white/75 px-2 py-1 font-mono text-xs font-bold text-[#8B1E1E] shadow-xs ring-1 ring-black/5">{order.orderNumber}</span> : <button type="button" onClick={onDetails} className="inline-flex rounded-sm bg-white/75 px-2 py-1 font-mono text-xs font-bold text-[#8B1E1E] shadow-xs ring-1 ring-black/5 hover:underline">{order.orderNumber}</button>}<p className="mt-1.5 text-xs text-[#756D62]">{formatDateTime(order.createdAt)}</p></td>
     <td className="px-4 py-4"><p className="max-w-44 truncate font-semibold">{order.customerName}</p><p className="mt-1 whitespace-nowrap text-xs text-[#756D62]">{order.customerPhone}</p></td>
     <td className="px-4 py-4"><p className="max-w-52 truncate font-medium">{order.deliveryZone || "-"}</p><p className="mt-1 max-w-52 truncate text-xs text-[#756D62]">{order.deliveryStreet}</p></td>
@@ -156,7 +156,7 @@ function OrderRow({ busy, index, isDriver, onAdvance, onCancel, onDetails, onPri
 }
 
 function OrderMobileRow({ busy, isDriver, onAdvance, onCancel, onDetails, onPrint, order }) {
-  return <article className={`border p-4 ${order.status === "PENDING" ? "border-amber-300 bg-amber-50/55" : order.status === "CANCELLED" ? "border-red-200 bg-red-50/35" : "border-[#E4DAC9] bg-white"}`}>
+  return <article className={`border p-4 ${order.status === "PENDING" ? "border-[#D4A017] bg-[#FFF0C2] shadow-[inset_4px_0_0_#B7791F]" : order.status === "CANCELLED" ? "border-red-200 bg-red-50/35" : "border-[#E4DAC9] bg-white"}`}>
     <div className="flex items-start justify-between gap-3">
       <div><p className="font-mono text-sm font-bold text-[#8B1E1E]">{order.orderNumber}</p><p className="mt-1 font-semibold">{order.customerName}</p><p className="text-xs text-[#756D62]">{order.customerPhone} | {formatDateTime(order.createdAt)}</p></div>
       <Badge variant={statusVariant[order.status]}>{formatOrderStatus(order.status)}</Badge>
