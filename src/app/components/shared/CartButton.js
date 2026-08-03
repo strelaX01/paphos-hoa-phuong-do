@@ -130,7 +130,7 @@ export function CartPanel({ cart, compact = false, onCheckout }) {
                     onChange={(event) => cart.updateNote(cartKey, event.target.value)}
                     maxLength={300}
                     placeholder="Kitchen note"
-                    className="mt-3 h-9 w-full border border-white/15 bg-transparent px-2 text-xs text-white outline-none placeholder:text-white/30 focus:border-[#D4A017]"
+                    className="mt-3 h-10 w-full border border-white/15 bg-transparent px-2 text-base text-white outline-none placeholder:text-white/30 focus:border-[#D4A017] sm:h-9 sm:text-xs"
                   />
                 </div>
                 <button

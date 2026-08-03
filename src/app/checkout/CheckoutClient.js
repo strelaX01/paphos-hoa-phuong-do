@@ -120,7 +120,7 @@ export default function CheckoutClient({ initialAvailability, openingHours }) {
             <p className="border-l-2 border-[#D4A017] bg-[#F2EAD8] px-4 py-3 text-[13px] leading-relaxed text-[#5F5547]">
               Delivery is {formatMoney(cart.nearbyDeliveryFee)} for nearby areas and {formatMoney(cart.fartherDeliveryFee)} for farther areas. The restaurant will confirm the final fee based on your address.
             </p>
-            <label className="block"><span className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.2em] text-[#8B6F47]">Delivery notes</span><textarea name="notes" rows={4} maxLength={1000} placeholder="Door code, floor, landmark, or preferred call instructions" className="w-full resize-y border border-[#E8DFC8] bg-white/70 px-4 py-3 text-[14px] leading-relaxed text-[#2B2B2B] outline-none placeholder:text-[#9C9489] focus:border-[#D4A017] focus:ring-2 focus:ring-[#D4A017]/20" /></label>
+            <label className="block"><span className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.2em] text-[#8B6F47]">Delivery notes</span><textarea name="notes" rows={4} maxLength={1000} placeholder="Door code, floor, landmark, or preferred call instructions" className="w-full resize-y border border-[#E8DFC8] bg-white/70 px-4 py-3 text-base leading-relaxed text-[#2B2B2B] outline-none placeholder:text-[#9C9489] focus:border-[#D4A017] focus:ring-2 focus:ring-[#D4A017]/20 sm:text-[14px]" /></label>
             <div className="border border-[#E8DFC8] bg-white/55 px-4 py-3"><p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#8B6F47]">Payment</p><p className="mt-1 text-sm font-semibold text-[#2B2B2B]">Cash on delivery</p></div>
             <label className="flex cursor-pointer items-start gap-3 border border-[#D4A017]/45 bg-[#FFF9E9] p-4 text-[#2B2B2B] transition-colors hover:border-[#D4A017]">
               <input type="checkbox" name="deliveryFeeConsent" required checked={deliveryFeeAccepted} onChange={(event) => setDeliveryFeeAccepted(event.target.checked)} disabled={!pricingReady} className="mt-0.5 size-5 shrink-0 accent-[#8B1E1E] disabled:cursor-not-allowed" aria-describedby="delivery-fee-consent-copy" />
@@ -174,7 +174,7 @@ function OrderSummary({ cart, locked }) {
                 <Trash2 className="size-4" />
               </button>
             </div>
-            <input value={item.note || ""} onChange={(event) => cart.updateNote(cartKey, event.target.value)} disabled={locked} maxLength={300} placeholder="Kitchen note for this dish" className="mt-3 h-9 w-full border border-white/15 bg-transparent px-2 text-xs text-white outline-none placeholder:text-white/30 focus:border-[#D4A017]" />
+            <input value={item.note || ""} onChange={(event) => cart.updateNote(cartKey, event.target.value)} disabled={locked} maxLength={300} placeholder="Kitchen note for this dish" className="mt-3 h-10 w-full border border-white/15 bg-transparent px-2 text-base text-white outline-none placeholder:text-white/30 focus:border-[#D4A017] sm:h-9 sm:text-xs" />
           </div>
           )
         })}
@@ -205,7 +205,7 @@ function OrderSuccessModal({ onClose, order }) {
 }
 
 function Input({ autoComplete, inputMode, label, maxLength, minLength, name, pattern, required = true, sanitize, type = "text" }) {
-  return <label className="block"><span className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.2em] text-[#8B6F47]">{label}</span><input name={name} type={type} required={required} minLength={minLength} maxLength={maxLength} pattern={pattern} inputMode={inputMode} autoComplete={autoComplete} onInput={sanitize ? (event) => { event.currentTarget.value = sanitize(event.currentTarget.value) } : undefined} className="h-12 w-full border border-[#E8DFC8] bg-white/70 px-4 text-[14px] text-[#2B2B2B] outline-none focus:border-[#D4A017] focus:ring-2 focus:ring-[#D4A017]/20" /></label>
+  return <label className="block"><span className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.2em] text-[#8B6F47]">{label}</span><input name={name} type={type} required={required} minLength={minLength} maxLength={maxLength} pattern={pattern} inputMode={inputMode} autoComplete={autoComplete} onInput={sanitize ? (event) => { event.currentTarget.value = sanitize(event.currentTarget.value) } : undefined} className="h-12 w-full border border-[#E8DFC8] bg-white/70 px-4 text-base text-[#2B2B2B] outline-none focus:border-[#D4A017] focus:ring-2 focus:ring-[#D4A017]/20 sm:text-[14px]" /></label>
 }
 function QtyButton({ children, disabled, label, onClick }) { return <button type="button" disabled={disabled} onClick={onClick} className="flex size-8 items-center justify-center border border-white/15 text-white/70 hover:border-[#D4A017]/60 hover:text-[#D4A017] disabled:cursor-not-allowed disabled:opacity-30" aria-label={label}>{children}</button> }
 function PriceRow({ label, value }) { return <div className="flex justify-between text-white/45"><span>{label}</span><span>{value}</span></div> }
