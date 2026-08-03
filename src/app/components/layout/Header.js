@@ -155,7 +155,7 @@ export default function Header() {
         <div className="flex items-center justify-between px-6 py-4 border-b border-[#EDE5D0]">
           <div>
             <p className="text-[#1A1410] text-[15px]" style={{ fontFamily: 'var(--font-display-local)' }}>
-              Hoa Phượng Đỏ
+              Hoa Phuong Do
             </p>
             <p className="text-[#D4A017] uppercase mt-0.5" style={{ fontSize: '9px', letterSpacing: '0.25em' }}>
               Vietnamese · Cyprus

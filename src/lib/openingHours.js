@@ -28,6 +28,17 @@ export const WEEK_DAYS = Object.freeze([
   'Sunday',
 ])
 
+export function getCyprusDateString(date = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Nicosia',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date)
+  const read = (type) => parts.find((part) => part.type === type)?.value || ''
+  return `${read('year')}-${read('month')}-${read('day')}`
+}
+
 function dayIndex(value) {
   return DAY_INDEXES[String(value || '').trim().toLowerCase().replace(/\./g, '')]
 }

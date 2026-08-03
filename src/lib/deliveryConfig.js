@@ -29,15 +29,27 @@ export function getDeliveryAvailability(openingHours, now = new Date()) {
   const range = schedule && !schedule.isClosed ? parseOpeningHoursRange(schedule.hours) : null;
   const currentMinutes = Number(read("hour")) * 60 + Number(read("minute"));
   const isOpen = Boolean(range && currentMinutes >= range.openMinutes && currentMinutes < range.closeMinutes);
+  const isBeforeOpen = Boolean(range && currentMinutes < range.openMinutes);
+  const isAfterClose = Boolean(range && currentMinutes >= range.closeMinutes);
   const [opensAt, closesAt] = range ? schedule.hours.split(/\s*[-\u2013\u2014]\s*/) : [null, null];
 
   return {
     isOpen,
     isClosedDay: !schedule || schedule.isClosed || !range,
+    isBeforeOpen,
+    isAfterClose,
     opensAt,
     closesAt,
     timeZone: "Asia/Nicosia",
   };
+}
+
+export function getDeliveryAvailabilityMessage(availability) {
+  if (!availability) return "Delivery availability could not be checked.";
+  if (availability.isOpen) return "Delivery ordering is open.";
+  if (availability.isClosedDay) return "Delivery is closed today.";
+  if (availability.isBeforeOpen) return `Delivery opens at ${availability.opensAt}.`;
+  return "Delivery ordering has closed for today.";
 }
 
 export function centsToMoney(cents) {

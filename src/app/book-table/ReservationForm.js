@@ -3,8 +3,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Calendar, CheckCircle2, Mail, Phone, UserRound, UsersRound, X } from 'lucide-react'
 
+import CopyReferenceButton from '@/app/components/shared/CopyReferenceButton'
+import FormErrorNotice from '@/app/components/shared/FormErrorNotice'
 import TimeSelect from './TimeSelect'
-import { getOpeningHoursForDate, getReservationTimeSlots } from '@/lib/openingHours'
+import { getCyprusDateString, getOpeningHoursForDate, getReservationTimeSlots } from '@/lib/openingHours'
 
 const initialState = {
   success: false,
@@ -17,11 +19,10 @@ export default function ReservationForm({ openingHours }) {
   const [selectedDate, setSelectedDate] = useState('')
   const [selectedTime, setSelectedTime] = useState('')
   const formRef = useRef(null)
-  const now = new Date()
-  const minDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
-  const lastBookingDate = new Date(now)
-  lastBookingDate.setDate(lastBookingDate.getDate() + 180)
-  const maxDate = `${lastBookingDate.getFullYear()}-${String(lastBookingDate.getMonth() + 1).padStart(2, '0')}-${String(lastBookingDate.getDate()).padStart(2, '0')}`
+  const minDate = getCyprusDateString()
+  const lastBookingDate = new Date(`${minDate}T12:00:00.000Z`)
+  lastBookingDate.setUTCDate(lastBookingDate.getUTCDate() + 180)
+  const maxDate = lastBookingDate.toISOString().slice(0, 10)
   const selectedSchedule = useMemo(
     () => getOpeningHoursForDate(openingHours, selectedDate),
     [openingHours, selectedDate],
@@ -37,6 +38,17 @@ export default function ReservationForm({ openingHours }) {
       : timeSlots.length
         ? 'Select'
         : 'No times available'
+  const selectedDateIsClosed = Boolean(selectedDate && (!selectedSchedule || selectedSchedule.isClosed || !timeSlots.length))
+  const submitDisabled = isPending || !selectedDate || !selectedTime || selectedDateIsClosed
+  const submitLabel = isPending
+    ? 'Sending Request...'
+    : selectedDateIsClosed
+      ? 'Closed on Selected Date'
+      : !selectedDate
+        ? 'Select a Date'
+        : !selectedTime
+          ? 'Select a Time'
+          : 'Reserve a Table'
 
   useEffect(() => {
     if (!state.success) return undefined
@@ -91,11 +103,11 @@ export default function ReservationForm({ openingHours }) {
     <>
     <form ref={formRef} onSubmit={handleSubmit} className="space-y-5">
       <input type="text" name="website" tabIndex={-1} autoComplete="off" className="hidden" aria-hidden="true" />
-      {state?.error && (
-        <div className="border border-[#8B1E1E]/25 bg-[#8B1E1E]/10 px-4 py-3 text-[13px] font-medium text-[#8B1E1E]">
-          {state.error}
-        </div>
-      )}
+      <FormErrorNotice
+        message={state.error}
+        onDismiss={() => setState(initialState)}
+        title="Reservation not sent"
+      />
 
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Full name" name="name" icon={<UserRound className="size-4" />} placeholder="Your name" minLength={2} maxLength={100} />
@@ -154,6 +166,12 @@ export default function ReservationForm({ openingHours }) {
         </label>
       </div>
 
+      {selectedDateIsClosed ? (
+        <p role="status" className="border-l-2 border-[#8B1E1E] bg-[#8B1E1E]/8 px-4 py-3 text-[13px] font-medium text-[#8B1E1E]">
+          The restaurant is closed on this date. Please choose another day.
+        </p>
+      ) : null}
+
       <label className="block">
         <span className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.2em] text-[#8B6F47]">
           Special requests
@@ -169,10 +187,10 @@ export default function ReservationForm({ openingHours }) {
 
       <button
         type="submit"
-        disabled={isPending}
+        disabled={submitDisabled}
         className="flex w-full items-center justify-center bg-[#8B1E1E] px-7 py-4 text-[13px] font-semibold uppercase tracking-[0.14em] text-white transition-colors hover:bg-[#a02424] disabled:cursor-not-allowed disabled:opacity-60"
       >
-        {isPending ? 'Sending Request...' : 'Reserve a Table'}
+        {submitLabel}
       </button>
     </form>
 
@@ -195,7 +213,7 @@ function ReservationSuccessModal({ onClose, reference }) {
 
   return (
     <div
-      className="fixed inset-0 z-[80] flex items-center justify-center bg-[#1E1A18]/65 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-[80] flex items-end justify-center bg-[#1E1A18]/65 p-0 backdrop-blur-sm sm:items-center sm:p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="reservation-success-title"
@@ -203,7 +221,7 @@ function ReservationSuccessModal({ onClose, reference }) {
         if (event.target === event.currentTarget) onClose()
       }}
     >
-      <div className="w-full max-w-md border border-[#D4A017]/35 bg-[#FAF6EE] shadow-2xl">
+      <div className="flex max-h-[calc(100svh-0.75rem)] w-full max-w-md flex-col overflow-hidden rounded-t-lg border border-[#D4A017]/35 bg-[#FAF6EE] shadow-2xl sm:max-h-[calc(100svh-2rem)] sm:rounded-lg">
         <div className="flex justify-end p-3 pb-0">
           <button
             ref={closeButtonRef}
@@ -216,7 +234,7 @@ function ReservationSuccessModal({ onClose, reference }) {
           </button>
         </div>
 
-        <div className="px-6 pb-7 text-center sm:px-8 sm:pb-8">
+        <div className="overflow-y-auto px-5 pb-5 text-center sm:px-8 sm:pb-6">
           <div className="mx-auto flex size-14 items-center justify-center bg-[#4A7C59]/12 text-[#2F5F3D]">
             <CheckCircle2 className="size-7" aria-hidden="true" />
           </div>
@@ -229,14 +247,19 @@ function ReservationSuccessModal({ onClose, reference }) {
           <p className="mt-3 text-[14px] leading-relaxed text-[#6B6560]">
             Our team will contact you shortly to confirm your table.
           </p>
-          <div className="mt-5 border border-[#E8DFC8] bg-white/65 px-4 py-3">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#8B6F47]">Reference</p>
-            <p className="mt-1 font-mono text-lg font-bold text-[#8B1E1E]">#{reference}</p>
+          <div className="mt-5 flex items-center justify-between gap-3 border border-[#E8DFC8] bg-white/65 p-3 text-left">
+            <div className="min-w-0">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#8B6F47]">Reference</p>
+              <p className="mt-1 break-all font-mono text-lg font-bold text-[#8B1E1E]">#{reference}</p>
+            </div>
+            <CopyReferenceButton value={reference} />
           </div>
+        </div>
+        <div className="shrink-0 border-t border-[#E8DFC8] bg-[#FAF6EE] px-5 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 sm:px-8 sm:pb-6">
           <button
             type="button"
             onClick={onClose}
-            className="mt-6 flex w-full items-center justify-center bg-[#8B1E1E] px-6 py-3.5 text-[12px] font-semibold uppercase tracking-[0.14em] text-white transition-colors hover:bg-[#A02424] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D4A017] focus-visible:ring-offset-2"
+            className="flex w-full items-center justify-center bg-[#8B1E1E] px-6 py-3.5 text-[12px] font-semibold uppercase tracking-[0.14em] text-white transition-colors hover:bg-[#A02424] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D4A017] focus-visible:ring-offset-2"
           >
             Done
           </button>

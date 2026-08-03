@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 
-import { buildDeliveryFeeConsentText, centsToMoney, getDeliveryAvailability } from "@/lib/deliveryConfig";
+import { buildDeliveryFeeConsentText, centsToMoney, getDeliveryAvailability, getDeliveryAvailabilityMessage } from "@/lib/deliveryConfig";
 import { normalizeDeliveryPricing } from "@/lib/deliveryPricingData";
 import { prisma } from "@/lib/prisma";
 import { checkRateLimit } from "@/lib/rateLimit";
@@ -95,10 +95,7 @@ export async function POST(request) {
   const { openingHours } = await getRestaurantProfileData();
   const availability = getDeliveryAvailability(openingHours);
   if (!availability.isOpen) {
-    const error = availability.isClosedDay
-      ? "Delivery orders are not available today."
-      : `Delivery orders are accepted today from ${availability.opensAt} to ${availability.closesAt}.`;
-    return json({ error }, 409, rate.headers);
+    return json({ error: getDeliveryAvailabilityMessage(availability) }, 409, rate.headers);
   }
 
   try {

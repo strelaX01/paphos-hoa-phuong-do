@@ -1,18 +1,7 @@
-import { isReservationTimeAvailable } from "@/lib/openingHours";
+import { getCyprusDateString, isReservationTimeAvailable } from "@/lib/openingHours";
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const phonePattern = /^\+?[\d\s().-]+$/;
-
-function getCyprusDate() {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Nicosia",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(new Date());
-  const read = (type) => parts.find((part) => part.type === type)?.value;
-  return `${read("year")}-${read("month")}-${read("day")}`;
-}
 
 function isValidTimeFormat(value) {
   if (!/^\d{2}:\d{2}$/.test(value)) return false;
@@ -39,7 +28,7 @@ export function validateReservationInput(input, options = {}) {
   }
   if (!Number.isInteger(partySize) || partySize < 1 || partySize > 20) errors.guests = "Party size must be between 1 and 20.";
 
-  const today = getCyprusDate();
+  const today = getCyprusDateString();
   const maxDate = new Date(`${today}T12:00:00.000Z`);
   maxDate.setUTCDate(maxDate.getUTCDate() + 180);
   const maxDateString = maxDate.toISOString().slice(0, 10);

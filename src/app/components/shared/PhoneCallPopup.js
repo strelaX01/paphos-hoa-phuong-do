@@ -18,7 +18,7 @@ export default function PhoneCallPopup({ phoneNumbers = [], restaurantName = 'th
   }
 
   return (
-    <div className="fixed bottom-6 right-6 z-[60] hidden flex-col items-end gap-3 sm:flex">
+    <div className="fixed bottom-[max(4.5rem,env(safe-area-inset-bottom))] right-4 z-[60] flex flex-col items-end gap-3 sm:bottom-6 sm:right-6">
       <div
         id="phone-call-options"
         className={`flex origin-bottom-right flex-col gap-2 transition-all duration-200 ${
@@ -44,12 +44,12 @@ export default function PhoneCallPopup({ phoneNumbers = [], restaurantName = 'th
       <button
         type="button"
         onClick={() => setIsOpen((open) => !open)}
-        className="phone-call-float group relative flex size-11 items-center justify-center rounded-full bg-[#8B1E1E] text-white shadow-2xl shadow-black/25 transition-transform duration-200 hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D4A017]/80 sm:size-16"
+        className="phone-call-float group relative flex size-14 items-center justify-center rounded-full bg-[#8B1E1E] text-white shadow-2xl shadow-black/25 transition-transform duration-200 hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D4A017]/80 sm:size-16"
         aria-expanded={isOpen}
         aria-controls="phone-call-options"
         aria-label={`Choose a phone number to call ${restaurantName}`}
       >
-        <span className="relative flex size-9 items-center justify-center rounded-full border border-white/20 bg-[#A51F1F] sm:size-12">
+        <span className="relative flex size-11 items-center justify-center rounded-full border border-white/20 bg-[#A51F1F] sm:size-12">
           <Phone className="size-5 transition-transform duration-200 group-hover:-rotate-12 sm:size-6" aria-hidden="true" />
         </span>
       </button>

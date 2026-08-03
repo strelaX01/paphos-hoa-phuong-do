@@ -6,8 +6,10 @@ import { useRouter } from "next/navigation"
 import { CheckCircle2, LoaderCircle, Minus, Plus, ShoppingBag, Trash2, X } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 
+import CopyReferenceButton from "@/app/components/shared/CopyReferenceButton"
+import FormErrorNotice from "@/app/components/shared/FormErrorNotice"
 import { useCart } from "@/hooks/useCart"
-import { buildDeliveryFeeConsentText, DELIVERY_CONFIG } from "@/lib/deliveryConfig"
+import { buildDeliveryFeeConsentText, DELIVERY_CONFIG, getDeliveryAvailability, getDeliveryAvailabilityMessage } from "@/lib/deliveryConfig"
 import { getCartItemKey } from "@/lib/stores/cartStore"
 
 function formatMoney(value) {
@@ -27,19 +29,29 @@ async function readApi(response) {
   return payload
 }
 
-export default function CheckoutClient() {
+export default function CheckoutClient({ initialAvailability, openingHours }) {
   const router = useRouter()
   const cart = useCart()
   const formRef = useRef(null)
   const [isPending, setIsPending] = useState(false)
   const [result, setResult] = useState(null)
   const [deliveryFeeAccepted, setDeliveryFeeAccepted] = useState(false)
+  const [deliveryAvailability, setDeliveryAvailability] = useState(initialAvailability)
   const pricingReady = cart.deliveryPricingStatus === "ready"
+  const orderingOpen = deliveryAvailability?.isOpen === true
+  const availabilityMessage = getDeliveryAvailabilityMessage(deliveryAvailability)
+  const canPlaceOrder = !isPending && Boolean(cart.items.length) && deliveryFeeAccepted && pricingReady && orderingOpen
   const deliveryFeeConsentText = buildDeliveryFeeConsentText(Math.round(cart.nearbyDeliveryFee * 100), Math.round(cart.fartherDeliveryFee * 100))
+
+  useEffect(() => {
+    const updateAvailability = () => setDeliveryAvailability(getDeliveryAvailability(openingHours))
+    const timer = window.setInterval(updateAvailability, 30_000)
+    return () => window.clearInterval(timer)
+  }, [openingHours])
 
   async function handleSubmit(event) {
     event.preventDefault()
-    if (isPending || !cart.items.length || !deliveryFeeAccepted || !pricingReady) return
+    if (!canPlaceOrder) return
     setIsPending(true)
     setResult(null)
 
@@ -92,7 +104,12 @@ export default function CheckoutClient() {
 
           <form ref={formRef} onSubmit={handleSubmit} className="mt-8 space-y-4">
             <input type="text" name="website" tabIndex={-1} autoComplete="off" className="hidden" aria-hidden="true" />
-            {result?.error ? <div role="alert" className="border border-[#8B1E1E]/25 bg-[#8B1E1E]/10 px-4 py-3 text-[13px] font-medium text-[#8B1E1E]">{result.error}</div> : null}
+            {!orderingOpen ? <div role="status" className="border-l-2 border-[#8B1E1E] bg-[#8B1E1E]/8 px-4 py-3 text-[13px] font-medium text-[#8B1E1E]">{availabilityMessage}</div> : null}
+            <FormErrorNotice
+              message={result?.error}
+              onDismiss={() => setResult(null)}
+              title="Order not placed"
+            />
             <div className="grid gap-4 sm:grid-cols-2">
               <Input name="name" label="Full name" minLength={2} maxLength={100} autoComplete="name" />
               <Input name="phone" label="Phone number" type="tel" minLength={6} maxLength={30} autoComplete="tel" inputMode="tel" pattern="\+?[0-9 ()\-.]{6,30}" sanitize={sanitizePhone} />
@@ -109,7 +126,7 @@ export default function CheckoutClient() {
               <input type="checkbox" name="deliveryFeeConsent" required checked={deliveryFeeAccepted} onChange={(event) => setDeliveryFeeAccepted(event.target.checked)} disabled={!pricingReady} className="mt-0.5 size-5 shrink-0 accent-[#8B1E1E] disabled:cursor-not-allowed" aria-describedby="delivery-fee-consent-copy" />
               <span id="delivery-fee-consent-copy" className="text-[13px] leading-relaxed"><span className="block font-semibold">I agree to the delivery fee policy.</span><span className="mt-1 block text-[#6B6560]">{pricingReady ? deliveryFeeConsentText : cart.deliveryPricingStatus === "error" ? "Delivery pricing could not be loaded. Refresh the page before ordering." : "Loading current delivery pricing..."}</span></span>
             </label>
-            <button type="submit" disabled={isPending || !cart.items.length || !deliveryFeeAccepted || !pricingReady} className="flex w-full items-center justify-center gap-2 bg-[#8B1E1E] px-7 py-4 text-[13px] font-semibold uppercase tracking-[0.14em] text-white transition-colors hover:bg-[#A02424] disabled:cursor-not-allowed disabled:opacity-60">{isPending ? <LoaderCircle className="size-4 animate-spin" /> : null}{isPending ? "Placing Order..." : `Place Order - ${formatMoney(cart.total)}`}</button>
+            <button type="submit" disabled={!canPlaceOrder} className="flex w-full items-center justify-center gap-2 bg-[#8B1E1E] px-7 py-4 text-[13px] font-semibold uppercase tracking-[0.14em] text-white transition-colors hover:bg-[#A02424] disabled:cursor-not-allowed disabled:opacity-60">{isPending ? <LoaderCircle className="size-4 animate-spin" /> : null}{isPending ? "Placing Order..." : !orderingOpen ? availabilityMessage : `Place Order - ${formatMoney(cart.total)}`}</button>
           </form>
         </section>
         <OrderSummary cart={cart} locked={isPending} />
@@ -188,7 +205,7 @@ function OrderSuccessModal({ onClose, order }) {
     closeRef.current?.focus()
     return () => { document.body.style.overflow = previousOverflow; window.removeEventListener("keydown", onKeyDown) }
   }, [onClose])
-  return <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#1E1A18]/70 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="order-success-title"><div className="w-full max-w-md border border-[#D4A017]/35 bg-[#FAF6EE] shadow-2xl"><div className="flex justify-end p-3 pb-0"><button ref={closeRef} type="button" onClick={onClose} className="flex size-10 items-center justify-center text-[#6B6560] hover:bg-[#F2EAD8]" aria-label="Close order confirmation"><X className="size-5" /></button></div><div className="px-6 pb-8 text-center"><div className="mx-auto flex size-14 items-center justify-center bg-[#4A7C59]/12 text-[#2F5F3D]"><CheckCircle2 className="size-7" /></div><p className="mt-5 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#8B6F47]">Order received</p><h2 id="order-success-title" className="mt-2 font-display text-3xl font-bold text-[#2B2B2B]">Thank you for your order.</h2><p className="mt-3 text-sm leading-relaxed text-[#6B6560]">We will call you shortly to confirm the delivery fee and final amount.</p><div className="mt-5 border border-[#E8DFC8] bg-white/65 p-4"><p className="text-[10px] font-semibold uppercase text-[#8B6F47]">Order reference</p><p className="mt-1 break-all font-mono text-base font-bold text-[#8B1E1E]">{order.reference}</p><p className="mt-3 border-t border-[#E8DFC8] pt-3 text-xs leading-relaxed text-[#6B6560]">Keep this reference in case you need to contact the restaurant about your order.</p></div><button type="button" onClick={onClose} className="mt-6 w-full bg-[#8B1E1E] px-6 py-3.5 text-[12px] font-semibold uppercase tracking-[0.14em] text-white hover:bg-[#A02424]">Done</button></div></div></div>
+  return <div className="fixed inset-0 z-[100] flex items-end justify-center bg-[#1E1A18]/70 p-0 backdrop-blur-sm sm:items-center sm:p-4" role="dialog" aria-modal="true" aria-labelledby="order-success-title"><div className="flex max-h-[calc(100svh-0.75rem)] w-full max-w-md flex-col overflow-hidden rounded-t-lg border border-[#D4A017]/35 bg-[#FAF6EE] shadow-2xl sm:max-h-[calc(100svh-2rem)] sm:rounded-lg"><div className="flex shrink-0 justify-end p-3 pb-0"><button ref={closeRef} type="button" onClick={onClose} className="flex size-10 items-center justify-center text-[#6B6560] hover:bg-[#F2EAD8]" aria-label="Close order confirmation"><X className="size-5" /></button></div><div className="overflow-y-auto px-5 pb-5 text-center sm:px-8 sm:pb-6"><div className="mx-auto flex size-14 items-center justify-center bg-[#4A7C59]/12 text-[#2F5F3D]"><CheckCircle2 className="size-7" /></div><p className="mt-5 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#8B6F47]">Order received</p><h2 id="order-success-title" className="mt-2 font-display text-3xl font-bold text-[#2B2B2B]">Thank you for your order.</h2><p className="mt-3 text-sm leading-relaxed text-[#6B6560]">We will call you shortly to confirm the delivery fee and final amount.</p><div className="mt-5 border border-[#E8DFC8] bg-white/65 p-3"><div className="flex items-center justify-between gap-3 text-left"><div className="min-w-0"><p className="text-[10px] font-semibold uppercase text-[#8B6F47]">Order reference</p><p className="mt-1 break-all font-mono text-base font-bold text-[#8B1E1E]">{order.reference}</p></div><CopyReferenceButton value={order.reference} /></div><p className="mt-3 border-t border-[#E8DFC8] pt-3 text-xs leading-relaxed text-[#6B6560]">Keep this reference in case you need to contact the restaurant about your order.</p></div></div><div className="shrink-0 border-t border-[#E8DFC8] bg-[#FAF6EE] px-5 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 sm:px-8 sm:pb-6"><button type="button" onClick={onClose} className="w-full bg-[#8B1E1E] px-6 py-3.5 text-[12px] font-semibold uppercase tracking-[0.14em] text-white hover:bg-[#A02424]">Done</button></div></div></div>
 }
 
 function Input({ autoComplete, inputMode, label, maxLength, minLength, name, pattern, required = true, sanitize, type = "text" }) {
