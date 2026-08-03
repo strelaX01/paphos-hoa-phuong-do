@@ -101,7 +101,7 @@ function MenuSection({ section }) {
   return (
     <section
       id={section.id}
-      className="scroll-mt-32 bg-[#F8F3EA] py-12 lg:py-16"
+      className="scroll-mt-36 bg-[#F8F3EA] py-12 lg:scroll-mt-48 lg:py-16"
     >
       <div className="site-container">
         <div className="mb-10 grid gap-6 lg:grid-cols-[0.8fr_1.2fr] lg:items-end">

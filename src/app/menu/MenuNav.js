@@ -1,58 +1,75 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+
+import CategoryScroller from '@/app/components/shared/CategoryScroller'
 
 export default function MenuNav({ categoryLinks }) {
   const [activeId, setActiveId] = useState(() => categoryLinks[0]?.href.replace('#', '') || '')
+  const sectionRef = useRef(null)
+  const navigationTargetRef = useRef(null)
+  const scrollEndTimerRef = useRef(null)
+
+  const getNavOffset = useCallback(() => 68 + (sectionRef.current?.offsetHeight || 60) + 8, [])
+
+  const getActiveId = useCallback(() => {
+    const ids = categoryLinks.map((link) => link.href.replace('#', ''))
+    const navOffset = getNavOffset()
+
+    for (let index = ids.length - 1; index >= 0; index -= 1) {
+      const section = document.getElementById(ids[index])
+      if (section && section.getBoundingClientRect().top <= navOffset) return ids[index]
+    }
+    return ids[0] ?? ''
+  }, [categoryLinks, getNavOffset])
+
+  const handleSelect = (id, event) => {
+    event?.preventDefault()
+    const targetSection = document.getElementById(id)
+    if (!targetSection) return
+
+    navigationTargetRef.current = id
+    setActiveId(id)
+    const top = Math.max(0, window.scrollY + targetSection.getBoundingClientRect().top - getNavOffset())
+    const behavior = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'
+    window.history.pushState(null, '', `#${id}`)
+    window.scrollTo({ top, behavior })
+  }
 
   useEffect(() => {
-    const NAV_OFFSET = 140 // sticky header + menu nav height
-
-    function getActiveId() {
-      const ids = categoryLinks.map((l) => l.href.replace('#', ''))
-      // Walk from bottom to top — first section whose top is above the offset wins
-      for (let i = ids.length - 1; i >= 0; i--) {
-        const el = document.getElementById(ids[i])
-        if (el && el.getBoundingClientRect().top <= NAV_OFFSET) {
-          return ids[i]
-        }
+    const onScroll = () => {
+      if (navigationTargetRef.current) {
+        setActiveId(navigationTargetRef.current)
+        if (scrollEndTimerRef.current) window.clearTimeout(scrollEndTimerRef.current)
+        scrollEndTimerRef.current = window.setTimeout(() => {
+          navigationTargetRef.current = null
+          setActiveId(getActiveId())
+        }, 140)
+        return
       }
-      return ids[0] ?? ''
-    }
-
-    function onScroll() {
       setActiveId(getActiveId())
     }
 
     window.addEventListener('scroll', onScroll, { passive: true })
-    return () => window.removeEventListener('scroll', onScroll)
-  }, [categoryLinks])
+    return () => {
+      window.removeEventListener('scroll', onScroll)
+      if (scrollEndTimerRef.current) window.clearTimeout(scrollEndTimerRef.current)
+    }
+  }, [getActiveId])
 
   return (
-    <section className="sticky top-[68px] z-30 border-y border-[#EDE5D0] bg-[#FAF6EE]/97 backdrop-blur-md">
+    <section ref={sectionRef} className="sticky top-[68px] z-30 border-y border-[#EDE5D0] bg-[#FAF6EE]/97 backdrop-blur-md">
       <div className="site-container">
-        <nav
-          className="grid grid-cols-2 gap-2 py-4 sm:flex sm:flex-wrap"
-          aria-label="Menu categories"
-        >
-          {categoryLinks.map((link) => {
-            const id = link.href.replace('#', '')
-            const isActive = activeId === id
-            return (
-              <a
-                key={link.href}
-                href={link.href}
-                className={`min-w-0 border px-3 py-2 text-center text-[10px] font-semibold uppercase tracking-[0.16em] transition-all sm:px-4 sm:text-[11px] sm:tracking-[0.18em] ${
-                  isActive
-                    ? 'border-[#8B1E1E] bg-[#8B1E1E] text-white'
-                    : 'border-[#E8DFC8] bg-[#FAF6EE] text-[#6B6560] hover:border-[#D4A017]/70 hover:text-[#8B1E1E]'
-                }`}
-              >
-                {link.label}
-              </a>
-            )
-          })}
-        </nav>
+        <CategoryScroller
+          activeKey={activeId}
+          ariaLabel="Menu categories"
+          items={categoryLinks.map((link) => ({
+            key: link.href.replace('#', ''),
+            label: link.label,
+            href: link.href,
+          }))}
+          onSelect={handleSelect}
+        />
       </div>
     </section>
   )

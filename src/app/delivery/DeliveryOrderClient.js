@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'reac
 import { createPortal } from 'react-dom'
 import { useSearchParams } from 'next/navigation'
 
+import CategoryScroller from '@/app/components/shared/CategoryScroller'
 import PaginationControls from '@/app/components/shared/PaginationControls'
 import { CardGridSkeleton } from '@/app/components/shared/SkeletonBlocks'
 import { useCart } from '@/hooks/useCart'
@@ -48,6 +49,10 @@ export default function DeliveryOrderClient() {
   const { setDeliveryPricing } = cart
   const mounted = useSyncExternalStore(emptySubscribe, () => true, () => false)
   const categories = useMemo(() => ['All', ...new Set(deliveryItems.map((item) => item.category))], [deliveryItems])
+  const categoryItems = useMemo(
+    () => categories.map((category) => ({ key: category, label: category })),
+    [categories]
+  )
 
   useEffect(() => {
     let active = true
@@ -155,23 +160,12 @@ export default function DeliveryOrderClient() {
         <div className="sticky top-[68px] z-30">
           <section className="relative left-1/2 w-screen -translate-x-1/2 border-y border-[#EDE5D0] bg-[#FAF6EE]/97 backdrop-blur-md">
             <div className="site-container">
-              <nav className="grid grid-cols-2 gap-2 py-4 sm:flex sm:flex-wrap" aria-label="Delivery categories">
-                {categories.map((category) => (
-                  <button
-                    key={category}
-                    type="button"
-                    onClick={() => updateCategory(category)}
-                    aria-pressed={activeCategory === category}
-                    className={`min-w-0 border px-3 py-2 text-center text-[10px] font-semibold uppercase tracking-[0.16em] transition-all sm:px-4 sm:text-[11px] sm:tracking-[0.18em] ${
-                      activeCategory === category
-                        ? 'border-[#8B1E1E] bg-[#8B1E1E] text-white'
-                        : 'border-[#E8DFC8] bg-[#FAF6EE] text-[#6B6560] hover:border-[#D4A017]/70 hover:text-[#8B1E1E]'
-                    }`}
-                  >
-                    {category}
-                  </button>
-                ))}
-              </nav>
+              <CategoryScroller
+                activeKey={activeCategory}
+                ariaLabel="Delivery categories"
+                items={categoryItems}
+                onSelect={updateCategory}
+              />
             </div>
           </section>
         </div>
