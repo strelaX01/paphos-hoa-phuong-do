@@ -108,6 +108,7 @@ export async function PATCH(request, context) {
       const canCancel = !isDriver && nextStatus === "CANCELLED" && ["PENDING", "PREPARING", "PENDING_PICKUP"].includes(current.status);
       if (nextStatus && nextStatus !== current.status && nextStatus !== expectedNextStatus && !canCancel) throw Object.assign(new Error(`Cannot move an order from ${current.status} to ${nextStatus}.`), { code: "INVALID_TRANSITION" });
       const deliveryFeeConfirmed = Number(current.deliveryFee) > 0;
+      if (hasDeliveryFee && deliveryFeeConfirmed) throw Object.assign(new Error("The delivery fee was already verified automatically and cannot be changed."), { code: "ORDER_LOCKED" });
       if (nextStatus === "PREPARING" && !deliveryFeeConfirmed && !hasDeliveryFee) throw Object.assign(new Error("Set the final delivery fee before confirming this order."), { code: "INVALID_EDIT" });
       const now = new Date();
       const statusChanged = Boolean(nextStatus && nextStatus !== current.status);
@@ -119,10 +120,8 @@ export async function PATCH(request, context) {
       } : {};
       const timelineCreates = [];
       if (statusChanged) timelineCreates.push({ status: nextStatus, title: STATUS_TITLES[nextStatus], note: isDriver ? `Updated by driver ${account.name}.` : null });
-      if (hasDeliveryFee && (!deliveryFeeConfirmed || deliveryFeeCents !== Math.round(Number(current.deliveryFee) * 100))) {
-        timelineCreates.push(deliveryFeeConfirmed
-          ? { title: "Delivery fee updated", note: `Changed from EUR ${Number(current.deliveryFee).toFixed(2)} to EUR ${(deliveryFeeCents / 100).toFixed(2)} by admin.` }
-          : { title: "Delivery fee confirmed", note: `Set to EUR ${(deliveryFeeCents / 100).toFixed(2)} by admin.` });
+      if (hasDeliveryFee) {
+        timelineCreates.push({ title: "Delivery fee confirmed", note: `Set to EUR ${(deliveryFeeCents / 100).toFixed(2)} by admin because automatic routing was unavailable.` });
       }
       const pricing = hasDeliveryFee ? {
         deliveryFee: (deliveryFeeCents / 100).toFixed(2),

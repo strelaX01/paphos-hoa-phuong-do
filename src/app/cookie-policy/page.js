@@ -3,7 +3,7 @@ import { createPageMetadata } from '@/lib/seo'
 
 export const metadata = createPageMetadata({
   title: 'Cookie Policy',
-  description: 'Learn about essential cookies, local storage, cart preferences, and optional third-party maps on the Hoa Phuong Do website.',
+  description: 'Learn about essential cookies, local storage, cart preferences, and third-party maps on the Hoa Phuong Do website.',
   path: '/cookie-policy',
 })
 
@@ -26,12 +26,12 @@ const sections = [
   {
     id: 'third-parties',
     title: 'Third-party content',
-    content: () => <><p>Google Maps is not loaded automatically. It connects to Google only after you press “Load Google Map” or choose an external map link. Google may then process technical data or use its own cookies under its policies.</p><p>Public menu images and videos are delivered from our storage provider. We do not currently use advertising pixels or visitor analytics cookies.</p></>,
+    content: () => <><p>The delivery checkout loads map tiles from OpenFreeMap. Address searches and route calculations are sent from our server to openrouteservice. These services receive technical request data needed to return the map or route, but we do not use them for advertising or cross-site tracking.</p><p>Google Maps connects only after you choose a Google map or delivery-pin link and may then use its own cookies under its policies. Public menu images and videos are delivered from our storage provider. We do not currently use advertising pixels or visitor analytics cookies.</p></>,
   },
   {
     id: 'choices',
     title: 'Your choices',
-    content: () => <p>You can delete cookies and site storage through your browser settings. Blocking strictly necessary storage may prevent the cart or administrator login from working. Because optional analytics and advertising tools are not currently enabled and maps require a deliberate click, the website does not display a general cookie-consent banner.</p>,
+    content: () => <p>You can delete cookies and site storage through your browser settings. Blocking strictly necessary storage may prevent the cart or administrator login from working. Because optional analytics and advertising tools are not currently enabled, the website does not display a general cookie-consent banner.</p>,
   },
   {
     id: 'changes-contact',
@@ -41,5 +41,5 @@ const sections = [
 ]
 
 export default function CookiePolicyPage() {
-  return <LegalPageShell eyebrow="Legal" title="Cookie Policy" introduction="A clear record of the essential browser storage used by the website and when third-party map content is loaded." sections={sections} />
+  return <LegalPageShell eyebrow="Legal" title="Cookie Policy" introduction="A clear record of the essential browser storage and third-party map services used by the website." sections={sections} />
 }

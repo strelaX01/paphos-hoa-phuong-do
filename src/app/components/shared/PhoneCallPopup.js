@@ -13,7 +13,7 @@ export default function PhoneCallPopup({ phoneNumbers = [], restaurantName = 'th
   const [isOpen, setIsOpen] = useState(false)
   const pathname = usePathname()
 
-  if (pathname?.startsWith('/admin') || !phoneNumbers.length) {
+  if (pathname?.startsWith('/admin') || pathname === '/checkout' || !phoneNumbers.length) {
     return null
   }
 

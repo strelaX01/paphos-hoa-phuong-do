@@ -133,3 +133,17 @@ export async function checkPasswordResetAttemptRateLimit(request, tokenHash) {
       : { "Retry-After": String(Math.max(ipResult.retryAfter, tokenResult.retryAfter)) },
   };
 }
+
+export async function checkExternalApiRateLimit(request, { namespace, shortLimit, dailyIpLimit, dailyGlobalLimit }) {
+  const clientIp = getClientIp(request)
+  const results = await Promise.all([
+    consume(rateKey(`${namespace}-short-ip`, clientIp), shortLimit, 15 * 60 * 1000),
+    consume(rateKey(`${namespace}-daily-ip`, clientIp), dailyIpLimit, 24 * 60 * 60 * 1000),
+    consume(rateKey(`${namespace}-daily-global`, "all"), dailyGlobalLimit, 24 * 60 * 60 * 1000),
+  ])
+  const denied = results.filter((result) => !result.allowed)
+  return {
+    allowed: denied.length === 0,
+    headers: denied.length ? { "Retry-After": String(Math.max(...denied.map((result) => result.retryAfter))) } : {},
+  }
+}

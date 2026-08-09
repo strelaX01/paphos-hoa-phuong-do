@@ -1,7 +1,8 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState } from "react"
-import { BellRing, CalendarDays, Euro, Eye, LoaderCircle, Megaphone, Plus, Save, Sparkles, Trash2, X } from "lucide-react"
+import dynamic from "next/dynamic"
+import { BellRing, CalendarDays, Euro, Eye, LoaderCircle, LocateFixed, Megaphone, Plus, Save, Sparkles, Trash2, X } from "lucide-react"
 
 import AdminShell from "@/app/admin/_components/AdminShell"
 import AdminToast from "@/app/admin/_components/AdminToast"
@@ -80,6 +81,7 @@ const effectToApi = { none: "NONE", tet: "LUNAR_NEW_YEAR", christmas: "CHRISTMAS
 const noticeTypeFromApi = { GENERAL: "general", PROMOTION: "promotion", TEMPORARY_CLOSURE: "temporary-closure", HOLIDAY: "holiday-hours" }
 const noticeTypeToApi = { general: "GENERAL", promotion: "PROMOTION", "temporary-closure": "TEMPORARY_CLOSURE", "holiday-hours": "HOLIDAY" }
 const euroFormatter = new Intl.NumberFormat("en-IE", { style: "currency", currency: "EUR", minimumFractionDigits: 2, maximumFractionDigits: 2 })
+const LocationMap = dynamic(() => import("@/app/components/shared/LocationMap"), { ssr: false, loading: () => <div className="h-[340px] animate-pulse bg-[#F0E9DC] sm:h-[390px]" /> })
 
 async function readApi(response) {
   const payload = await response.json().catch(() => ({}))
@@ -105,6 +107,10 @@ const initialSettings = {
   restaurantMapUrl: "https://maps.google.com",
   nearbyDeliveryFee: "3.00",
   fartherDeliveryFee: "3.50",
+  restaurantLatitude: "",
+  restaurantLongitude: "",
+  nearbyDeliveryMaxKm: "5.00",
+  maximumDeliveryKm: "15.00",
   openingHours: [
     { clientId: "monday", day: "Monday", openTime: "11:00", closeTime: "22:00", isClosed: false },
     { clientId: "tuesday", day: "Tuesday", openTime: "11:00", closeTime: "22:00", isClosed: false },
@@ -134,6 +140,7 @@ export default function AdminSettingsPage() {
   const [settings, setSettings] = useState(initialSettings)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [locatingRestaurant, setLocatingRestaurant] = useState(false)
   const [toast, setToast] = useState(null)
   const toastIdRef = useRef(0)
 
@@ -163,6 +170,10 @@ export default function AdminSettingsPage() {
           festivalEffectEndDate: data.storefront.endsAt,
           nearbyDeliveryFee: data.storefront.nearbyDeliveryFee,
           fartherDeliveryFee: data.storefront.fartherDeliveryFee,
+          restaurantLatitude: data.storefront.restaurantLatitude,
+          restaurantLongitude: data.storefront.restaurantLongitude,
+          nearbyDeliveryMaxKm: data.storefront.nearbyDeliveryMaxKm,
+          maximumDeliveryKm: data.storefront.maximumDeliveryKm,
           announcementEnabled: data.notice.enabled,
           announcementType: noticeTypeFromApi[data.notice.type] || "general",
           announcementPriority: titleCase(data.notice.priority),
@@ -210,6 +221,25 @@ export default function AdminSettingsPage() {
     setSettings((previous) => ({ ...previous, phoneNumbers: previous.phoneNumbers.filter((entry) => entry.clientId !== clientId) }))
   }
 
+  const updateRestaurantLocation = ({ latitude, longitude }) => {
+    setSettings((previous) => ({ ...previous, restaurantLatitude: Number(latitude).toFixed(7), restaurantLongitude: Number(longitude).toFixed(7) }))
+  }
+
+  const locateRestaurantAddress = async () => {
+    if (settings.restaurantAddress.trim().length < 3) return showToast("Enter the restaurant address first.", "error")
+    setLocatingRestaurant(true)
+    try {
+      const payload = await fetch("/api/delivery/geocode", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: settings.restaurantAddress }) }).then(readApi)
+      if (!payload.data?.length) throw new Error("No matching location was found. Check the address and try again.")
+      updateRestaurantLocation(payload.data[0])
+      showToast("Restaurant location found. Drag the pin if the entrance is different.")
+    } catch (error) {
+      showToast(error.message || "Could not find the restaurant location.", "error")
+    } finally {
+      setLocatingRestaurant(false)
+    }
+  }
+
   const updateNoticeType = (noticeTypeId) => {
     const noticeType = noticeTypeOptions.find((notice) => notice.id === noticeTypeId) || noticeTypeOptions[0]
 
@@ -232,11 +262,11 @@ export default function AdminSettingsPage() {
         body: JSON.stringify({
           profile: { email: settings.restaurantEmail, phones: settings.phoneNumbers.map((entry) => entry.value), address: settings.restaurantAddress, mapUrl: settings.restaurantMapUrl },
           openingHours: settings.openingHours.map(({ day, openTime, closeTime, isClosed }) => ({ day, openTime, closeTime, isClosed })),
-          storefront: { festivalEffectEnabled: settings.festivalEffectEnabled, festivalEffect: effectToApi[settings.festivalEffect], effectIntensity: settings.effectIntensity, startsAt: settings.festivalEffectStartDate, endsAt: settings.festivalEffectEndDate, nearbyDeliveryFee: settings.nearbyDeliveryFee, fartherDeliveryFee: settings.fartherDeliveryFee },
+          storefront: { festivalEffectEnabled: settings.festivalEffectEnabled, festivalEffect: effectToApi[settings.festivalEffect], effectIntensity: settings.effectIntensity, startsAt: settings.festivalEffectStartDate, endsAt: settings.festivalEffectEndDate, nearbyDeliveryFee: settings.nearbyDeliveryFee, fartherDeliveryFee: settings.fartherDeliveryFee, restaurantLatitude: settings.restaurantLatitude, restaurantLongitude: settings.restaurantLongitude, nearbyDeliveryMaxKm: settings.nearbyDeliveryMaxKm, maximumDeliveryKm: settings.maximumDeliveryKm },
           notice: { enabled: settings.announcementEnabled, type: noticeTypeToApi[settings.announcementType], priority: settings.announcementPriority.toUpperCase(), title: settings.announcementTitle, message: settings.announcementMessage, ctaEnabled: settings.announcementCtaEnabled, ctaLabel: activeCtaDestination.label, ctaHref: activeCtaDestination.href, startsAt: settings.announcementStartDate, endsAt: settings.announcementEndDate },
         }),
       }).then(readApi)
-      setSettings((current) => ({ ...current, nearbyDeliveryFee: payload.data.storefront.nearbyDeliveryFee, fartherDeliveryFee: payload.data.storefront.fartherDeliveryFee, openingHours: payload.data.openingHours.map((entry, index) => ({ ...entry, clientId: entry.id || `saved-${index}` })) }))
+      setSettings((current) => ({ ...current, ...payload.data.storefront, festivalEffect: current.festivalEffect, openingHours: payload.data.openingHours.map((entry, index) => ({ ...entry, clientId: entry.id || `saved-${index}` })) }))
       showToast("Settings saved and published.")
     } catch (error) {
       showToast(error.message || "Could not save settings.", "error")
@@ -276,11 +306,25 @@ export default function AdminSettingsPage() {
               <div><CardTitle className="font-display text-xl">Delivery pricing</CardTitle><CardDescription>Set the two delivery fees shown to customers and used for new orders.</CardDescription></div>
             </CardHeader>
             <CardContent>
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <MoneyInput label="Nearby delivery fee" value={settings.nearbyDeliveryFee} onChange={(value) => updateSetting("nearbyDeliveryFee", value)} disabled={loading} />
                 <MoneyInput label="Farther delivery fee" value={settings.fartherDeliveryFee} onChange={(value) => updateSetting("fartherDeliveryFee", value)} disabled={loading} />
+                <DecimalInput label="Nearby up to (km)" value={settings.nearbyDeliveryMaxKm} onChange={(value) => updateSetting("nearbyDeliveryMaxKm", value)} disabled={loading} />
+                <DecimalInput label="Maximum distance (km)" value={settings.maximumDeliveryKm} onChange={(value) => updateSetting("maximumDeliveryKm", value)} disabled={loading} />
               </div>
-              <p className="mt-4 border-l-2 border-[#D4A017] bg-[#FAF7F0] px-4 py-3 text-sm leading-relaxed text-[#756D62]">Changes apply to new orders only. Existing orders keep the delivery policy accepted by the customer.</p>
+              <div className="mt-5 overflow-hidden rounded-lg border border-[#E4DAC9]">
+                <div className="flex flex-col gap-3 bg-[#FAF7F0] p-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div><p className="text-sm font-semibold text-[#2B2B2B]">Restaurant route origin</p><p className="mt-1 text-xs leading-relaxed text-[#756D62]">This pin is the starting point for delivery distance. Set it at the restaurant entrance.</p></div>
+                  <Button type="button" variant="outline" size="sm" onClick={locateRestaurantAddress} disabled={loading || locatingRestaurant}><LocateFixed className="size-4" />{locatingRestaurant ? "Finding..." : "Find from address"}</Button>
+                </div>
+                <LocationMap
+                  destination={settings.restaurantLatitude && settings.restaurantLongitude ? { latitude: Number(settings.restaurantLatitude), longitude: Number(settings.restaurantLongitude) } : null}
+                  destinationTone="restaurant"
+                  onChange={updateRestaurantLocation}
+                  showLocate
+                />
+              </div>
+              <p className="mt-4 border-l-2 border-[#D4A017] bg-[#FAF7F0] px-4 py-3 text-sm leading-relaxed text-[#756D62]">Changes apply to new route quotes and orders only. Existing orders keep the fee and distance accepted by the customer.</p>
             </CardContent>
           </Card>
 
@@ -637,6 +681,26 @@ function MoneyInput({ disabled, label, onChange, value }) {
   )
 }
 
+function DecimalInput({ disabled, label, onChange, value }) {
+  return (
+    <FormField label={label}>
+      <input
+        type="text"
+        inputMode="decimal"
+        value={value}
+        onChange={(event) => onChange(sanitizeDecimal(event.target.value, 2))}
+        onBlur={() => {
+          const amount = Number(value)
+          if (Number.isFinite(amount)) onChange(amount.toFixed(2))
+        }}
+        className={`${fieldClassName} tabular-nums`}
+        placeholder="0.00"
+        disabled={disabled}
+      />
+    </FormField>
+  )
+}
+
 function formatEuroInput(value) {
   const amount = Number(value)
   return Number.isFinite(amount) ? euroFormatter.format(amount) : value
@@ -646,6 +710,13 @@ function sanitizeMoney(value) {
   const normalized = String(value).replace(",", ".").replace(/[^\d.]/g, "")
   const [whole = "", ...decimalParts] = normalized.split(".")
   const decimal = decimalParts.join("").slice(0, 2)
+  return decimalParts.length ? `${whole.slice(0, 3)}.${decimal}` : whole.slice(0, 3)
+}
+
+function sanitizeDecimal(value, decimalPlaces = 2) {
+  const normalized = String(value).replace(",", ".").replace(/[^\d.]/g, "")
+  const [whole = "", ...decimalParts] = normalized.split(".")
+  const decimal = decimalParts.join("").slice(0, decimalPlaces)
   return decimalParts.length ? `${whole.slice(0, 3)}.${decimal}` : whole.slice(0, 3)
 }
 

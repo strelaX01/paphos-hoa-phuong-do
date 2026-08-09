@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 
 import { buildDeliveryFeeConsentText, centsToMoney, getDeliveryAvailability, getDeliveryAvailabilityMessage } from "@/lib/deliveryConfig";
 import { normalizeDeliveryPricing } from "@/lib/deliveryPricingData";
+import { DeliveryRoutingError, quoteDeliveryRoute } from "@/lib/deliveryRouting";
 import { prisma } from "@/lib/prisma";
 import { checkRateLimit } from "@/lib/rateLimit";
 import { validateDeliveryOrderInput } from "@/lib/validations/deliveryOrder";
@@ -39,9 +40,8 @@ async function createOrder(data, pricedItems, totals) {
     }
 
     let address = await tx.customerAddress.findFirst({ where: { customerId: customer.id, street: data.street, zone: data.area } });
-    if (!address) {
-      address = await tx.customerAddress.create({ data: { customerId: customer.id, street: data.street, zone: data.area, city: data.area, notes: data.notes } });
-    }
+    if (!address) address = await tx.customerAddress.create({ data: { customerId: customer.id, street: data.street, zone: data.area, city: data.area, notes: data.notes, latitude: data.latitude, longitude: data.longitude } });
+    else address = await tx.customerAddress.update({ where: { id: address.id }, data: { notes: data.notes, latitude: data.latitude, longitude: data.longitude } });
 
     return tx.order.create({
       data: {
@@ -57,13 +57,17 @@ async function createOrder(data, pricedItems, totals) {
         deliveryStreet: data.street,
         deliveryZone: data.area,
         deliveryNotes: data.notes,
+        deliveryLatitude: data.latitude,
+        deliveryLongitude: data.longitude,
         deliveryFeeConsentAt: new Date(),
         deliveryFeeConsentText: totals.deliveryFeeConsentText,
         deliveryFeePolicyNearby: centsToMoney(totals.nearbyFeeCents),
         deliveryFeePolicyFarther: centsToMoney(totals.fartherFeeCents),
         subtotal: centsToMoney(totals.subtotalCents),
-        deliveryFee: centsToMoney(0),
-        total: centsToMoney(totals.subtotalCents),
+        distanceKm: totals.routeQuote?.distanceKm,
+        etaMinutes: totals.routeQuote?.etaMinutes,
+        deliveryFee: centsToMoney(totals.deliveryFeeCents),
+        total: centsToMoney(totals.subtotalCents + totals.deliveryFeeCents),
         items: { create: pricedItems.map((item) => ({ menuItemId: item.menuItemId, variantId: item.variantId, variantLabel: item.variantLabel, name: item.name, note: item.note, quantity: item.quantity, unitPrice: centsToMoney(item.unitPriceCents), lineTotal: centsToMoney(item.lineTotalCents) })) },
         timeline: { create: { status: "PENDING", title: "Order received", note: "Waiting for restaurant confirmation." } },
       },
@@ -146,24 +150,43 @@ export async function POST(request) {
       };
     });
     const subtotalCents = pricedItems.reduce((sum, item) => sum + item.lineTotalCents, 0);
-    const totals = { subtotalCents, nearbyFeeCents: pricing.nearbyFeeCents, fartherFeeCents: pricing.fartherFeeCents, deliveryFeeConsentText: buildDeliveryFeeConsentText(pricing.nearbyFeeCents, pricing.fartherFeeCents) };
+    let routeQuote = null;
+    try {
+      routeQuote = await quoteDeliveryRoute({ latitude: validation.data.latitude, longitude: validation.data.longitude });
+    } catch (error) {
+      const canUseManualFallback = validation.data.routingMode === "manual" && error instanceof DeliveryRoutingError && ["ROUTING_UNAVAILABLE", "ROUTING_RATE_LIMITED"].includes(error.code);
+      if (!canUseManualFallback) {
+        const status = error instanceof DeliveryRoutingError ? error.status : 503;
+        return json({ error: error.message || "The delivery route could not be calculated.", code: error.code || "ROUTING_UNAVAILABLE" }, status, rate.headers);
+      }
+    }
+    if (routeQuote && validation.data.acceptedDeliveryFeeCents !== routeQuote.feeCents) {
+      return json({ error: "The delivery route or fee changed. Review the updated quote before ordering.", code: "DELIVERY_QUOTE_CHANGED", deliveryQuote: routeQuote }, 409, rate.headers);
+    }
+    const deliveryFeeCents = routeQuote?.feeCents || 0;
+    const deliveryFeeConsentText = routeQuote
+      ? `I agree to the calculated delivery fee of EUR ${centsToMoney(deliveryFeeCents)} for the ${routeQuote.distanceKm.toFixed(1)} km route to my confirmed delivery pin.`
+      : buildDeliveryFeeConsentText(pricing.nearbyFeeCents, pricing.fartherFeeCents);
+    const totals = { subtotalCents, deliveryFeeCents, routeQuote, nearbyFeeCents: pricing.nearbyFeeCents, fartherFeeCents: pricing.fartherFeeCents, deliveryFeeConsentText };
 
     const duplicateSince = new Date(Date.now() - 2 * 60 * 1000);
     const recentOrders = await prisma.order.findMany({
       where: { customerPhone: validation.data.phone, createdAt: { gte: duplicateSince }, status: { not: "CANCELLED" } },
       orderBy: { createdAt: "desc" },
-      select: { id: true, orderNumber: true, status: true, subtotal: true, deliveryFee: true, total: true, deliveryStreet: true, deliveryZone: true, deliveryFeeConsentAt: true, items: { select: { menuItemId: true, variantId: true, quantity: true, note: true } } },
+      select: { id: true, orderNumber: true, status: true, subtotal: true, deliveryFee: true, total: true, deliveryStreet: true, deliveryZone: true, deliveryLatitude: true, deliveryLongitude: true, deliveryFeeConsentAt: true, items: { select: { menuItemId: true, variantId: true, quantity: true, note: true } } },
     });
-    const duplicate = recentOrders.find((order) => order.deliveryStreet === validation.data.street && order.deliveryZone === validation.data.area && Math.round(Number(order.subtotal) * 100) === subtotalCents && sameItems(order.items, pricedItems));
+    const duplicate = recentOrders.find((order) => order.deliveryStreet === validation.data.street && order.deliveryZone === validation.data.area && Math.abs(Number(order.deliveryLatitude) - validation.data.latitude) < 0.00001 && Math.abs(Number(order.deliveryLongitude) - validation.data.longitude) < 0.00001 && Math.round(Number(order.subtotal) * 100) === subtotalCents && sameItems(order.items, pricedItems));
     if (duplicate) {
-      if (!duplicate.deliveryFeeConsentAt) {
-        await prisma.order.update({
+      let resolvedDuplicate = duplicate;
+      if (!duplicate.deliveryFeeConsentAt || Math.round(Number(duplicate.deliveryFee) * 100) !== deliveryFeeCents) {
+        resolvedDuplicate = await prisma.order.update({
           where: { id: duplicate.id },
-          data: { deliveryFeeConsentAt: new Date(), deliveryFeeConsentText: totals.deliveryFeeConsentText, deliveryFeePolicyNearby: centsToMoney(pricing.nearbyFeeCents), deliveryFeePolicyFarther: centsToMoney(pricing.fartherFeeCents) },
+          data: { deliveryFeeConsentAt: new Date(), deliveryFeeConsentText: totals.deliveryFeeConsentText, deliveryFeePolicyNearby: centsToMoney(pricing.nearbyFeeCents), deliveryFeePolicyFarther: centsToMoney(pricing.fartherFeeCents), distanceKm: routeQuote?.distanceKm, etaMinutes: routeQuote?.etaMinutes, deliveryFee: centsToMoney(deliveryFeeCents), total: centsToMoney(subtotalCents + deliveryFeeCents) },
+          select: { id: true, orderNumber: true, status: true, subtotal: true, deliveryFee: true, total: true },
         });
       }
-      const feeConfirmed = Number(duplicate.deliveryFee) > 0;
-      return json({ data: { reference: duplicate.orderNumber, status: duplicate.status, subtotal: Number(duplicate.subtotal), deliveryFee: feeConfirmed ? Number(duplicate.deliveryFee) : null, total: feeConfirmed ? Number(duplicate.total) : null, deliveryFeeConfirmed: feeConfirmed, duplicate: true } }, 200, rate.headers);
+      const feeConfirmed = Number(resolvedDuplicate.deliveryFee) > 0;
+      return json({ data: { reference: resolvedDuplicate.orderNumber, status: resolvedDuplicate.status, subtotal: Number(resolvedDuplicate.subtotal), deliveryFee: feeConfirmed ? Number(resolvedDuplicate.deliveryFee) : null, total: feeConfirmed ? Number(resolvedDuplicate.total) : null, deliveryFeeConfirmed: feeConfirmed, duplicate: true } }, 200, rate.headers);
     }
 
     let order;
@@ -176,7 +199,8 @@ export async function POST(request) {
       }
     }
 
-    return json({ data: { reference: order.orderNumber, status: order.status, subtotal: Number(order.subtotal), deliveryFee: null, total: null, deliveryFeeConfirmed: false, createdAt: order.createdAt } }, 201, rate.headers);
+    const deliveryFeeConfirmed = Number(order.deliveryFee) > 0;
+    return json({ data: { reference: order.orderNumber, status: order.status, subtotal: Number(order.subtotal), deliveryFee: deliveryFeeConfirmed ? Number(order.deliveryFee) : null, total: deliveryFeeConfirmed ? Number(order.total) : null, deliveryFeeConfirmed, createdAt: order.createdAt } }, 201, rate.headers);
   } catch (error) {
     console.error("POST /api/orders", error);
     return json({ error: "Could not place the order. Please call the restaurant or try again." }, 500, rate.headers);

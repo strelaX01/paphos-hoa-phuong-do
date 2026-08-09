@@ -2,7 +2,7 @@
 
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
-import { ChevronLeft, ChevronRight, ClipboardList, LoaderCircle, Minus, PackageCheck, Pencil, Plus, Printer, RefreshCw, Search, Timer, Trash2, Truck, WalletCards, X } from "lucide-react"
+import { ChevronLeft, ChevronRight, ClipboardList, LoaderCircle, MapPinned, Minus, PackageCheck, Pencil, Plus, Printer, RefreshCw, Search, Timer, Trash2, Truck, WalletCards, X } from "lucide-react"
 
 import AdminShell from "@/app/admin/_components/AdminShell"
 import { useAdminSession } from "@/app/admin/_components/AdminSession"
@@ -182,6 +182,7 @@ function OrderActions({ busy, compact = false, isDriver, onAdvance, onCancel, on
   const canCancel = ["PENDING", "PREPARING", "PENDING_PICKUP"].includes(order.status)
 
   return <div className="flex flex-wrap items-center justify-end gap-2">
+    {order.deliveryLatitude !== null && order.deliveryLongitude !== null ? <a href={`https://www.google.com/maps/search/?api=1&query=${order.deliveryLatitude},${order.deliveryLongitude}`} target="_blank" rel="noreferrer" className="inline-flex h-9 items-center gap-2 rounded-md border border-[#D8CEBD] bg-white px-3 text-sm font-medium text-[#2B2B2B] hover:bg-[#F6F1E8]" aria-label={`Open delivery pin for ${order.orderNumber}`} title="Open delivery pin"><MapPinned className="size-4" />{compact ? null : "Map"}</a> : null}
     {!isDriver ? <Button variant="outline" size="icon-sm" onClick={onPrint} disabled={!order.deliveryFeeConfirmed} aria-label={`Print invoice ${order.orderNumber}`} title={order.deliveryFeeConfirmed ? "Print invoice" : "Set delivery fee before printing"}><Printer className="size-4" /></Button> : null}
     {!isDriver ? <Button variant="outline" size={compact ? "icon-sm" : "sm"} onClick={onDetails} aria-label={`View details ${order.orderNumber}`} title="View details"><ClipboardList className="size-4" />{compact ? null : "Details"}</Button> : null}
     {!isDriver && canCancel ? <Button variant="destructive" size="sm" onClick={onCancel} disabled={busy}>Cancel</Button> : null}
@@ -208,17 +209,26 @@ function OrderDetailModal({ busy, onClose, onPrint, onSaveEdit, onSaveFee, order
     <div className="space-y-5 p-5">
       <div className="flex flex-wrap justify-end gap-2">{canEdit && !editing ? <Button variant="outline" size="sm" onClick={() => setEditing(true)}><Pencil className="size-4" />Edit order</Button> : null}<Button variant="outline" size="sm" onClick={onPrint} disabled={!order.deliveryFeeConfirmed} title={order.deliveryFeeConfirmed ? "Print invoice" : "Set delivery fee before printing"}><Printer className="size-4" />Print invoice</Button></div>
       {editing ? <OrderEditForm order={order} busy={busy} onCancel={() => setEditing(false)} onSave={async (edit) => { const updated = await onSaveEdit(edit); if (updated) setEditing(false) }} /> : <>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"><Info label="Customer" value={order.customerName} /><Info label="Phone" value={order.customerPhone} /><Info label="Address" value={`${order.deliveryStreet}, ${order.deliveryZone}`} /><Info label="Payment" value={`${formatStatus(order.paymentMethod)} / ${formatStatus(order.paymentStatus)}`} /></div>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"><Info label="Customer" value={order.customerName} /><Info label="Phone" value={order.customerPhone} /><Info label="Address" value={`${order.deliveryStreet}, ${order.deliveryZone}`} /><Info label="Payment" value={formatStatus(order.paymentMethod)} /></div>
+        {order.deliveryLatitude !== null && order.deliveryLongitude !== null ? <div className="flex flex-wrap items-center justify-between gap-3 border border-[#E4DAC9] bg-[#FAF7F0] p-3"><div><p className="text-xs font-semibold uppercase text-[#756D62]">Confirmed delivery pin</p><p className="mt-1 text-sm">{order.distanceKm !== null ? `${order.distanceKm.toFixed(1)} km` : "Distance pending"}{order.etaMinutes ? ` | about ${order.etaMinutes} min drive` : ""}</p></div><a href={`https://www.google.com/maps/search/?api=1&query=${order.deliveryLatitude},${order.deliveryLongitude}`} target="_blank" rel="noreferrer" className="inline-flex h-9 items-center border border-[#8B1E1E] px-3 text-sm font-semibold text-[#8B1E1E] hover:bg-[#8B1E1E] hover:text-white">Open delivery pin</a></div> : null}
         {order.deliveryNotes ? <div><p className="text-xs font-semibold uppercase text-[#756D62]">Delivery notes</p><p className="mt-1 whitespace-pre-wrap text-sm">{order.deliveryNotes}</p></div> : null}
         <div className="overflow-x-auto"><table className="w-full min-w-[560px] text-sm"><thead><tr className="border-b border-[#E4DAC9] text-left text-xs uppercase text-[#756D62]"><th className="py-2">Dish</th><th>Note</th><th>Qty</th><th>Unit</th><th className="text-right">Total</th></tr></thead><tbody>{order.items.map((item) => <tr key={item.id} className="border-b border-[#EFE7DA]"><td className="py-3 font-semibold">{item.name}{item.variantLabel ? <span className="mt-0.5 block text-xs font-normal text-[#8B1E1E]">{item.variantLabel}</span> : null}</td><td className="text-[#756D62]">{item.note || "-"}</td><td>{item.quantity}</td><td>{formatMoney(item.unitPrice)}</td><td className="text-right font-semibold">{formatMoney(item.lineTotal)}</td></tr>)}</tbody></table></div>
       </>}
       <div className="grid items-start gap-4 md:grid-cols-[1fr_20rem]">
-        <form onSubmit={submitFee} className="border border-[#E4DAC9] p-4">
-          <label htmlFor={`delivery-fee-${order.id}`} className="text-sm font-semibold">Final delivery fee</label>
-          <div className="mt-2 flex gap-2"><select id={`delivery-fee-${order.id}`} required value={deliveryFee} onChange={(event) => setDeliveryFee(event.target.value)} disabled={busy || locked} className="h-9 flex-1 rounded-md border border-[#E4DAC9] bg-white px-3 text-sm outline-none disabled:bg-[#F6F1E8]"><option value="" disabled>Select fee</option>{deliveryFeeOptions.map((fee) => <option key={fee} value={fee.toFixed(2)}>EUR {fee.toFixed(2)}</option>)}</select><Button type="submit" size="sm" disabled={busy || locked || !deliveryFee}>{busy ? <LoaderCircle className="size-4 animate-spin" /> : null}Save fee</Button></div>
-          <p className="mt-2 text-xs text-[#756D62]">{locked ? "The fee is locked because delivery has started or the order is closed." : selectedDeliveryFee !== null && !order.deliveryFeeConfirmed ? "The total preview has updated. Save the fee to confirm it on the order." : "Changing the selection updates the total preview. Save to confirm the change."}</p>
-        </form>
-        <div className="space-y-2 border border-[#E4DAC9] bg-[#FDFAF4] p-4 text-sm"><Price label="Subtotal" value={order.subtotal} />{Number(order.discountTotal) > 0 ? <Price label="Discount" value={-Number(order.discountTotal)} /> : null}{selectedDeliveryFee !== null ? <><Price label="Delivery" value={selectedDeliveryFee} /><Price label="Total preview" value={previewTotal} strong /></> : <PendingPrice />}</div>
+        {order.deliveryFeeConfirmed ? (
+          <div className="border border-[#E4DAC9] bg-[#FAF7F0] p-4">
+            <p className="text-sm font-semibold">Calculated delivery fee</p>
+            <p className="mt-2 font-display text-2xl font-semibold tabular-nums text-[#2B2B2B]">{formatMoney(order.deliveryFee)}</p>
+            <p className="mt-2 text-xs leading-relaxed text-[#756D62]">Verified automatically from the customer&apos;s confirmed pin and driving distance when the order was placed.</p>
+          </div>
+        ) : (
+          <form onSubmit={submitFee} className="border border-amber-300 bg-amber-50/60 p-4">
+            <label htmlFor={`delivery-fee-${order.id}`} className="text-sm font-semibold">Manual delivery fee required</label>
+            <div className="mt-2 flex gap-2"><select id={`delivery-fee-${order.id}`} required value={deliveryFee} onChange={(event) => setDeliveryFee(event.target.value)} disabled={busy || locked} className="h-9 flex-1 rounded-md border border-[#E4DAC9] bg-white px-3 text-sm outline-none disabled:bg-[#F6F1E8]"><option value="" disabled>Select fee</option>{deliveryFeeOptions.map((fee) => <option key={fee} value={fee.toFixed(2)}>EUR {fee.toFixed(2)}</option>)}</select><Button type="submit" size="sm" disabled={busy || locked || !deliveryFee}>{busy ? <LoaderCircle className="size-4 animate-spin" /> : null}Confirm fee</Button></div>
+            <p className="mt-2 text-xs text-[#756D62]">{locked ? "The fee is locked because delivery has started or the order is closed." : selectedDeliveryFee !== null ? "The total preview has updated. Confirm the fee to continue processing this fallback order." : "Automatic routing was unavailable when this order was placed."}</p>
+          </form>
+        )}
+        <div className="space-y-2 border border-[#E4DAC9] bg-[#FDFAF4] p-4 text-sm"><Price label="Subtotal" value={order.subtotal} />{Number(order.discountTotal) > 0 ? <Price label="Discount" value={-Number(order.discountTotal)} /> : null}{selectedDeliveryFee !== null ? <><Price label="Delivery" value={selectedDeliveryFee} /><Price label={order.deliveryFeeConfirmed ? "Total" : "Total preview"} value={previewTotal} strong /></> : <PendingPrice />}</div>
       </div>
       <div><h3 className="font-display text-lg font-semibold">Timeline</h3><div className="mt-3 space-y-3">{order.timeline.map((event) => <div key={event.id} className="border-l-2 border-[#D4A017] pl-3"><p className="text-sm font-semibold">{event.title}</p><p className="text-xs text-[#756D62]">{formatDateTime(event.createdAt)}{event.note ? ` | ${event.note}` : ""}</p></div>)}</div></div>
     </div>
@@ -292,6 +302,7 @@ function InvoiceModal({ autoPrint = false, onClose, order }) {
           <ReceiptLine label="Customer" value={order.customerName} />
           <ReceiptLine label="Phone" value={order.customerPhone} />
           <ReceiptLine label="Address" value={[order.deliveryStreet, order.deliveryZone].filter(Boolean).join(", ")} />
+          {order.distanceKm !== null ? <ReceiptLine label="Route" value={`${order.distanceKm.toFixed(1)} km${order.etaMinutes ? ` / ~${order.etaMinutes} min` : ""}`} /> : null}
           {order.deliveryNotes ? <ReceiptLine label="Note" value={order.deliveryNotes} /> : null}
           <ReceiptLine label="Payment" value={formatStatus(order.paymentMethod)} />
         </section>

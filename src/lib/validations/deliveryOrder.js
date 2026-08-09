@@ -25,6 +25,10 @@ export function validateDeliveryOrderInput(input) {
   const deliveryFeeConsent = input?.deliveryFeeConsent === true;
   const acceptedNearbyFeeCents = moneyCents(input?.acceptedNearbyDeliveryFee);
   const acceptedFartherFeeCents = moneyCents(input?.acceptedFartherDeliveryFee);
+  const acceptedDeliveryFeeCents = input?.acceptedDeliveryFee === null || input?.acceptedDeliveryFee === undefined ? null : moneyCents(input.acceptedDeliveryFee);
+  const routingMode = input?.routingMode === "manual" ? "manual" : input?.routingMode === "automatic" ? "automatic" : "";
+  const latitude = Number(input?.deliveryLocation?.latitude);
+  const longitude = Number(input?.deliveryLocation?.longitude);
   const phoneDigits = phone.replace(/\D/g, "");
   const normalizedPhone = phone.startsWith("+") ? `+${phoneDigits}` : phoneDigits;
 
@@ -36,6 +40,9 @@ export function validateDeliveryOrderInput(input) {
   if (notes.length > 1000) errors.notes = "Delivery notes must be 1000 characters or fewer.";
   if (!deliveryFeeConsent) errors.deliveryFeeConsent = "You must agree to the delivery fee policy before placing the order.";
   if (acceptedNearbyFeeCents === null || acceptedFartherFeeCents === null) errors.deliveryPricing = "Refresh the page to load the current delivery fees.";
+  if (!routingMode) errors.deliveryLocation = "Confirm your delivery point on the map.";
+  if (!Number.isFinite(latitude) || latitude < 34.4 || latitude > 35.8 || !Number.isFinite(longitude) || longitude < 32 || longitude > 34.8) errors.deliveryLocation = "Choose a valid delivery point inside Cyprus.";
+  if (routingMode === "automatic" && acceptedDeliveryFeeCents === null) errors.deliveryPricing = "Recalculate and accept the delivery fee.";
 
   const rawItems = Array.isArray(input?.items) ? input.items : [];
   if (!rawItems.length) errors.items = "Your cart is empty.";
@@ -62,7 +69,7 @@ export function validateDeliveryOrderInput(input) {
   if (totalQuantity > DELIVERY_CONFIG.maxTotalQuantity) errors.items = `An order can contain at most ${DELIVERY_CONFIG.maxTotalQuantity} items.`;
 
   return {
-    data: { name, email: email || null, phone: normalizedPhone, street, area, notes: notes || null, website, deliveryFeeConsent, acceptedNearbyFeeCents, acceptedFartherFeeCents, items },
+    data: { name, email: email || null, phone: normalizedPhone, street, area, notes: notes || null, website, deliveryFeeConsent, acceptedNearbyFeeCents, acceptedFartherFeeCents, acceptedDeliveryFeeCents, routingMode, latitude, longitude, items },
     errors,
     isValid: Object.keys(errors).length === 0,
   };

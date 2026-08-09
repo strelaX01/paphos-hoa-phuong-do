@@ -1,5 +1,26 @@
 @import "tailwindcss";
 
+.hpd-map-marker {
+  width: 28px;
+  height: 28px;
+  border: 3px solid #fff;
+  border-radius: 50% 50% 50% 0;
+  box-shadow: 0 3px 12px rgb(30 26 24 / 35%);
+  transform: rotate(-45deg);
+  cursor: grab;
+}
+
+.hpd-map-marker::after {
+  content: "";
+  position: absolute;
+  inset: 7px;
+  border-radius: 999px;
+  background: #fff;
+}
+
+.hpd-map-marker--delivery { background: #9b1c1c; }
+.hpd-map-marker--restaurant { background: #d4a017; }
+
 @font-face {
   font-family: "HPD Cormorant";
   src: url("./fonts/cormorant-vietnamese.woff2") format("woff2");
@@ -264,4 +285,56 @@
 
 .animate-pulse-once {
   animation: highlight-pulse 1.8s ease-out forwards;
+}
+
+.header-nav-link {
+  opacity: 0;
+  transform: translateY(-8px);
+  animation: header-nav-enter 520ms cubic-bezier(0.2, 0.75, 0.2, 1) var(--nav-delay) forwards;
+  transition: color 250ms ease;
+}
+
+.header-nav-line {
+  transition: transform 420ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.header-reserve-fill {
+  transition: transform 420ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.hpd-mobile-nav-item {
+  opacity: 0;
+  transform: translateX(18px);
+}
+
+.hpd-mobile-menu-open .hpd-mobile-nav-item {
+  animation: mobile-nav-enter 500ms cubic-bezier(0.2, 0.75, 0.2, 1) var(--mobile-nav-delay) forwards;
+}
+
+@keyframes header-nav-enter {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes mobile-nav-enter {
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .header-nav-link,
+  .hpd-mobile-menu-open .hpd-mobile-nav-item {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+
+  .header-nav-line,
+  .header-reserve-fill {
+    transition: none;
+  }
 }

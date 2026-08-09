@@ -36,6 +36,14 @@ function moneyCents(value) {
   return Number.isSafeInteger(cents) ? cents : null
 }
 
+function decimalNumber(value, minimum, maximum) {
+  if (typeof value !== "string" && typeof value !== "number") return null
+  const normalized = String(value).trim().replace(",", ".")
+  if (!/^-?\d+(?:\.\d{1,7})?$/.test(normalized)) return null
+  const number = Number(normalized)
+  return Number.isFinite(number) && number >= minimum && number <= maximum ? number : null
+}
+
 export function validateRestaurantSettings(body) {
   const errors = {}
   const profile = body?.profile || {}
@@ -88,6 +96,10 @@ export function validateRestaurantSettings(body) {
   const effectEndsAt = optionalDate(storefront.endsAt)
   const nearbyDeliveryFeeCents = moneyCents(storefront.nearbyDeliveryFee)
   const fartherDeliveryFeeCents = moneyCents(storefront.fartherDeliveryFee)
+  const restaurantLatitude = decimalNumber(storefront.restaurantLatitude, 34.4, 35.8)
+  const restaurantLongitude = decimalNumber(storefront.restaurantLongitude, 32, 34.8)
+  const nearbyDeliveryMaxKm = decimalNumber(storefront.nearbyDeliveryMaxKm, 0.1, 100)
+  const maximumDeliveryKm = decimalNumber(storefront.maximumDeliveryKm, 0.1, 100)
   const noticeType = text(notice.type, 30).toUpperCase()
   const noticePriority = text(notice.priority, 30).toUpperCase()
   const noticeTitle = text(notice.title, 160)
@@ -106,6 +118,10 @@ export function validateRestaurantSettings(body) {
   if (nearbyDeliveryFeeCents === null || nearbyDeliveryFeeCents < 1 || nearbyDeliveryFeeCents > 10000) errors.nearbyDeliveryFee = "Nearby delivery fee must be between €0.01 and €100.00."
   if (fartherDeliveryFeeCents === null || fartherDeliveryFeeCents < 1 || fartherDeliveryFeeCents > 10000) errors.fartherDeliveryFee = "Farther delivery fee must be between €0.01 and €100.00."
   if (nearbyDeliveryFeeCents !== null && fartherDeliveryFeeCents !== null && fartherDeliveryFeeCents < nearbyDeliveryFeeCents) errors.fartherDeliveryFee = "Farther delivery fee cannot be lower than the nearby fee."
+  if (restaurantLatitude === null || restaurantLongitude === null) errors.restaurantLocation = "Set the restaurant location on the map."
+  if (nearbyDeliveryMaxKm === null) errors.nearbyDeliveryMaxKm = "Nearby distance must be between 0.1 and 100 km."
+  if (maximumDeliveryKm === null) errors.maximumDeliveryKm = "Maximum delivery distance must be between 0.1 and 100 km."
+  if (nearbyDeliveryMaxKm !== null && maximumDeliveryKm !== null && maximumDeliveryKm <= nearbyDeliveryMaxKm) errors.maximumDeliveryKm = "Maximum delivery distance must be greater than the nearby distance."
   if (!NOTICE_TYPES.includes(noticeType)) errors.noticeType = "Invalid notice type."
   if (!NOTICE_PRIORITIES.includes(noticePriority)) errors.noticePriority = "Invalid notice priority."
   if (Boolean(notice.enabled) && noticeTitle.length < 2) errors.noticeTitle = "Notice title is required when enabled."
@@ -128,6 +144,10 @@ export function validateRestaurantSettings(body) {
         effectEndsAt: effectEndsAt ? new Date(`${effectEndsAt}T23:59:59.999Z`) : null,
         nearbyDeliveryFee: (nearbyDeliveryFeeCents / 100).toFixed(2),
         fartherDeliveryFee: (fartherDeliveryFeeCents / 100).toFixed(2),
+        restaurantLatitude,
+        restaurantLongitude,
+        nearbyDeliveryMaxKm: nearbyDeliveryMaxKm?.toFixed(2),
+        maximumDeliveryKm: maximumDeliveryKm?.toFixed(2),
       },
       notice: {
         enabled: Boolean(notice.enabled),

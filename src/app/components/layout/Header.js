@@ -1,207 +1,212 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import Image from 'next/image'
+import { ArrowUpRight, CalendarDays, Menu, X } from 'lucide-react'
 import CartButton from '@/app/components/shared/CartButton'
 import { NAV_LINKS as navLinks } from '@/lib/constants/index.js'
 
-function FlamboyantIcon({ className }) {
-  return (
-    <svg viewBox="0 0 34 34" fill="none" xmlns="http://www.w3.org/2000/svg" className={className} aria-hidden="true">
-      <circle cx="17" cy="17" r="16" stroke="currentColor" strokeWidth="0.75" strokeOpacity="0.2" />
-      <path d="M17 4 C19 10, 23 13, 17 17 C11 13, 15 10, 17 4Z" fill="#C41E3A" opacity="0.9" />
-      <path d="M30 17 C24 19, 21 23, 17 17 C21 11, 24 15, 30 17Z" fill="#C41E3A" opacity="0.75" />
-      <path d="M17 30 C15 24, 11 21, 17 17 C23 21, 19 24, 17 30Z" fill="#C41E3A" opacity="0.9" />
-      <path d="M4 17 C10 15, 13 11, 17 17 C13 23, 10 19, 4 17Z" fill="#C41E3A" opacity="0.75" />
-      <circle cx="17" cy="17" r="2.5" fill="#D4A017" />
-    </svg>
-  )
+const NO_HERO_ROUTES = ['/checkout']
+
+function routeIsActive(pathname, href) {
+  return href === '/' ? pathname === '/' : pathname.startsWith(href)
 }
 
 export default function Header() {
   const [isScrolled, setIsScrolled] = useState(false)
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
+  const closeButtonRef = useRef(null)
   const pathname = usePathname()
 
-  const NO_HERO_ROUTES = ['/checkout']
   const forceSolid = NO_HERO_ROUTES.some((route) => pathname.startsWith(route))
   const solidStyle = isScrolled || forceSolid
 
   useEffect(() => {
-    const onScroll = () => setIsScrolled(window.scrollY > 50)
+    const onScroll = () => setIsScrolled(window.scrollY > 42)
     onScroll()
     window.addEventListener('scroll', onScroll, { passive: true })
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
 
   useEffect(() => {
-    document.body.style.overflow = isMobileMenuOpen ? 'hidden' : ''
-    return () => { document.body.style.overflow = '' }
+    if (!isMobileMenuOpen) return undefined
+
+    const previousOverflow = document.body.style.overflow
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') setIsMobileMenuOpen(false)
+    }
+
+    document.body.style.overflow = 'hidden'
+    window.addEventListener('keydown', onKeyDown)
+    closeButtonRef.current?.focus()
+
+    return () => {
+      document.body.style.overflow = previousOverflow
+      window.removeEventListener('keydown', onKeyDown)
+    }
   }, [isMobileMenuOpen])
 
   return (
     <>
-      {/* ── Header bar ─────────────────────────────────── */}
-      <header className={`fixed top-0 inset-x-0 z-50 transition-all duration-500 ${
-        solidStyle
-          ? 'bg-[#FAF6EE]/97 backdrop-blur-md border-b border-[#EDE5D0]'
-          : 'bg-transparent'
-      }`}>
-        <div className="site-container px-5 lg:px-8">
-          <div className={`flex items-center justify-between gap-8 transition-[height] duration-500 ${isScrolled ? 'h-[68px]' : 'h-[80px]'}`}>
-
-            {/* Logo */}
-            <Link href="/" className="flex items-center gap-3 flex-shrink-0 focus-visible:outline-none" aria-label="Hoa Phuong Do">
+      <header
+        className={`fixed inset-x-0 top-0 z-50 transition-[background-color,border-color,box-shadow] duration-500 ${
+          solidStyle
+            ? 'border-b border-[#dfd3bd] bg-[#faf6ee]/95 shadow-[0_10px_35px_rgba(35,25,17,0.06)] backdrop-blur-xl'
+            : 'border-b border-white/15 bg-[#15110e]/20 backdrop-blur-[3px]'
+        }`}
+      >
+        <div className="site-container">
+          <div className={`flex items-center justify-between gap-5 transition-[height] duration-500 ${isScrolled ? 'h-[68px]' : 'h-[82px]'}`}>
+            <Link
+              href="/"
+              className="group relative z-10 flex shrink-0 items-center gap-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d4a017]"
+              aria-label="Hoa Phuong Do home"
+            >
               <Image
                 src="/images/hoa-phuong-do-logo.png"
                 alt="Hoa Phuong Do"
-                width={50}  
-                height={50}
+                width={102}
+                height={66}
                 priority
-                className='w-auto h-15'
+                className={`h-[68px] w-auto object-contain transition-[transform,filter] duration-500 group-hover:scale-[1.03] ${solidStyle ? '' : 'drop-shadow-[0_2px_8px_rgba(0,0,0,0.45)]'}`}
               />
             </Link>
 
-            {/* Desktop nav */}
-          <nav className="hidden lg:flex items-center gap-6 lg:gap-8 flex-1 justify-center" aria-label="Main navigation">
-              {navLinks.map((link) => {
-                const isActive = pathname === link.href
+            <nav className="hidden min-w-0 flex-1 items-stretch justify-center lg:flex" aria-label="Main navigation">
+              {navLinks.map((link, index) => {
+                const isActive = routeIsActive(pathname, link.href)
                 return (
                   <Link
                     key={link.href}
                     href={link.href}
-                    className={`relative px-4 py-2 text-[13px] font-normal transition-colors duration-200 group focus-visible:outline-none ${
+                    className={`header-nav-link group relative flex h-[52px] min-w-[76px] items-center justify-center px-3 text-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#d4a017] xl:min-w-[88px] ${
                       isActive
-                        ? solidStyle ? 'text-[#1A1410]' : 'text-white'
-                        : solidStyle
-                          ? 'text-[#6B645A] hover:text-[#1A1410]'
-                          : 'text-white/65 hover:text-white'
+                        ? solidStyle ? 'text-[#211a15]' : 'text-white'
+                        : solidStyle ? 'text-[#756c61] hover:text-[#211a15]' : 'text-white/70 hover:text-white'
                     }`}
+                    style={{ '--nav-delay': `${80 + index * 55}ms` }}
+                    aria-current={isActive ? 'page' : undefined}
                   >
-                    {link.label}
-                    <span className={`absolute bottom-0 inset-x-4 h-px bg-[#D4A017] transition-transform duration-200 origin-left ${
-                      isActive ? 'scale-x-100' : 'scale-x-0 group-hover:scale-x-100'
-                    }`} />
+                    <span className="font-[family-name:var(--font-display-local)] text-[17px] font-semibold leading-none">{link.label}</span>
+                    <span className={`header-nav-line absolute inset-x-3 bottom-0 h-[2px] origin-left bg-[#c99a18] ${isActive ? 'scale-x-100' : 'scale-x-0 group-hover:scale-x-100'}`} />
                   </Link>
                 )
               })}
             </nav>
 
-            {/* Desktop CTAs */}
-            <div className="hidden lg:flex items-center gap-2 flex-shrink-0">
+            <div className="hidden shrink-0 items-center gap-3 lg:flex">
               <CartButton isScrolled={solidStyle} />
-              <Link
-                href="/delivery"
-                className={`text-[12px] font-medium px-4 py-2 transition-colors duration-200 ${
-                  solidStyle ? 'text-[#6B645A] hover:text-[#1A1410]' : 'text-white/65 hover:text-white'
-                }`}
-              >
-                Order Online
-              </Link>
               <Link
                 href="/book-table"
-                className={`text-[12px] font-medium px-5 py-2.5 transition-all duration-200 ${
+                className={`header-reserve group relative flex h-11 items-center overflow-hidden border px-4 text-[11px] font-bold uppercase tracking-[0.08em] transition-colors duration-300 xl:px-5 ${
                   solidStyle
-                    ? 'bg-[#C41E3A] text-white hover:bg-[#9B1530]'
-                    : 'border border-white/40 text-white hover:bg-white/10'
+                    ? 'border-[#9d2023] text-white'
+                    : 'border-white/55 text-white hover:border-[#d4a017]'
                 }`}
               >
-                Reserve a Table
+                <span className={`header-reserve-fill absolute inset-0 ${solidStyle ? 'translate-x-0 bg-[#9d2023]' : '-translate-x-full bg-[#9d2023] group-hover:translate-x-0'}`} />
+                <CalendarDays className="relative mr-2 h-4 w-4" strokeWidth={1.8} aria-hidden="true" />
+                <span className="relative">Reserve</span>
+                <ArrowUpRight className="relative ml-2 h-4 w-4 transition-transform duration-300 group-hover:-translate-y-0.5 group-hover:translate-x-0.5" strokeWidth={1.8} aria-hidden="true" />
               </Link>
             </div>
 
-            <div className="lg:hidden flex items-center gap-1">
+            <div className="flex shrink-0 items-center gap-1.5 lg:hidden">
               <CartButton isScrolled={solidStyle} />
-              {/* Mobile hamburger */}
               <button
-                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-                className={`flex flex-col justify-center items-center w-9 h-9 gap-[5px] focus-visible:outline-none ${
-                  solidStyle ? 'text-[#1A1410]' : 'text-white'
+                type="button"
+                onClick={() => setIsMobileMenuOpen(true)}
+                className={`grid h-10 w-10 place-items-center border transition-colors duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d4a017] ${
+                  solidStyle ? 'border-[#dfd3bd] text-[#211a15]' : 'border-white/35 text-white'
                 }`}
                 aria-expanded={isMobileMenuOpen}
-                aria-label={isMobileMenuOpen ? 'Close menu' : 'Open menu'}
+                aria-controls="mobile-navigation"
+                aria-label="Open menu"
               >
-                <span className={`block w-[22px] h-px bg-current transition-all duration-300 ${isMobileMenuOpen ? 'rotate-45 translate-y-[6px]' : ''}`} />
-                <span className={`block w-[22px] h-px bg-current transition-all duration-300 ${isMobileMenuOpen ? 'opacity-0 scale-x-0' : ''}`} />
-                <span className={`block w-[22px] h-px bg-current transition-all duration-300 ${isMobileMenuOpen ? '-rotate-45 -translate-y-[6px]' : ''}`} />
+                <Menu className="h-5 w-5" strokeWidth={1.7} aria-hidden="true" />
               </button>
             </div>
-
           </div>
         </div>
       </header>
 
-      {/* Backdrop */}
       <div
-        onClick={() => setIsMobileMenuOpen(false)}
-        className={`fixed inset-0 z-[65] lg:hidden bg-black/60 backdrop-blur-sm transition-opacity duration-300 ${
-          isMobileMenuOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+        className={`fixed inset-0 z-[65] bg-[#160f0c]/70 backdrop-blur-sm transition-opacity duration-500 lg:hidden ${
+          isMobileMenuOpen ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0'
         }`}
+        onClick={() => setIsMobileMenuOpen(false)}
         aria-hidden="true"
       />
 
-      {/* Mobile slide-in panel */}
       <div
+        id="mobile-navigation"
         role="dialog"
         aria-modal="true"
         aria-label="Navigation"
-        className={`fixed top-0 right-0 bottom-0 z-[70] lg:hidden w-[300px] bg-[#FAF6EE] flex flex-col shadow-xl transition-transform duration-300 ${
-          isMobileMenuOpen ? 'translate-x-0' : 'translate-x-full'
+        aria-hidden={!isMobileMenuOpen}
+        inert={!isMobileMenuOpen}
+        className={`fixed inset-0 z-[70] flex flex-col overflow-hidden bg-[#17110e] transition-transform duration-500 lg:hidden ${
+          isMobileMenuOpen ? 'hpd-mobile-menu-open translate-x-0' : 'translate-x-full'
         }`}
       >
-        {/* Panel header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-[#EDE5D0]">
-          <div>
-            <p className="text-[#1A1410] text-[15px]" style={{ fontFamily: 'var(--font-display-local)' }}>
-              Hoa Phuong Do
-            </p>
-            <p className="text-[#D4A017] uppercase mt-0.5" style={{ fontSize: '9px', letterSpacing: '0.25em' }}>
-              Vietnamese · Cyprus
-            </p>
-          </div>
+        <Image src="/images/hpd8.png" alt="" fill sizes="100vw" className="object-cover opacity-45" priority />
+        <div className="absolute inset-0 bg-[#160f0c]/75" />
+
+        <div className="relative z-10 flex h-[78px] shrink-0 items-center justify-between border-b border-white/15 px-5">
+          <Link href="/" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center" aria-label="Hoa Phuong Do home">
+            <Image src="/images/hoa-phuong-do-logo.png" alt="Hoa Phuong Do" width={100} height={64} className="h-[62px] w-auto object-contain drop-shadow-[0_2px_7px_rgba(0,0,0,0.5)]" />
+          </Link>
           <button
+            ref={closeButtonRef}
+            type="button"
             onClick={() => setIsMobileMenuOpen(false)}
-            className="w-8 h-8 flex items-center justify-center text-[#6B645A] hover:text-[#C41E3A] transition-colors"
+            className="grid h-10 w-10 place-items-center border border-white/35 text-white transition-colors hover:border-[#e5bd43] hover:text-[#e5bd43] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d4a017]"
             aria-label="Close menu"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
+            <X className="h-5 w-5" strokeWidth={1.6} aria-hidden="true" />
           </button>
         </div>
 
-        {/* Nav links */}
-        <nav className="flex-1 overflow-y-auto" aria-label="Mobile navigation">
-          {navLinks.map((link) => {
-            const isActive = pathname === link.href
-            return (
-              <Link
-                key={link.href}
-                href={link.href}
-                onClick={() => setIsMobileMenuOpen(false)}
-                className={`flex items-center justify-between px-6 py-4 text-[13px] border-b border-[#EDE5D0] transition-colors duration-150 ${
-                  isActive ? 'text-[#C41E3A]' : 'text-[#1A1410] hover:text-[#C41E3A]'
-                }`}
-              >
-                {link.label}
-                <svg className="w-4 h-4 text-[#C8BFA8] flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
-                </svg>
-              </Link>
-            )
-          })}
-        </nav>
+        <div className="relative z-10 flex min-h-0 flex-1 flex-col">
+          <nav className="flex min-h-0 flex-1 flex-col justify-center px-6 py-4 sm:mx-auto sm:w-full sm:max-w-xl sm:px-9" aria-label="Mobile navigation">
+            {navLinks.map((link, index) => {
+              const isActive = routeIsActive(pathname, link.href)
+              return (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className={`hpd-mobile-nav-item group relative flex min-h-[50px] items-center border-b border-white/15 py-2 pl-4 transition-colors ${
+                    isActive ? 'text-[#e5bd43]' : 'text-white hover:text-[#e5bd43]'
+                  }`}
+                  style={{ '--mobile-nav-delay': `${110 + index * 60}ms` }}
+                  aria-current={isActive ? 'page' : undefined}
+                >
+                  <span className={`absolute inset-y-3 left-0 w-[2px] origin-center bg-[#e5bd43] transition-transform duration-300 ${isActive ? 'scale-y-100' : 'scale-y-0 group-hover:scale-y-100'}`} />
+                  <span className="font-[family-name:var(--font-display-local)] text-[clamp(1.55rem,7vw,2.05rem)] leading-none">
+                    {link.label}
+                  </span>
+                  <ArrowUpRight className={`ml-auto h-4 w-4 transition-[transform,opacity] duration-300 ${isActive ? 'opacity-100' : 'opacity-0 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:opacity-100'}`} strokeWidth={1.5} aria-hidden="true" />
+                </Link>
+              )
+            })}
 
-        {/* CTAs */}
-        <div className="px-6 py-5 border-t border-[#EDE5D0] space-y-3">
-          <Link href="/book-table" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center justify-center w-full py-3 bg-[#C41E3A] text-white text-[12px] font-medium tracking-wide hover:bg-[#9B1530] transition-colors">
-            Reserve a Table
-          </Link>
-          <Link href="/delivery" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center justify-center w-full py-3 border border-[#EDE5D0] text-[#1A1410] text-[12px] font-medium tracking-wide hover:border-[#C41E3A] hover:text-[#C41E3A] transition-all">
-            Order Delivery
-          </Link>
+            <div className="hpd-mobile-nav-item mt-5 grid grid-cols-2 gap-2.5" style={{ '--mobile-nav-delay': '500ms' }}>
+              <Link href="/book-table" onClick={() => setIsMobileMenuOpen(false)} className="flex min-h-12 items-center justify-center bg-[#a72024] px-3 text-[10px] font-bold uppercase tracking-[0.1em] text-white">
+                <CalendarDays className="mr-2 h-4 w-4" strokeWidth={1.8} aria-hidden="true" />
+                Reserve
+              </Link>
+              <Link href="/delivery" onClick={() => setIsMobileMenuOpen(false)} className="flex min-h-12 items-center justify-center border border-white/35 px-3 text-[10px] font-bold uppercase tracking-[0.1em] text-white">
+                Order food
+                <ArrowUpRight className="ml-2 h-4 w-4" strokeWidth={1.8} aria-hidden="true" />
+              </Link>
+            </div>
+          </nav>
+          <p className="shrink-0 border-t border-white/15 px-6 py-4 text-center text-[9px] font-semibold uppercase tracking-[0.18em] text-white/55">
+            Kissonerga, Cyprus
+          </p>
         </div>
       </div>
     </>

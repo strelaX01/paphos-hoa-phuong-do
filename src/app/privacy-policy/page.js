@@ -16,7 +16,7 @@ const sections = [
   {
     id: 'information-we-collect',
     title: 'Information we collect',
-    content: () => <><p>We collect information you choose to provide when making a reservation, placing a delivery order, or contacting the restaurant.</p><LegalList><li>Name, phone number, and optional email address.</li><li>Reservation date, time, guest count, and special requests.</li><li>Delivery address, area, order contents, dish notes, and delivery instructions.</li><li>Order, reservation, payment, and fulfilment status. We do not collect card details because online orders are currently paid in cash.</li><li>Limited technical and security information, such as IP-derived rate-limit records and authentication activity.</li></LegalList></>,
+    content: () => <><p>We collect information you choose to provide when making a reservation, placing a delivery order, or contacting the restaurant.</p><LegalList><li>Name, phone number, and optional email address.</li><li>Reservation date, time, guest count, and special requests.</li><li>Delivery address, map pin coordinates, calculated route distance and time, order contents, dish notes, and delivery instructions.</li><li>Order, reservation, payment, and fulfilment status. We do not collect card details because online orders are currently paid in cash.</li><li>Limited technical and security information, such as IP-derived rate-limit records and authentication activity.</li></LegalList></>,
   },
   {
     id: 'how-we-use-data',
@@ -31,7 +31,7 @@ const sections = [
   {
     id: 'sharing',
     title: 'Who receives information',
-    content: () => <><p>Information is available only to people and service providers who need it to operate the restaurant and website.</p><LegalList><li>Hosting, database, file-storage, and email-delivery providers acting on our instructions.</li><li>Restaurant staff responsible for reservations, kitchen operations, delivery, and customer support.</li><li>Professional advisers, payment or accounting services, and public authorities where legally required.</li><li>Google Maps only when you choose to load or open the map.</li></LegalList><p>Some providers may process information outside Cyprus or the European Economic Area. Where required, we rely on recognised safeguards for those transfers. We do not sell personal information.</p></>,
+    content: () => <><p>Information is available only to people and service providers who need it to operate the restaurant and website.</p><LegalList><li>Hosting, database, file-storage, and email-delivery providers acting on our instructions.</li><li>Restaurant staff responsible for reservations, kitchen operations, delivery, and customer support.</li><li>OpenFreeMap supplies checkout map tiles, and openrouteservice processes delivery coordinates to search addresses and calculate driving routes.</li><li>Google Maps only when you choose to load or open a Google map or delivery-pin link.</li><li>Professional advisers, payment or accounting services, and public authorities where legally required.</li></LegalList><p>Some providers may process information outside Cyprus or the European Economic Area. Where required, we rely on recognised safeguards for those transfers. We do not sell personal information.</p></>,
   },
   {
     id: 'retention-security',

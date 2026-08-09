@@ -147,6 +147,8 @@ model CustomerAddress {
   zone       String?
   city       String?  @default("Kissonerga")
   notes      String?
+  latitude   Decimal? @db.Decimal(10, 7)
+  longitude  Decimal? @db.Decimal(10, 7)
   isDefault  Boolean  @default(false)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
@@ -233,6 +235,8 @@ model Order {
   deliveryStreet           String
   deliveryZone             String?
   deliveryNotes            String?
+  deliveryLatitude         Decimal?             @db.Decimal(10, 7)
+  deliveryLongitude        Decimal?             @db.Decimal(10, 7)
   deliveryFeeConsentAt     DateTime?
   deliveryFeeConsentText   String?
   deliveryFeePolicyNearby  Decimal?             @db.Decimal(10, 2)
@@ -368,6 +372,10 @@ model StorefrontSettings {
   effectEndsAt          DateTime?
   nearbyDeliveryFee     Decimal        @default(3.00) @db.Decimal(10, 2)
   fartherDeliveryFee    Decimal        @default(3.50) @db.Decimal(10, 2)
+  restaurantLatitude    Decimal?       @db.Decimal(10, 7)
+  restaurantLongitude   Decimal?       @db.Decimal(10, 7)
+  nearbyDeliveryMaxKm   Decimal        @default(5.00) @db.Decimal(8, 2)
+  maximumDeliveryKm     Decimal        @default(15.00) @db.Decimal(8, 2)
   updatedAt             DateTime       @updatedAt
 }
 
