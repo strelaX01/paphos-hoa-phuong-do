@@ -1,11 +1,10 @@
 import { authorizeAdminRequest } from "@/lib/adminApiAuth";
 import { prisma } from "@/lib/prisma";
 import { reservationAdminSelect, serializeAdminReservation } from "@/lib/reservationAdminData";
+import { RESERVATION_STATUSES, reservationStatusFilter } from "@/lib/reservationStatus";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-const STATUSES = ["PENDING", "CONFIRMED", "SEATED", "COMPLETED", "CANCELLED", "NO_SHOW"];
 
 function readPositiveInteger(value, fallback, maximum) {
   const parsed = Number.parseInt(value || "", 10);
@@ -41,7 +40,7 @@ export async function GET(request) {
   const status = (searchParams.get("status") || "").trim().toUpperCase();
   const date = (searchParams.get("date") || "").trim();
 
-  if (status && !STATUSES.includes(status)) {
+  if (status && !RESERVATION_STATUSES.includes(status)) {
     return Response.json({ error: "Invalid reservation status." }, { status: 422 });
   }
   if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
@@ -49,7 +48,7 @@ export async function GET(request) {
   }
 
   const where = {
-    ...(status ? { status } : {}),
+    ...(status ? { status: reservationStatusFilter(status) } : {}),
     ...(date ? { date: dateRange(date) } : {}),
     ...(query ? {
       OR: [
@@ -62,7 +61,7 @@ export async function GET(request) {
 
   try {
     const todayRange = dateRange(getCyprusDate());
-    const [reservations, total, todayBookings, todaySeats, confirmed, pending] = await prisma.$transaction([
+    const [reservations, total, metrics] = await prisma.$transaction([
       prisma.reservation.findMany({
         where,
         orderBy: [{ createdAt: "desc" }, { id: "desc" }],
@@ -71,20 +70,25 @@ export async function GET(request) {
         select: reservationAdminSelect,
       }),
       prisma.reservation.count({ where }),
-      prisma.reservation.count({ where: { date: todayRange } }),
-      prisma.reservation.aggregate({ where: { date: todayRange }, _sum: { partySize: true } }),
-      prisma.reservation.count({ where: { status: "CONFIRMED" } }),
-      prisma.reservation.count({ where: { status: "PENDING" } }),
+      prisma.$queryRaw`
+        SELECT
+          COUNT(*) FILTER (WHERE "date" >= ${todayRange.gte} AND "date" < ${todayRange.lt})::int AS "todayBookings",
+          COALESCE(SUM("partySize") FILTER (WHERE "date" >= ${todayRange.gte} AND "date" < ${todayRange.lt}), 0)::int AS "todaySeats",
+          COUNT(*) FILTER (WHERE "status" IN (CAST('CONFIRMED' AS "ReservationStatus"), CAST('SEATED' AS "ReservationStatus")))::int AS "confirmed",
+          COUNT(*) FILTER (WHERE "status" = CAST('PENDING' AS "ReservationStatus"))::int AS "pending"
+        FROM "Reservation"
+      `,
     ]);
+    const summary = metrics[0];
 
     return Response.json({
       data: reservations.map(serializeAdminReservation),
       pagination: { page, limit, total, totalPages: Math.max(1, Math.ceil(total / limit)) },
       summary: {
-        todayBookings,
-        todaySeats: todaySeats._sum.partySize || 0,
-        confirmed,
-        pending,
+        todayBookings: summary.todayBookings,
+        todaySeats: summary.todaySeats,
+        confirmed: summary.confirmed,
+        pending: summary.pending,
       },
     }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {

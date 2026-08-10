@@ -1,4 +1,5 @@
 import { authorizeAdminRequest } from "@/lib/adminApiAuth";
+import { readAdminJson } from "@/lib/adminJsonRequest";
 import { prisma } from "@/lib/prisma";
 import { validateMenuCategoryInput } from "@/lib/validations/menuCategory";
 
@@ -56,13 +57,9 @@ export async function GET(request) {
 export async function POST(request) {
   const auth = await authorizeAdminRequest(request);
   if (auth.response) return auth.response;
-  let body;
-
-  try {
-    body = await request.json();
-  } catch {
-    return Response.json({ error: "Invalid JSON body." }, { status: 400 });
-  }
+  const parsed = await readAdminJson(request);
+  if (parsed.response) return parsed.response;
+  const body = parsed.data;
 
   const validation = validateMenuCategoryInput(body);
 

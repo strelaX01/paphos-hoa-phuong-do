@@ -18,7 +18,7 @@ export default function VisitUsSection({ restaurantData, openingStatus }) {
     <section id="visit-us" aria-label={`Visit ${profile.name}`} className="bg-[#1E1A18] py-18 lg:py-24">
       <div className="site-container">
         <div className="grid gap-10 lg:grid-cols-[1fr_1.05fr] lg:items-center">
-          <div>
+          <div data-home-reveal="rise">
             <span className="mb-3 block text-[11px] font-semibold uppercase tracking-[0.3em] text-[#D4A017]">Visit Us</span>
             <h2 className="font-display text-4xl font-bold leading-[1.08] text-white sm:text-5xl lg:text-[56px]">Plan your visit.</h2>
             <p className="mt-5 max-w-xl text-[15px] leading-relaxed text-white/55">Join us for Vietnamese food in a relaxed dining room, or call ahead for your next visit.</p>
@@ -39,8 +39,8 @@ export default function VisitUsSection({ restaurantData, openingStatus }) {
           </div>
 
           <div className="grid gap-3 sm:grid-cols-3">
-            {visitDetails.map(({ icon: Icon, isPhone, label, values }) => (
-              <article key={label} className="border border-white/10 bg-white/[0.04] p-5 text-white shadow-sm">
+            {visitDetails.map(({ icon: Icon, isPhone, label, values }, index) => (
+              <article key={label} data-home-reveal="rise" className="border border-white/10 bg-white/[0.04] p-5 text-white shadow-sm" style={{ '--home-reveal-delay': `${index * 80}ms` }}>
                 <div className="mb-5 flex size-10 items-center justify-center bg-[#8B1E1E] text-white"><Icon className="size-4" aria-hidden="true" /></div>
                 <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#D4A017]">{label}</p>
                 <div className="mt-3 space-y-1 text-[14px] leading-relaxed text-white/70">
@@ -57,7 +57,7 @@ export default function VisitUsSection({ restaurantData, openingStatus }) {
           </div>
         </div>
 
-        <div className="mt-10 flex flex-wrap items-center justify-between gap-4 border-t border-white/10 pt-6">
+        <div data-home-reveal="rise" className="mt-10 flex flex-wrap items-center justify-between gap-4 border-t border-white/10 pt-6">
           <p className="text-[11px] uppercase tracking-[0.2em] text-white/30">Reserve a table or order delivery during service hours</p>
           <div className="flex flex-wrap gap-4">
             <Link href="/book-table" className="text-[12px] font-semibold uppercase tracking-[0.18em] text-white/75 transition-colors hover:text-[#D4A017]">Book Table</Link>

@@ -25,7 +25,7 @@ export const orderAdminSelect = {
   prepTargetMins: true,
   createdAt: true,
   updatedAt: true,
-  items: { orderBy: { createdAt: "asc" }, select: { id: true, name: true, variantLabel: true, note: true, quantity: true, unitPrice: true, lineTotal: true } },
+  items: { orderBy: { createdAt: "asc" }, select: { id: true, menuItemId: true, variantId: true, name: true, variantLabel: true, note: true, quantity: true, unitPrice: true, lineTotal: true, menuItem: { select: { isActive: true, deliverable: true, category: { select: { isActive: true } } } }, variant: { select: { isActive: true } } } },
   timeline: { orderBy: { createdAt: "asc" }, select: { id: true, status: true, title: true, note: true, createdAt: true } },
 };
 
@@ -71,7 +71,7 @@ export function serializeAdminOrder(order) {
     deliveryFeeConsentText: order.deliveryFeeConsentText || "",
     deliveryFeePolicyNearby: order.deliveryFeePolicyNearby === null ? null : Number(order.deliveryFeePolicyNearby),
     deliveryFeePolicyFarther: order.deliveryFeePolicyFarther === null ? null : Number(order.deliveryFeePolicyFarther),
-    deliveryFeeConfirmed: Number(order.deliveryFee) > 0,
+    deliveryFeeConfirmed: order.distanceKm !== null || Number(order.deliveryFee) > 0,
     subtotal: Number(order.subtotal),
     deliveryFee: Number(order.deliveryFee),
     discountTotal: Number(order.discountTotal),
@@ -79,7 +79,12 @@ export function serializeAdminOrder(order) {
     prepTargetMins: order.prepTargetMins,
     createdAt: order.createdAt.toISOString(),
     updatedAt: order.updatedAt.toISOString(),
-    items: order.items.map((item) => ({ ...item, unitPrice: Number(item.unitPrice), lineTotal: Number(item.lineTotal) })),
+    items: order.items.map(({ menuItem, variant, ...item }) => ({
+      ...item,
+      available: Boolean(menuItem?.isActive && menuItem?.deliverable && menuItem.category?.isActive && (!item.variantId || variant?.isActive)),
+      unitPrice: Number(item.unitPrice),
+      lineTotal: Number(item.lineTotal),
+    })),
     timeline: order.timeline.map((event) => ({ ...event, createdAt: event.createdAt.toISOString() })),
   };
 }

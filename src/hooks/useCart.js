@@ -54,6 +54,9 @@ export function useCart() {
     setDeliveryPricing,
     nearbyDeliveryFee: deliveryPricing.nearbyDeliveryFee,
     fartherDeliveryFee: deliveryPricing.fartherDeliveryFee,
+    freeDeliveryEnabled: deliveryPricing.freeDeliveryEnabled,
+    freeDeliveryMaxKm: deliveryPricing.freeDeliveryMaxKm,
+    freeDeliveryMinimum: deliveryPricing.freeDeliveryMinimum,
     deliveryPricingStatus: deliveryPricing.status,
   }
 }

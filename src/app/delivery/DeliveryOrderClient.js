@@ -1,17 +1,19 @@
 'use client'
 
 import Image from 'next/image'
-import { CheckCircle2, Plus, RefreshCw, Utensils } from 'lucide-react'
+import { CheckCircle2, Plus, RefreshCw, SearchX, Utensils } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { createPortal } from 'react-dom'
 import { useSearchParams } from 'next/navigation'
 
 import CategoryScroller from '@/app/components/shared/CategoryScroller'
+import MenuSearchField from '@/app/components/shared/MenuSearchField'
 import PaginationControls from '@/app/components/shared/PaginationControls'
 import { CardGridSkeleton } from '@/app/components/shared/SkeletonBlocks'
 import { useCart } from '@/hooks/useCart'
 import { dedupeClientRequest } from '@/lib/dedupeClientRequest'
 import { DELIVERY_CONFIG } from '@/lib/deliveryConfig'
+import { menuItemMatchesQuery, normalizeMenuSearch } from '@/lib/menuSearch'
 
 const ITEMS_PER_PAGE = 6
 const emptySubscribe = () => () => {}
@@ -37,12 +39,14 @@ export default function DeliveryOrderClient() {
   const [menuLoading, setMenuLoading] = useState(true)
   const [menuError, setMenuError] = useState('')
   const [activeCategory, setActiveCategory] = useState('All')
+  const [query, setQuery] = useState('')
   const [page, setPage] = useState(1)
   const [isLoading, setIsLoading] = useState(false)
   const [flyItems, setFlyItems] = useState([])
   const [highlightedId, setHighlightedId] = useState(null)
   const [selectedVariants, setSelectedVariants] = useState({})
   const highlightRef = useRef(null)
+  const emptySearchRef = useRef(null)
   const flyIdRef = useRef(0)
   const cart = useCart()
   const { syncCatalog } = cart
@@ -53,6 +57,7 @@ export default function DeliveryOrderClient() {
     () => categories.map((category) => ({ key: category, label: category })),
     [categories]
   )
+  const normalizedQuery = normalizeMenuSearch(query)
 
   useEffect(() => {
     let active = true
@@ -95,11 +100,25 @@ export default function DeliveryOrderClient() {
     return () => window.clearTimeout(timer)
   }, [activeCategory, highlightedId, menuLoading, page])
 
-  const visibleItems = activeCategory === 'All'
-    ? deliveryItems
-    : deliveryItems.filter((item) => item.category === activeCategory)
+  const visibleItems = useMemo(() => {
+    if (normalizedQuery) {
+      return deliveryItems.filter((item) => menuItemMatchesQuery(item, item.category, normalizedQuery))
+    }
+    return activeCategory === 'All'
+      ? deliveryItems
+      : deliveryItems.filter((item) => item.category === activeCategory)
+  }, [activeCategory, deliveryItems, normalizedQuery])
   const totalPages = Math.max(1, Math.ceil(visibleItems.length / ITEMS_PER_PAGE))
   const pageItems = visibleItems.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE)
+
+  useEffect(() => {
+    if (!normalizedQuery || visibleItems.length || menuLoading) return undefined
+
+    const frame = window.requestAnimationFrame(() => {
+      emptySearchRef.current?.scrollIntoView({ block: 'center', behavior: 'auto' })
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [menuLoading, normalizedQuery, visibleItems.length])
 
   const updatePage = (nextPage) => {
     const safePage = Math.min(Math.max(nextPage, 1), totalPages)
@@ -113,6 +132,13 @@ export default function DeliveryOrderClient() {
     setActiveCategory(category)
     setPage(1)
     window.setTimeout(() => setIsLoading(false), 220)
+  }
+
+  const updateSearch = (nextQuery) => {
+    setQuery(nextQuery)
+    setPage(1)
+    setHighlightedId(null)
+    if (nextQuery.trim()) setActiveCategory('All')
   }
 
   const addWithAnimation = (event, item) => {
@@ -156,16 +182,27 @@ export default function DeliveryOrderClient() {
 
   return (
     <div className="min-w-0">
-      {!menuError && categories.length > 1 ? (
+      {!menuError && !menuLoading && deliveryItems.length ? (
         <div className="sticky top-[68px] z-30">
           <section className="relative left-1/2 w-screen -translate-x-1/2 border-y border-[#EDE5D0] bg-[#FAF6EE]/97 backdrop-blur-md">
-            <div className="site-container">
-              <CategoryScroller
-                activeKey={activeCategory}
-                ariaLabel="Delivery categories"
-                items={categoryItems}
-                onSelect={updateCategory}
-              />
+            <div className="site-container py-2.5">
+              <div className="grid min-w-0 gap-2.5 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-center">
+                <div className="order-2 min-w-0 lg:order-1">
+                  {normalizedQuery ? (
+                    <div className="flex h-10 items-center justify-between border-l-2 border-[#9d2023] px-3 text-sm text-[#6b6560]" role="status" aria-live="polite">
+                      <span><strong className="text-[#2b241e]">{visibleItems.length}</strong> {visibleItems.length === 1 ? 'dish' : 'dishes'} found</span>
+                      <span className="hidden text-xs text-[#9a9085] sm:inline">Search covers all categories</span>
+                    </div>
+                  ) : categories.length > 1 ? (
+                    <CategoryScroller activeKey={activeCategory} ariaLabel="Delivery categories" items={categoryItems} onSelect={updateCategory} />
+                  ) : (
+                    <p className="px-1 text-xs font-semibold uppercase tracking-[0.16em] text-[#8b6f47]">Delivery menu</p>
+                  )}
+                </div>
+                <div className="order-1 lg:order-2">
+                  <MenuSearchField value={query} onChange={updateSearch} />
+                </div>
+              </div>
             </div>
           </section>
         </div>
@@ -183,7 +220,11 @@ export default function DeliveryOrderClient() {
         ) : menuLoading || isLoading ? (
           <CardGridSkeleton count={Math.min(ITEMS_PER_PAGE, visibleItems.length || ITEMS_PER_PAGE)} />
         ) : pageItems.length === 0 ? (
-          <div className="flex min-h-64 flex-col items-center justify-center border border-dashed border-[#E8DFC8] p-6 text-center"><Utensils className="size-8 text-[#8B1E1E]" /><p className="mt-3 font-semibold">No delivery dishes are available.</p></div>
+          <div ref={normalizedQuery ? emptySearchRef : null} className={`flex flex-col items-center justify-center border-y border-[#E8DFC8] p-6 text-center ${normalizedQuery ? 'min-h-[55svh] scroll-mt-44' : 'min-h-64'}`}>
+            {normalizedQuery ? <SearchX className="size-8 text-[#8B1E1E]" /> : <Utensils className="size-8 text-[#8B1E1E]" />}
+            <p className="mt-3 font-semibold">{normalizedQuery ? 'No matching dishes.' : 'No delivery dishes are available.'}</p>
+            {normalizedQuery ? <button type="button" onClick={() => updateSearch('')} className="mt-5 border border-[#9d2023] px-5 py-2.5 text-[11px] font-bold uppercase tracking-[0.14em] text-[#9d2023] transition-colors hover:bg-[#9d2023] hover:text-white">Clear search</button> : null}
+          </div>
         ) : (
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 md:gap-5">
             {pageItems.map((item) => {
@@ -216,6 +257,7 @@ export default function DeliveryOrderClient() {
                       Your selected dish
                     </div>
                   ) : null}
+                  {normalizedQuery ? <p className="mb-1 text-[9px] font-bold uppercase tracking-[0.14em] text-[#9d2023]">{item.category}</p> : null}
                   <div className="mb-2 flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <h3 className="font-display text-lg font-bold leading-tight text-[#2B2B2B] sm:text-xl">{item.name}</h3>

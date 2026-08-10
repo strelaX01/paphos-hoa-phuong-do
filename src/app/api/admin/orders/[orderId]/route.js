@@ -1,4 +1,5 @@
 import { authorizeAdminRequest } from "@/lib/adminApiAuth";
+import { readAdminJson } from "@/lib/adminJsonRequest";
 import { DELIVERY_CONFIG } from "@/lib/deliveryConfig";
 import { orderAdminSelect, orderDriverSelect, serializeAdminOrder, serializeDriverOrder } from "@/lib/orderAdminData";
 import { ADMIN_NEXT_STATUS, DRIVER_NEXT_STATUS, ORDER_STATUSES } from "@/lib/orderStatus";
@@ -50,18 +51,22 @@ function validateOrderEdit(edit, allowFullEdit) {
   const seen = new Set();
   let totalQuantity = 0;
   const items = rawItems.map((item) => {
-    const id = typeof item?.id === "string" ? item.id.trim() : "";
+    const orderItemId = typeof item?.orderItemId === "string" ? item.orderItemId.trim() : "";
+    const menuItemId = typeof item?.menuItemId === "string" ? item.menuItemId.trim() : "";
+    const variantId = typeof item?.variantId === "string" && item.variantId.trim() ? item.variantId.trim() : null;
     const quantity = Number(item?.quantity);
     const note = text(item?.note, 300);
-    if (!id || seen.has(id)) errors.push("Order items are invalid or duplicated.");
+    const itemKey = orderItemId ? `order:${orderItemId}` : `menu:${menuItemId}:${variantId || "base"}`;
+    if (Boolean(orderItemId) === Boolean(menuItemId) || seen.has(itemKey)) errors.push("Order items are invalid or duplicated.");
+    if (orderItemId && variantId) errors.push("Existing order items cannot change their price option directly.");
     if (!Number.isInteger(quantity) || quantity < 1 || quantity > DELIVERY_CONFIG.maxItemQuantity) errors.push(`Each quantity must be between 1 and ${DELIVERY_CONFIG.maxItemQuantity}.`);
     if (note.length > 300) errors.push("Item notes must be 300 characters or fewer.");
-    seen.add(id);
+    seen.add(itemKey);
     totalQuantity += Number.isInteger(quantity) ? quantity : 0;
-    return { id, quantity, note: note || null };
+    return { orderItemId: orderItemId || null, menuItemId: menuItemId || null, variantId, quantity, note: note || null };
   });
   if (totalQuantity > DELIVERY_CONFIG.maxTotalQuantity) errors.push(`An order can contain at most ${DELIVERY_CONFIG.maxTotalQuantity} total items.`);
-  return { data: { ...data, customerName, customerEmail: customerEmail || null, customerPhone, items }, errors };
+  return { data: { ...data, customerName, customerEmail: customerEmail || null, customerPhone, items, customerConfirmedItemChanges: edit?.customerConfirmedItemChanges === true }, errors };
 }
 
 export async function PATCH(request, context) {
@@ -71,8 +76,9 @@ export async function PATCH(request, context) {
   const account = auth.account;
   const isDriver = account.role === "DRIVER";
 
-  let body;
-  try { body = await request.json(); } catch { return Response.json({ error: "Invalid JSON body." }, { status: 400 }); }
+  const parsed = await readAdminJson(request);
+  if (parsed.response) return parsed.response;
+  const body = parsed.data;
   const nextStatus = typeof body?.status === "string" ? body.status.trim().toUpperCase() : "";
   const hasDriver = Object.prototype.hasOwnProperty.call(body || {}, "driverId");
   const hasDeliveryFee = Object.prototype.hasOwnProperty.call(body || {}, "deliveryFee");
@@ -90,7 +96,7 @@ export async function PATCH(request, context) {
     const updated = await prisma.$transaction(async (tx) => {
       const current = await tx.order.findUnique({
         where: { id: orderId },
-        select: { status: true, paymentMethod: true, customerName: true, customerPhone: true, customerEmail: true, deliveryStreet: true, deliveryZone: true, deliveryNotes: true, subtotal: true, discountTotal: true, deliveryFee: true, deliveryFeePolicyNearby: true, deliveryFeePolicyFarther: true, items: { orderBy: { createdAt: "asc" }, select: { id: true, name: true, variantLabel: true, note: true, quantity: true, unitPrice: true } } },
+        select: { status: true, paymentMethod: true, customerName: true, customerPhone: true, customerEmail: true, deliveryStreet: true, deliveryZone: true, deliveryNotes: true, distanceKm: true, subtotal: true, discountTotal: true, deliveryFee: true, deliveryFeePolicyNearby: true, deliveryFeePolicyFarther: true, items: { orderBy: { createdAt: "asc" }, select: { id: true, menuItemId: true, variantId: true, name: true, variantLabel: true, note: true, quantity: true, unitPrice: true } } },
       });
       if (!current) return null;
       const allowFullEdit = FULL_EDIT_STATUSES.includes(current.status);
@@ -107,7 +113,7 @@ export async function PATCH(request, context) {
       const expectedNextStatus = (isDriver ? DRIVER_NEXT_STATUS : ADMIN_NEXT_STATUS)[current.status];
       const canCancel = !isDriver && nextStatus === "CANCELLED" && ["PENDING", "PREPARING", "PENDING_PICKUP"].includes(current.status);
       if (nextStatus && nextStatus !== current.status && nextStatus !== expectedNextStatus && !canCancel) throw Object.assign(new Error(`Cannot move an order from ${current.status} to ${nextStatus}.`), { code: "INVALID_TRANSITION" });
-      const deliveryFeeConfirmed = Number(current.deliveryFee) > 0;
+      const deliveryFeeConfirmed = current.distanceKm !== null || Number(current.deliveryFee) > 0;
       if (hasDeliveryFee && deliveryFeeConfirmed) throw Object.assign(new Error("The delivery fee was already verified automatically and cannot be changed."), { code: "ORDER_LOCKED" });
       if (nextStatus === "PREPARING" && !deliveryFeeConfirmed && !hasDeliveryFee) throw Object.assign(new Error("Set the final delivery fee before confirming this order."), { code: "INVALID_EDIT" });
       const now = new Date();
@@ -136,18 +142,70 @@ export async function PATCH(request, context) {
         if (allowFullEdit) {
           if (edit.customerName !== current.customerName || edit.customerPhone !== current.customerPhone || (edit.customerEmail || "") !== (current.customerEmail || "")) changedSections.push("customer details");
           const currentById = new Map(current.items.map((item) => [item.id, item]));
-          const submittedIds = new Set(edit.items.map((item) => item.id));
-          if (edit.items.some((item) => !currentById.has(item.id))) throw Object.assign(new Error("One or more order items no longer exist."), { code: "INVALID_EDIT" });
+          const existingItems = edit.items.filter((item) => item.orderItemId);
+          const newItems = edit.items.filter((item) => item.menuItemId);
+          const submittedIds = new Set(existingItems.map((item) => item.orderItemId));
+          if (existingItems.some((item) => !currentById.has(item.orderItemId))) throw Object.assign(new Error("One or more order items no longer exist."), { code: "INVALID_EDIT" });
           const removedIds = current.items.filter((item) => !submittedIds.has(item.id)).map((item) => item.id);
-          const itemChanges = edit.items.filter((item) => {
-            const existing = currentById.get(item.id);
+          const itemChanges = existingItems.filter((item) => {
+            const existing = currentById.get(item.orderItemId);
             return existing.quantity !== item.quantity || (existing.note || "") !== (item.note || "");
           });
-          if (removedIds.length || itemChanges.length) changedSections.push("order items");
-          const subtotal = edit.items.reduce((sum, item) => sum + Number(currentById.get(item.id).unitPrice) * item.quantity, 0);
+          const requestedMenuIds = [...new Set(newItems.map((item) => item.menuItemId))];
+          const menuItems = requestedMenuIds.length ? await tx.menuItem.findMany({
+            where: { id: { in: requestedMenuIds } },
+            select: {
+              id: true,
+              name: true,
+              price: true,
+              isActive: true,
+              deliverable: true,
+              category: { select: { isActive: true } },
+              variants: { select: { id: true, label: true, price: true, isActive: true } },
+            },
+          }) : [];
+          const menuById = new Map(menuItems.map((item) => [item.id, item]));
+          const pricedNewItems = newItems.map((item) => {
+            const menuItem = menuById.get(item.menuItemId);
+            if (!menuItem || !menuItem.isActive || !menuItem.deliverable || !menuItem.category.isActive) {
+              throw Object.assign(new Error("One or more replacement dishes are no longer available for delivery."), { code: "INVALID_EDIT" });
+            }
+            const activeVariants = menuItem.variants.filter((variant) => variant.isActive);
+            const variant = item.variantId ? activeVariants.find((entry) => entry.id === item.variantId) : null;
+            if ((menuItem.variants.length && !variant) || (!menuItem.variants.length && item.variantId)) {
+              throw Object.assign(new Error("Select a valid price option for each replacement dish."), { code: "INVALID_EDIT" });
+            }
+            const unitPrice = Number(variant?.price ?? menuItem.price);
+            return {
+              ...item,
+              name: menuItem.name,
+              variantLabel: variant?.label || null,
+              unitPrice,
+            };
+          });
+          const finalProductKeys = [
+            ...existingItems.map((item) => {
+              const existing = currentById.get(item.orderItemId);
+              return existing.menuItemId ? `${existing.menuItemId}:${existing.variantId || "base"}` : `snapshot:${existing.id}`;
+            }),
+            ...pricedNewItems.map((item) => `${item.menuItemId}:${item.variantId || "base"}`),
+          ];
+          if (new Set(finalProductKeys).size !== finalProductKeys.length) {
+            throw Object.assign(new Error("The same dish and price option cannot appear twice. Increase its quantity instead."), { code: "INVALID_EDIT" });
+          }
+          const quantityChanged = itemChanges.some((item) => currentById.get(item.orderItemId).quantity !== item.quantity);
+          const customerConfirmationRequired = Boolean(removedIds.length || pricedNewItems.length || quantityChanged);
+          if (customerConfirmationRequired && !edit.customerConfirmedItemChanges) {
+            throw Object.assign(new Error("Confirm that the customer agreed to the item changes before saving."), { code: "INVALID_EDIT" });
+          }
+          if (removedIds.length || itemChanges.length || pricedNewItems.length) changedSections.push("order items");
+          const existingSubtotal = existingItems.reduce((sum, item) => sum + Number(currentById.get(item.orderItemId).unitPrice) * item.quantity, 0);
+          const newSubtotal = pricedNewItems.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
+          const subtotal = existingSubtotal + newSubtotal;
           const itemMutations = {
             ...(removedIds.length ? { deleteMany: { id: { in: removedIds } } } : {}),
-            ...(itemChanges.length ? { update: itemChanges.map((item) => ({ where: { id: item.id }, data: { quantity: item.quantity, note: item.note, lineTotal: (Number(currentById.get(item.id).unitPrice) * item.quantity).toFixed(2) } })) } : {}),
+            ...(itemChanges.length ? { update: itemChanges.map((item) => ({ where: { id: item.orderItemId }, data: { quantity: item.quantity, note: item.note, lineTotal: (Number(currentById.get(item.orderItemId).unitPrice) * item.quantity).toFixed(2) } })) } : {}),
+            ...(pricedNewItems.length ? { create: pricedNewItems.map((item) => ({ menuItemId: item.menuItemId, variantId: item.variantId, variantLabel: item.variantLabel, name: item.name, note: item.note, quantity: item.quantity, unitPrice: item.unitPrice.toFixed(2), lineTotal: (item.unitPrice * item.quantity).toFixed(2) })) } : {}),
           };
           editData = {
             ...editData,
@@ -156,8 +214,9 @@ export async function PATCH(request, context) {
             customerEmail: edit.customerEmail,
             subtotal: subtotal.toFixed(2),
             total: (Math.max(0, subtotal - Number(current.discountTotal)) + (hasDeliveryFee ? deliveryFeeCents / 100 : deliveryFeeConfirmed ? Number(current.deliveryFee) : 0)).toFixed(2),
-            ...(removedIds.length || itemChanges.length ? { items: itemMutations } : {}),
+            ...(removedIds.length || itemChanges.length || pricedNewItems.length ? { items: itemMutations } : {}),
           };
+          if (customerConfirmationRequired) timelineCreates.push({ title: "Customer approved item changes", note: `Confirmed by phone and recorded by admin ${account.name}.` });
         }
         if (!changedSections.length) throw Object.assign(new Error("No order changes were detected."), { code: "INVALID_EDIT" });
         timelineCreates.push({ title: "Order edited", note: `Updated ${changedSections.join(", ")} by admin.` });

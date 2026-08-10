@@ -27,7 +27,7 @@ export default function DiningPromiseSection() {
     >
       <div className="site-container">
         <div className="grid gap-10 lg:grid-cols-[0.8fr_1.2fr] lg:items-center">
-          <div>
+          <div data-home-reveal="rise">
             <span className="mb-3 block text-[11px] font-semibold uppercase tracking-[0.3em] text-[#D4A017]">
               Our Promise
             </span>
@@ -40,8 +40,8 @@ export default function DiningPromiseSection() {
           </div>
 
           <div className="divide-y divide-[#D8CBAE] border-y border-[#D8CBAE]">
-            {promises.map(({ icon: Icon, title, text }) => (
-              <div key={title} className="grid gap-4 py-6 sm:grid-cols-[auto_0.7fr_1.3fr] sm:items-center">
+            {promises.map(({ icon: Icon, title, text }, index) => (
+              <div key={title} data-home-reveal="from-right" className="grid gap-4 py-6 sm:grid-cols-[auto_0.7fr_1.3fr] sm:items-center" style={{ '--home-reveal-delay': `${index * 80}ms` }}>
                 <span className="flex size-11 items-center justify-center bg-[#8B1E1E] text-white">
                   <Icon className="size-5" aria-hidden="true" />
                 </span>

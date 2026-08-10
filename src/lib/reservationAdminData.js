@@ -1,3 +1,5 @@
+import { normalizeReservationStatus } from "@/lib/reservationStatus";
+
 export const reservationAdminSelect = {
   id: true,
   customerName: true,
@@ -22,7 +24,7 @@ export function serializeAdminReservation(reservation) {
     guests: reservation.partySize,
     date: reservation.date.toISOString().slice(0, 10),
     time: reservation.time,
-    status: reservation.status,
+    status: normalizeReservationStatus(reservation.status),
     requests: reservation.requests || "",
     internalNote: reservation.internalNote || "",
     createdAt: reservation.createdAt.toISOString(),

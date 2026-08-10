@@ -10,12 +10,30 @@ export async function GET(request) {
   const isDriver = auth.account.role === "DRIVER";
 
   try {
-    const [pending, latest] = await prisma.$transaction([
-      prisma.order.count({ where: { status: isDriver ? "PENDING_PICKUP" : "PENDING" } }),
-      prisma.order.findFirst({ orderBy: { createdAt: "desc" }, select: { createdAt: true } }),
-    ]);
+    const pendingStatus = isDriver ? "PENDING_PICKUP" : "PENDING";
+    const [summary] = isDriver
+      ? await prisma.$queryRaw`
+          SELECT
+            COUNT(*) FILTER (WHERE "status" = CAST(${pendingStatus} AS "OrderStatus"))::int AS "pendingOrders",
+            MAX("createdAt") AS "latestOrderCreatedAt",
+            0::int AS "pendingReservations",
+            NULL::timestamp AS "latestReservationCreatedAt"
+          FROM "Order"
+        `
+      : await prisma.$queryRaw`
+          SELECT
+            (SELECT COUNT(*)::int FROM "Order" WHERE "status" = CAST(${pendingStatus} AS "OrderStatus")) AS "pendingOrders",
+            (SELECT MAX("createdAt") FROM "Order") AS "latestOrderCreatedAt",
+            (SELECT COUNT(*)::int FROM "Reservation" WHERE "status" = CAST('PENDING' AS "ReservationStatus")) AS "pendingReservations",
+            (SELECT MAX("createdAt") FROM "Reservation") AS "latestReservationCreatedAt"
+        `;
     return Response.json({
-      data: { pending, latestCreatedAt: latest?.createdAt.toISOString() || null },
+      data: {
+        pending: summary.pendingOrders,
+        latestCreatedAt: summary.latestOrderCreatedAt?.toISOString() || null,
+        pendingReservations: summary.pendingReservations,
+        latestReservationCreatedAt: summary.latestReservationCreatedAt?.toISOString() || null,
+      },
     }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     console.error("GET /api/admin/orders/summary", error);

@@ -22,7 +22,7 @@ export default function AboutSection() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-0 items-stretch">
 
           {/* ── Image side ─────────────────────────────────── */}
-          <div className="relative min-h-[380px] lg:min-h-[600px] order-2 lg:order-1 lg:-ml-6">
+          <div data-home-reveal="image-left" className="relative min-h-[380px] lg:min-h-[600px] order-2 lg:order-1 lg:-ml-6">
             <Image
               src="/images/hpd3.png"
               alt="Intimate dining room at Hoa Phượng Đỏ restaurant"
@@ -41,7 +41,7 @@ export default function AboutSection() {
           </div>
 
           {/* ── Content side ───────────────────────────────── */}
-          <div className="order-1 lg:order-2 py-16 lg:py-20 lg:pl-14 xl:pl-20 flex flex-col justify-center">
+          <div data-home-reveal="rise" className="order-1 lg:order-2 py-16 lg:py-20 lg:pl-14 xl:pl-20 flex flex-col justify-center">
             <span className="block text-[#D4A017] text-[11px] font-semibold tracking-[0.3em] uppercase mb-4">
               Our Story
             </span>
@@ -65,7 +65,7 @@ export default function AboutSection() {
             {/* Pillars */}
             <ul className="space-y-4 mb-8">
               {pillars.map((p, i) => (
-                <li key={i} className="flex items-start gap-4">
+                <li key={i} data-home-reveal="rise" className="flex items-start gap-4" style={{ '--home-reveal-delay': `${i * 70}ms` }}>
                   <span className="flex-shrink-0 mt-1 w-4 h-4 rounded-full border border-[#D4A017]/50 flex items-center justify-center">
                     <span className="w-1.5 h-1.5 rounded-full bg-[#D4A017]" />
                   </span>

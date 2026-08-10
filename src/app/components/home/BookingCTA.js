@@ -24,7 +24,7 @@ export default function BookingCTA({ restaurantProfile, openingStatus }) {
       </div>
 
       <div className="site-container relative z-10 flex items-center py-24 lg:py-32">
-        <div className="max-w-lg">
+        <div data-home-reveal="rise" className="max-w-lg">
           <div className="mb-5 flex items-center gap-3">
             <span className="block h-px w-7 bg-[#D4A017]" />
             <span className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[#D4A017]">Reservations</span>

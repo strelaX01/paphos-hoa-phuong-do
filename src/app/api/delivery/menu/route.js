@@ -35,6 +35,9 @@ export async function GET() {
         currency: pricing.currency,
         nearbyDeliveryFee: pricing.nearbyDeliveryFee,
         fartherDeliveryFee: pricing.fartherDeliveryFee,
+        freeDeliveryEnabled: pricing.freeDeliveryEnabled,
+        freeDeliveryMaxKm: pricing.freeDeliveryMaxKm,
+        freeDeliveryMinimum: pricing.freeDeliveryMinimum,
         availability: getDeliveryAvailability(restaurantData.openingHours),
       },
     }, { headers: { "Cache-Control": "no-store" } });

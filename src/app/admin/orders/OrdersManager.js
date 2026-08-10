@@ -1,8 +1,8 @@
 "use client"
 
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react"
-import { createPortal } from "react-dom"
-import { ChevronLeft, ChevronRight, ClipboardList, LoaderCircle, MapPinned, Minus, PackageCheck, Pencil, Plus, Printer, RefreshCw, Search, Timer, Trash2, Truck, WalletCards, X } from "lucide-react"
+import { createPortal, flushSync } from "react-dom"
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, ClipboardList, LoaderCircle, MapPinned, Minus, PackageCheck, Pencil, Plus, Printer, RefreshCw, Search, Timer, Trash2, Truck, WalletCards, X } from "lucide-react"
 
 import AdminShell from "@/app/admin/_components/AdminShell"
 import { useAdminSession } from "@/app/admin/_components/AdminSession"
@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { CONTACT } from "@/lib/constants/index.js"
 import { dedupeClientRequest } from "@/lib/dedupeClientRequest"
+import { DELIVERY_CONFIG } from "@/lib/deliveryConfig"
 import { ADMIN_NEXT_STATUS, DRIVER_NEXT_STATUS, DRIVER_ORDER_STATUSES, formatOrderStatus, ORDER_ACTION_LABELS, ORDER_STATUSES } from "@/lib/orderStatus"
 
 const statusVariant = { PENDING: "warning", PREPARING: "preparing", PENDING_PICKUP: "info", EN_ROUTE: "default", DELIVERED: "success", CANCELLED: "destructive" }
@@ -51,7 +52,9 @@ export default function OrdersManager() {
       showToast("Set the final delivery fee before printing the invoice.", "error")
       return
     }
-    setInvoice({ order, autoPrint: true })
+    // Keep print() in the original click event so mobile browsers retain user activation.
+    flushSync(() => setInvoice({ order }))
+    window.print()
   }
 
   useEffect(() => {
@@ -122,7 +125,7 @@ export default function OrdersManager() {
     </div>
     {selected ? <OrderDetailModal order={selected} busy={busyId === selected.id} onClose={() => setSelected(null)} onPrint={() => printInvoice(selected)} onSaveEdit={(edit) => updateOrder(selected, { edit }, "Order updated.")} onSaveFee={(deliveryFee) => updateOrder(selected, { deliveryFee }, "Delivery fee updated.")} /> : null}
     {confirmCancel ? <CancelModal order={confirmCancel} busy={busyId === confirmCancel.id} onClose={() => setConfirmCancel(null)} onConfirm={() => updateOrder(confirmCancel, { status: "CANCELLED" }, "Order cancelled.")} /> : null}
-    {invoice ? <InvoiceModal order={invoice.order} autoPrint={invoice.autoPrint} onClose={() => setInvoice(null)} /> : null}
+    {invoice ? <InvoiceModal order={invoice.order} onClose={() => setInvoice(null)} /> : null}
   </AdminShell>
 }
 
@@ -214,7 +217,7 @@ function OrderDetailModal({ busy, onClose, onPrint, onSaveEdit, onSaveFee, order
         {order.deliveryNotes ? <div><p className="text-xs font-semibold uppercase text-[#756D62]">Delivery notes</p><p className="mt-1 whitespace-pre-wrap text-sm">{order.deliveryNotes}</p></div> : null}
         <div className="overflow-x-auto"><table className="w-full min-w-[560px] text-sm"><thead><tr className="border-b border-[#E4DAC9] text-left text-xs uppercase text-[#756D62]"><th className="py-2">Dish</th><th>Note</th><th>Qty</th><th>Unit</th><th className="text-right">Total</th></tr></thead><tbody>{order.items.map((item) => <tr key={item.id} className="border-b border-[#EFE7DA]"><td className="py-3 font-semibold">{item.name}{item.variantLabel ? <span className="mt-0.5 block text-xs font-normal text-[#8B1E1E]">{item.variantLabel}</span> : null}</td><td className="text-[#756D62]">{item.note || "-"}</td><td>{item.quantity}</td><td>{formatMoney(item.unitPrice)}</td><td className="text-right font-semibold">{formatMoney(item.lineTotal)}</td></tr>)}</tbody></table></div>
       </>}
-      <div className="grid items-start gap-4 md:grid-cols-[1fr_20rem]">
+      {!editing ? <div className="grid items-start gap-4 md:grid-cols-[1fr_20rem]">
         {order.deliveryFeeConfirmed ? (
           <div className="border border-[#E4DAC9] bg-[#FAF7F0] p-4">
             <p className="text-sm font-semibold">Calculated delivery fee</p>
@@ -229,7 +232,7 @@ function OrderDetailModal({ busy, onClose, onPrint, onSaveEdit, onSaveFee, order
           </form>
         )}
         <div className="space-y-2 border border-[#E4DAC9] bg-[#FDFAF4] p-4 text-sm"><Price label="Subtotal" value={order.subtotal} />{Number(order.discountTotal) > 0 ? <Price label="Discount" value={-Number(order.discountTotal)} /> : null}{selectedDeliveryFee !== null ? <><Price label="Delivery" value={selectedDeliveryFee} /><Price label={order.deliveryFeeConfirmed ? "Total" : "Total preview"} value={previewTotal} strong /></> : <PendingPrice />}</div>
-      </div>
+      </div> : null}
       <div><h3 className="font-display text-lg font-semibold">Timeline</h3><div className="mt-3 space-y-3">{order.timeline.map((event) => <div key={event.id} className="border-l-2 border-[#D4A017] pl-3"><p className="text-sm font-semibold">{event.title}</p><p className="text-xs text-[#756D62]">{formatDateTime(event.createdAt)}{event.note ? ` | ${event.note}` : ""}</p></div>)}</div></div>
     </div>
   </Modal>
@@ -237,9 +240,50 @@ function OrderDetailModal({ busy, onClose, onPrint, onSaveEdit, onSaveFee, order
 
 function OrderEditForm({ busy, onCancel, onSave, order }) {
   const fullEdit = order.status === "PENDING"
-  const [form, setForm] = useState({ customerName: order.customerName, customerPhone: order.customerPhone, customerEmail: order.customerEmail || "", deliveryStreet: order.deliveryStreet, deliveryZone: order.deliveryZone || "", deliveryNotes: order.deliveryNotes || "", items: order.items.map((item) => ({ id: item.id, name: item.name, variantLabel: item.variantLabel, note: item.note || "", quantity: item.quantity, unitPrice: item.unitPrice })) })
+  const [form, setForm] = useState({ customerName: order.customerName, customerPhone: order.customerPhone, customerEmail: order.customerEmail || "", deliveryStreet: order.deliveryStreet, deliveryZone: order.deliveryZone || "", deliveryNotes: order.deliveryNotes || "", items: order.items.map((item) => ({ key: item.id, orderItemId: item.id, menuItemId: item.menuItemId, variantId: item.variantId, name: item.name, variantLabel: item.variantLabel, note: item.note || "", quantity: item.quantity, unitPrice: item.unitPrice, available: item.available, isNew: false })) })
+  const [customerConfirmed, setCustomerConfirmed] = useState(false)
+  const originalQuantities = useMemo(() => new Map(order.items.map((item) => [item.id, item.quantity])), [order.items])
+  const itemsChanged = useMemo(() => {
+    if (form.items.length !== order.items.length || form.items.some((item) => item.isNew)) return true
+    return form.items.some((item) => originalQuantities.get(item.orderItemId) !== item.quantity)
+  }, [form.items, order.items.length, originalQuantities])
+  const subtotalPreview = form.items.reduce((sum, item) => sum + Number(item.unitPrice) * item.quantity, 0)
+  const totalQuantity = form.items.reduce((sum, item) => sum + item.quantity, 0)
+  const discountPreview = Number(order.discountTotal || 0)
+  const deliveryFeePreview = Number(order.deliveryFee || 0)
+  const totalPreview = Math.max(0, subtotalPreview - discountPreview) + deliveryFeePreview
   const updateField = (field, value) => setForm((current) => ({ ...current, [field]: value }))
-  const updateItem = (id, changes) => setForm((current) => ({ ...current, items: current.items.map((item) => item.id === id ? { ...item, ...changes } : item) }))
+  const updateItem = (key, changes) => setForm((current) => ({ ...current, items: current.items.map((item) => item.key === key ? { ...item, ...changes } : item) }))
+  const removeItem = (key) => setForm((current) => ({ ...current, items: current.items.filter((entry) => entry.key !== key) }))
+  const addItem = (menuItem, variant = null) => {
+    const variantId = variant?.id || null
+    setForm((current) => {
+      const currentTotal = current.items.reduce((sum, item) => sum + item.quantity, 0)
+      if (currentTotal >= DELIVERY_CONFIG.maxTotalQuantity) return current
+      const existingIndex = current.items.findIndex((item) => item.menuItemId === menuItem.id && (item.variantId || null) === variantId)
+      if (existingIndex >= 0) {
+        const existing = current.items[existingIndex]
+        if (existing.quantity >= DELIVERY_CONFIG.maxItemQuantity) return current
+        return { ...current, items: current.items.map((item, index) => index === existingIndex ? { ...item, quantity: item.quantity + 1 } : item) }
+      }
+      return {
+        ...current,
+        items: [...current.items, {
+          key: `new:${menuItem.id}:${variantId || "base"}`,
+          orderItemId: null,
+          menuItemId: menuItem.id,
+          variantId,
+          name: menuItem.name,
+          variantLabel: variant?.label || null,
+          note: "",
+          quantity: 1,
+          unitPrice: Number(variant?.price ?? menuItem.price),
+          available: true,
+          isNew: true,
+        }],
+      }
+    })
+  }
 
   const submit = (event) => {
     event.preventDefault()
@@ -247,7 +291,7 @@ function OrderEditForm({ busy, onCancel, onSave, order }) {
       deliveryStreet: form.deliveryStreet,
       deliveryZone: form.deliveryZone,
       deliveryNotes: form.deliveryNotes,
-      ...(fullEdit ? { customerName: form.customerName, customerPhone: form.customerPhone, customerEmail: form.customerEmail, items: form.items.map(({ id, note, quantity }) => ({ id, note, quantity })) } : {}),
+      ...(fullEdit ? { customerName: form.customerName, customerPhone: form.customerPhone, customerEmail: form.customerEmail, customerConfirmedItemChanges: customerConfirmed, items: form.items.map((item) => item.isNew ? { menuItemId: item.menuItemId, variantId: item.variantId, note: item.note, quantity: item.quantity } : { orderItemId: item.orderItemId, note: item.note, quantity: item.quantity }) } : {}),
     })
   }
 
@@ -256,32 +300,48 @@ function OrderEditForm({ busy, onCancel, onSave, order }) {
     {fullEdit ? <div className="grid gap-4 md:grid-cols-3"><OrderField label="Customer name"><input required minLength={2} maxLength={100} value={form.customerName} onChange={(event) => updateField("customerName", event.target.value)} className={orderFieldClass} /></OrderField><OrderField label="Phone"><input required type="tel" minLength={6} maxLength={30} value={form.customerPhone} onChange={(event) => updateField("customerPhone", event.target.value)} className={orderFieldClass} /></OrderField><OrderField label="Email"><input type="email" maxLength={254} value={form.customerEmail} onChange={(event) => updateField("customerEmail", event.target.value)} className={orderFieldClass} /></OrderField></div> : null}
     <div className="grid gap-4 md:grid-cols-2"><OrderField label="Delivery address"><input required minLength={5} maxLength={200} value={form.deliveryStreet} onChange={(event) => updateField("deliveryStreet", event.target.value)} className={orderFieldClass} /></OrderField><OrderField label="Area"><input required minLength={2} maxLength={100} value={form.deliveryZone} onChange={(event) => updateField("deliveryZone", event.target.value)} className={orderFieldClass} /></OrderField></div>
     <OrderField label="Delivery notes"><textarea rows={3} maxLength={1000} value={form.deliveryNotes} onChange={(event) => updateField("deliveryNotes", event.target.value)} className="w-full resize-y rounded-md border border-[#E4DAC9] bg-white px-3 py-2 text-sm outline-none focus:border-[#8B1E1E]" /></OrderField>
-    {fullEdit ? <div><p className="text-sm font-semibold">Order items</p><div className="mt-2 divide-y divide-[#E4DAC9] border border-[#E4DAC9] bg-white">{form.items.map((item) => <div key={item.id} className="grid gap-3 p-3 sm:grid-cols-[minmax(10rem,1fr)_auto_2fr_auto] sm:items-center"><div><p className="font-semibold">{item.name}</p>{item.variantLabel ? <p className="text-xs font-semibold text-[#8B1E1E]">{item.variantLabel}</p> : null}<p className="text-xs text-[#756D62]">{formatMoney(item.unitPrice)} each</p></div><div className="flex items-center gap-1"><Button type="button" variant="outline" size="icon-sm" onClick={() => updateItem(item.id, { quantity: Math.max(1, item.quantity - 1) })} disabled={busy || item.quantity <= 1} aria-label={`Decrease ${item.name}`}><Minus className="size-3.5" /></Button><span className="w-8 text-center text-sm font-semibold tabular-nums">{item.quantity}</span><Button type="button" variant="outline" size="icon-sm" onClick={() => updateItem(item.id, { quantity: Math.min(20, item.quantity + 1) })} disabled={busy || item.quantity >= 20} aria-label={`Increase ${item.name}`}><Plus className="size-3.5" /></Button></div><input value={item.note} maxLength={300} onChange={(event) => updateItem(item.id, { note: event.target.value })} placeholder="Item note" aria-label={`Note for ${item.name}`} className={orderFieldClass} /><Button type="button" variant="destructive" size="icon-sm" onClick={() => setForm((current) => ({ ...current, items: current.items.filter((entry) => entry.id !== item.id) }))} disabled={busy || form.items.length <= 1} aria-label={`Remove ${item.name}`}><Trash2 className="size-4" /></Button></div>)}</div></div> : null}
-    <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={onCancel} disabled={busy}>Discard</Button><Button type="submit" disabled={busy}>{busy ? <LoaderCircle className="size-4 animate-spin" /> : null}{busy ? "Saving..." : "Save changes"}</Button></div>
+    {fullEdit ? <div className="space-y-3"><div className="flex flex-wrap items-end justify-between gap-3"><div><p className="text-sm font-semibold">Order items</p><p className="mt-0.5 text-xs text-[#756D62]">Existing lines keep their original price. Added dishes use the current menu price.</p></div><p className="text-sm font-semibold tabular-nums">{totalQuantity} items</p></div><div className="divide-y divide-[#E4DAC9] border border-[#E4DAC9] bg-white">{form.items.map((item) => <div key={item.key} className={`grid gap-3 p-3 sm:grid-cols-[minmax(10rem,1fr)_auto_2fr_auto] sm:items-center ${item.available === false ? "bg-red-50/70" : item.isNew ? "bg-emerald-50/50" : ""}`}><div><div className="flex flex-wrap items-center gap-2"><p className="font-semibold">{item.name}</p>{item.available === false ? <Badge variant="destructive">Unavailable</Badge> : item.isNew ? <Badge variant="success">Replacement</Badge> : null}</div>{item.variantLabel ? <p className="text-xs font-semibold text-[#8B1E1E]">{item.variantLabel}</p> : null}<div className="mt-1 flex flex-wrap gap-x-3 text-xs"><span className="text-[#756D62]">{formatMoney(item.unitPrice)} each</span><span className="font-semibold tabular-nums text-[#2B2B2B]">Line: {formatMoney(Number(item.unitPrice) * item.quantity)}</span></div></div><div className="flex items-center gap-1"><Button type="button" variant="outline" size="icon-sm" onClick={() => updateItem(item.key, { quantity: Math.max(1, item.quantity - 1) })} disabled={busy || item.quantity <= 1} aria-label={`Decrease ${item.name}`}><Minus className="size-3.5" /></Button><span className="w-8 text-center text-sm font-semibold tabular-nums">{item.quantity}</span><Button type="button" variant="outline" size="icon-sm" onClick={() => updateItem(item.key, { quantity: Math.min(DELIVERY_CONFIG.maxItemQuantity, item.quantity + 1) })} disabled={busy || item.quantity >= DELIVERY_CONFIG.maxItemQuantity || totalQuantity >= DELIVERY_CONFIG.maxTotalQuantity} aria-label={`Increase ${item.name}`}><Plus className="size-3.5" /></Button></div><input value={item.note} maxLength={300} onChange={(event) => updateItem(item.key, { note: event.target.value })} placeholder="Item note" aria-label={`Note for ${item.name}`} className={orderFieldClass} /><Button type="button" variant="destructive" size="icon-sm" onClick={() => removeItem(item.key)} disabled={busy || form.items.length <= 1} aria-label={`Remove ${item.name}`}><Trash2 className="size-4" /></Button></div>)}</div><MenuItemPicker disabled={busy || form.items.length >= DELIVERY_CONFIG.maxDistinctItems || totalQuantity >= DELIVERY_CONFIG.maxTotalQuantity} onAdd={addItem} /><div className="ml-auto w-full max-w-sm space-y-2 border border-[#D8CEBD] bg-white p-4 text-sm"><Price label="Updated subtotal" value={subtotalPreview} />{discountPreview > 0 ? <Price label="Discount" value={-discountPreview} /> : null}<Price label={order.deliveryFeeConfirmed ? "Delivery" : "Delivery (pending)"} value={deliveryFeePreview} /><Price label={order.deliveryFeeConfirmed ? "Updated total" : "Total before final delivery fee"} value={totalPreview} strong /></div>{itemsChanged ? <label className="flex cursor-pointer items-start gap-3 border border-amber-300 bg-amber-50 p-3"><input type="checkbox" checked={customerConfirmed} onChange={(event) => setCustomerConfirmed(event.target.checked)} className="mt-0.5 size-4 accent-[#8B1E1E]" /><span className="text-sm"><span className="block font-semibold">Customer approved these item changes</span><span className="mt-0.5 block text-xs leading-relaxed text-[#756D62]">Confirm only after speaking with the customer. The final receipt and total will use this updated list.</span></span></label> : null}</div> : null}
+    <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={onCancel} disabled={busy}>Discard</Button><Button type="submit" disabled={busy || (itemsChanged && !customerConfirmed)}>{busy ? <LoaderCircle className="size-4 animate-spin" /> : null}{busy ? "Saving..." : "Save changes"}</Button></div>
   </form>
+}
+
+function MenuItemPicker({ disabled, onAdd }) {
+  const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState("")
+  const deferredQuery = useDeferredValue(query.trim())
+  const [items, setItems] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState("")
+
+  useEffect(() => {
+    if (!open) return
+    const controller = new AbortController()
+    const params = new URLSearchParams({ orderable: "true", page: "1", pageSize: "20" })
+    if (deferredQuery) params.set("q", deferredQuery)
+    const timer = window.setTimeout(() => {
+      setLoading(true)
+      setError("")
+      fetch(`/api/admin/menu/items?${params}`, { signal: controller.signal })
+        .then(readApi)
+        .then((payload) => setItems(payload.data || []))
+        .catch((fetchError) => { if (fetchError.name !== "AbortError") setError(fetchError.message || "Could not load dishes.") })
+        .finally(() => { if (!controller.signal.aborted) setLoading(false) })
+    }, 0)
+    return () => {
+      window.clearTimeout(timer)
+      controller.abort()
+    }
+  }, [deferredQuery, open])
+
+  return <div className="border border-[#D8CEBD] bg-white">
+    <button type="button" onClick={() => setOpen((value) => !value)} disabled={disabled} aria-expanded={open} className={`flex min-h-11 w-full items-center justify-between gap-3 px-4 py-3 text-left text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${open ? "bg-[#8B1E1E] text-white" : "text-[#8B1E1E] hover:bg-[#FAF7F0]"}`}><span className="flex items-center gap-2"><Plus className="size-4" />Add replacement dish</span><span className={`flex items-center gap-1.5 text-xs ${open ? "text-white" : "font-normal text-[#756D62]"}`}>{open ? "Close menu" : "Open menu"}{open ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}</span></button>
+    {open ? <div className="border-t border-[#E4DAC9] p-3"><label className="relative block"><span className="sr-only">Search available dishes</span><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[#756D62]" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search dish or category" className="h-10 w-full rounded-md border border-[#E4DAC9] bg-white pl-9 pr-3 text-base outline-none focus:border-[#8B1E1E] sm:text-sm" /></label>{loading ? <div className="flex items-center justify-center gap-2 py-8 text-sm text-[#756D62]"><LoaderCircle className="size-4 animate-spin" />Loading dishes...</div> : error ? <p className="py-5 text-center text-sm text-red-700">{error}</p> : items.length ? <div className="mt-3 max-h-72 divide-y divide-[#EFE7DA] overflow-y-auto border border-[#EFE7DA]">{items.map((item) => <div key={item.id} className="flex flex-col gap-2 p-3 sm:flex-row sm:items-center sm:justify-between"><div className="min-w-0"><p className="font-semibold text-[#2B2B2B]">{item.name}</p><p className="text-xs text-[#756D62]">{item.categoryTitle || "Menu"}</p></div><div className="flex flex-wrap gap-2">{item.variants.length ? item.variants.map((variant) => <Button key={variant.id} type="button" variant="outline" size="sm" onClick={() => onAdd(item, variant)}>{variant.label} - {formatMoney(variant.price)}</Button>) : <Button type="button" variant="outline" size="sm" onClick={() => onAdd(item)}>Add - {formatMoney(item.price)}</Button>}</div></div>)}</div> : <p className="py-8 text-center text-sm text-[#756D62]">No available dishes match this search.</p>}</div> : null}
+  </div>
 }
 
 function OrderField({ children, label }) { return <label className="block"><span className="mb-1.5 block text-xs font-semibold uppercase text-[#756D62]">{label}</span>{children}</label> }
 
-function InvoiceModal({ autoPrint = false, onClose, order }) {
-  const printStarted = useRef(false)
-
-  useEffect(() => {
-    if (!autoPrint || printStarted.current) return
-
-    const handleAfterPrint = () => onClose()
-    window.addEventListener("afterprint", handleAfterPrint, { once: true })
-    const frame = window.requestAnimationFrame(() => {
-      printStarted.current = true
-      window.print()
-    })
-
-    return () => {
-      window.cancelAnimationFrame(frame)
-      window.removeEventListener("afterprint", handleAfterPrint)
-    }
-  }, [autoPrint, onClose])
-
+function InvoiceModal({ onClose, order }) {
   return createPortal(<div className="invoice-overlay fixed inset-0 z-[70] overflow-y-auto bg-[#2B2B2B]/70 p-3 backdrop-blur-sm sm:p-6" role="dialog" aria-modal="true" aria-label={`Invoice ${order.orderNumber}`}>
     <div className="invoice-shell mx-auto w-full max-w-sm">
       <div className="invoice-no-print mb-3 flex items-center justify-end gap-2 rounded-md bg-white p-2 shadow-lg">

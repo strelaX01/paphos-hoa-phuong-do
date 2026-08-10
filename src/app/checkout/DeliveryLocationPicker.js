@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic"
 import { LocateFixed, LoaderCircle, MapPin, Search } from "lucide-react"
-import { useCallback, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 
 const LocationMap = dynamic(() => import("@/app/components/shared/LocationMap"), { ssr: false, loading: () => <div className="h-[340px] animate-pulse bg-[#E8DFC8] sm:h-[390px]" /> })
 
@@ -16,13 +16,14 @@ async function readApi(response) {
   return payload
 }
 
-export default function DeliveryLocationPicker({ addressQuery, destination, onAddressSelected, onDestinationChange, onQuoteChange, quote }) {
+export default function DeliveryLocationPicker({ addressQuery, destination, onAddressSelected, onDestinationChange, onQuoteChange, quote, subtotal }) {
   const [suggestions, setSuggestions] = useState([])
   const [searching, setSearching] = useState(false)
   const [locating, setLocating] = useState(false)
   const [quoting, setQuoting] = useState(false)
   const [message, setMessage] = useState("")
   const locationRequestRef = useRef(0)
+  const previousSubtotalRef = useRef(Math.round(Number(subtotal || 0) * 100))
 
   const calculateQuote = useCallback(async (point, options = {}) => {
     const { resolveAddress = true } = options
@@ -39,7 +40,7 @@ export default function DeliveryLocationPicker({ addressQuery, destination, onAd
         fetch("/api/delivery/quote", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(normalized),
+          body: JSON.stringify({ ...normalized, subtotal: Number(subtotal || 0) }),
         }).then(readApi),
         resolveAddress
           ? fetch("/api/delivery/geocode/reverse", {
@@ -86,7 +87,16 @@ export default function DeliveryLocationPicker({ addressQuery, destination, onAd
     } finally {
       if (requestId === locationRequestRef.current) setQuoting(false)
     }
-  }, [onAddressSelected, onDestinationChange, onQuoteChange])
+  }, [onAddressSelected, onDestinationChange, onQuoteChange, subtotal])
+
+  useEffect(() => {
+    const subtotalCents = Math.round(Number(subtotal || 0) * 100)
+    if (subtotalCents === previousSubtotalRef.current) return
+    previousSubtotalRef.current = subtotalCents
+    if (!destination) return
+    const timer = window.setTimeout(() => calculateQuote(destination, { resolveAddress: false }), 0)
+    return () => window.clearTimeout(timer)
+  }, [calculateQuote, destination, subtotal])
 
   async function searchAddress() {
     if (addressQuery.trim().length < 3) return setMessage("Enter the street and area before searching.")
@@ -172,7 +182,7 @@ export default function DeliveryLocationPicker({ addressQuery, destination, onAd
         <LocationMap destination={destination} origin={quote?.origin} route={quote?.route || []} onChange={calculateQuote} showLocate={false} />
         {quoting ? <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/65 backdrop-blur-[1px]"><div className="flex items-center gap-2 bg-[#1E1A18] px-4 py-3 text-sm text-white"><LoaderCircle className="size-4 animate-spin" />Calculating route...</div></div> : null}
       </div>
-      {quote?.mode === "automatic" ? <div className="grid grid-cols-3 divide-x divide-[#E8DFC8] border-t border-[#E8DFC8] bg-[#FFF9E9] text-center"><Metric label="Distance" value={`${quote.distanceKm.toFixed(1)} km`} /><Metric label="Drive time" value={`~${quote.etaMinutes} min`} /><Metric label="Delivery fee" value={`€${quote.fee.toFixed(2)}`} /></div> : null}
+      {quote?.mode === "automatic" ? <><div className="grid grid-cols-3 divide-x divide-[#E8DFC8] border-t border-[#E8DFC8] bg-[#FFF9E9] text-center"><Metric label="Distance" value={`${quote.distanceKm.toFixed(1)} km`} /><Metric label="Drive time" value={`~${quote.etaMinutes} min`} /><Metric label="Delivery fee" value={quote.feeCents === 0 ? "Free" : `€${quote.fee.toFixed(2)}`} /></div>{quote.freeDelivery?.remainingCents > 0 ? <p className="border-t border-[#E8DFC8] bg-[#FFF9E9] px-4 py-3 text-center text-xs text-[#6B6560]">Add €{(quote.freeDelivery.remainingCents / 100).toFixed(2)} more to qualify for free delivery on this route.</p> : null}</> : null}
       {destination && !quote && !quoting ? <p className="border-t border-[#E8DFC8] px-4 py-3 text-center text-xs text-[#8B1E1E]">Move the pin or search again to calculate a valid route.</p> : null}
     </section>
   )

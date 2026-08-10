@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma"
 const HEIGIT_API_URL = "https://api.heigit.org"
 const CYPRUS_BOUNDS = Object.freeze({ minLatitude: 34.4, maxLatitude: 35.8, minLongitude: 32, maxLongitude: 34.8 })
 const MAX_AUTOFILL_HOUSE_DISTANCE_KM = 0.025
+const AREA_LAYERS = Object.freeze(["locality", "localadmin", "borough", "neighbourhood"])
 
 export class DeliveryRoutingError extends Error {
   constructor(message, code, status = 503) {
@@ -41,6 +42,55 @@ async function callProvider(url, options, fallbackMessage) {
   } catch {
     throw new DeliveryRoutingError(fallbackMessage, "ROUTING_UNAVAILABLE")
   }
+}
+
+function firstText(...values) {
+  return values.map((value) => String(value || "").trim()).find(Boolean) || ""
+}
+
+function featureName(feature) {
+  const properties = feature?.properties || {}
+  return firstText(properties.name, String(properties.label || "").split(",")[0])
+}
+
+function resolveArea(properties, features = []) {
+  const embeddedArea = firstText(
+    properties.locality,
+    properties.localadmin,
+    properties.borough,
+    properties.neighbourhood,
+  )
+  if (embeddedArea) return embeddedArea
+
+  for (const layer of AREA_LAYERS) {
+    const areaFeature = features.find((candidate) => candidate?.properties?.layer === layer)
+    const areaName = featureName(areaFeature)
+    if (areaName) return areaName
+  }
+  return ""
+}
+
+function formatResolvedLabel({ area, houseNumber, postalCode, streetName }) {
+  return [
+    [houseNumber, streetName].filter(Boolean).join(" "),
+    area,
+    postalCode,
+    "Cyprus",
+  ].filter(Boolean).join(", ")
+}
+
+async function reverseGeocodeFeatures({ latitude, layers, longitude, size }) {
+  const params = new URLSearchParams({
+    "point.lat": String(latitude),
+    "point.lon": String(longitude),
+    size: String(size),
+    layers: layers.join(","),
+  })
+  const response = await callProvider(`${HEIGIT_API_URL}/pelias/v1/reverse?${params}`, {
+    headers: { Authorization: apiKey() },
+  }, "The address at this point could not be identified.")
+  const payload = await readJson(response, "The address at this point could not be identified.")
+  return Array.isArray(payload.features) ? payload.features : []
 }
 
 export async function searchDeliveryAddresses(query) {
@@ -85,17 +135,12 @@ export async function reverseDeliveryAddress(point) {
     throw new DeliveryRoutingError("Choose a delivery point inside Cyprus.", "INVALID_LOCATION", 422)
   }
 
-  const params = new URLSearchParams({
-    "point.lat": String(latitude),
-    "point.lon": String(longitude),
-    size: "5",
-    layers: "address,street",
+  const features = await reverseGeocodeFeatures({
+    latitude,
+    longitude,
+    size: 5,
+    layers: ["address", "street"],
   })
-  const response = await callProvider(`${HEIGIT_API_URL}/pelias/v1/reverse?${params}`, {
-    headers: { Authorization: apiKey() },
-  }, "The address at this point could not be identified.")
-  const payload = await readJson(response, "The address at this point could not be identified.")
-  const features = Array.isArray(payload.features) ? payload.features : []
   const nearbyAddress = features.find((candidate) => {
     const properties = candidate?.properties || {}
     const distanceKm = Number(properties.distance)
@@ -115,21 +160,29 @@ export async function reverseDeliveryAddress(point) {
   const houseNumber = String(properties.housenumber || "").trim()
   const street = [houseNumber, streetName].filter(Boolean).join(" ")
     || String(properties.label || "").split(",")[0].trim()
-  const area = String(
-    properties.neighbourhood
-    || properties.borough
-    || properties.locality
-    || properties.localadmin
-    || ""
-  ).trim()
+  let area = resolveArea(properties, features)
+  if (!area) {
+    try {
+      const areaFeatures = await reverseGeocodeFeatures({
+        latitude,
+        longitude,
+        size: AREA_LAYERS.length,
+        layers: AREA_LAYERS,
+      })
+      area = resolveArea({}, areaFeatures)
+    } catch {
+      // A valid street is still useful when the provider has no area boundary data.
+    }
+  }
+  const postalCode = String(properties.postalcode || "").trim()
 
   if (!street && !area) return null
   return {
     street: street.slice(0, 200),
     area: area.slice(0, 100),
-    label: String(properties.label || [street, area].filter(Boolean).join(", ")).slice(0, 300),
+    label: formatResolvedLabel({ area, houseNumber, postalCode, streetName }).slice(0, 300),
     hasHouseNumber: Boolean(houseNumber),
-    postalCode: String(properties.postalcode || "").slice(0, 20),
+    postalCode: postalCode.slice(0, 20),
     latitude,
     longitude,
   }
@@ -145,9 +198,12 @@ export async function getDeliveryRoutingSettings() {
       maximumDeliveryKm: true,
       nearbyDeliveryFee: true,
       fartherDeliveryFee: true,
+      freeDeliveryEnabled: true,
+      freeDeliveryMaxKm: true,
+      freeDeliveryMinimum: true,
     },
   })
-  const origin = settings?.restaurantLatitude !== null && settings?.restaurantLongitude !== null
+  const origin = settings && settings.restaurantLatitude !== null && settings.restaurantLongitude !== null
     ? { latitude: Number(settings.restaurantLatitude), longitude: Number(settings.restaurantLongitude) }
     : null
   if (!origin || !isCoordinateInCyprus(origin.latitude, origin.longitude)) {
@@ -155,10 +211,13 @@ export async function getDeliveryRoutingSettings() {
   }
   return {
     origin,
-    nearbyMaxKm: Number(settings.nearbyDeliveryMaxKm),
-    maximumKm: Number(settings.maximumDeliveryKm),
-    nearbyFeeCents: Math.round(Number(settings.nearbyDeliveryFee) * 100),
-    fartherFeeCents: Math.round(Number(settings.fartherDeliveryFee) * 100),
+    nearbyMaxKm: Number(settings.nearbyDeliveryMaxKm ?? 5),
+    maximumKm: Number(settings.maximumDeliveryKm ?? 15),
+    nearbyFeeCents: Math.round(Number(settings.nearbyDeliveryFee ?? 3) * 100),
+    fartherFeeCents: Math.round(Number(settings.fartherDeliveryFee ?? 3.5) * 100),
+    freeDeliveryEnabled: settings.freeDeliveryEnabled === true,
+    freeDeliveryMaxKm: Number(settings.freeDeliveryMaxKm ?? 2),
+    freeDeliveryMinimumCents: Math.round(Number(settings.freeDeliveryMinimum ?? 20) * 100),
   }
 }
 
@@ -176,13 +235,14 @@ function getDestinationStreet(feature) {
   return [...steps].reverse().map((step) => String(step?.name || "").trim()).find((name) => name && name !== "-") || ""
 }
 
-export async function quoteDeliveryRoute(destination, suppliedSettings) {
+export async function quoteDeliveryRoute(destination, options = {}) {
   const latitude = Number(destination?.latitude)
   const longitude = Number(destination?.longitude)
   if (!isCoordinateInCyprus(latitude, longitude)) {
     throw new DeliveryRoutingError("Choose a delivery point inside Cyprus.", "INVALID_LOCATION", 422)
   }
-  const settings = suppliedSettings || await getDeliveryRoutingSettings()
+  const settings = options.settings || await getDeliveryRoutingSettings()
+  const subtotalCents = Number.isSafeInteger(options.subtotalCents) && options.subtotalCents >= 0 ? options.subtotalCents : 0
   const response = await callProvider(`${HEIGIT_API_URL}/openrouteservice/v2/directions/driving-car/geojson`, {
     method: "POST",
     headers: { Authorization: apiKey(), "Content-Type": "application/json" },
@@ -199,7 +259,12 @@ export async function quoteDeliveryRoute(destination, suppliedSettings) {
   if (distanceKm > settings.maximumKm) {
     throw new DeliveryRoutingError(`This address is ${distanceKm.toFixed(1)} km away, outside our ${settings.maximumKm.toFixed(1)} km delivery area.`, "OUTSIDE_DELIVERY_AREA", 422)
   }
-  const feeCents = distanceKm <= settings.nearbyMaxKm ? settings.nearbyFeeCents : settings.fartherFeeCents
+  const qualifiesForFreeDelivery = settings.freeDeliveryEnabled
+    && distanceKm <= settings.freeDeliveryMaxKm
+    && subtotalCents >= settings.freeDeliveryMinimumCents
+  const feeCents = qualifiesForFreeDelivery
+    ? 0
+    : distanceKm <= settings.nearbyMaxKm ? settings.nearbyFeeCents : settings.fartherFeeCents
   return {
     latitude,
     longitude,
@@ -207,7 +272,17 @@ export async function quoteDeliveryRoute(destination, suppliedSettings) {
     etaMinutes: Math.max(1, Math.round(durationSeconds / 60)),
     feeCents,
     fee: feeCents / 100,
-    tier: distanceKm <= settings.nearbyMaxKm ? "nearby" : "farther",
+    tier: qualifiesForFreeDelivery ? "free" : distanceKm <= settings.nearbyMaxKm ? "nearby" : "farther",
+    freeDelivery: {
+      enabled: settings.freeDeliveryEnabled,
+      maximumKm: settings.freeDeliveryMaxKm,
+      minimumOrderCents: settings.freeDeliveryMinimumCents,
+      minimumOrder: settings.freeDeliveryMinimumCents / 100,
+      qualifies: qualifiesForFreeDelivery,
+      remainingCents: settings.freeDeliveryEnabled && distanceKm <= settings.freeDeliveryMaxKm
+        ? Math.max(0, settings.freeDeliveryMinimumCents - subtotalCents)
+        : null,
+    },
     maximumKm: settings.maximumKm,
     nearbyMaxKm: settings.nearbyMaxKm,
     destinationStreet: getDestinationStreet(feature).slice(0, 200),

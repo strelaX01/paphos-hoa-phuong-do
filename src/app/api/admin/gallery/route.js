@@ -1,9 +1,15 @@
 import { authorizeAdminRequest } from "@/lib/adminApiAuth";
+import { readAdminJson } from "@/lib/adminJsonRequest";
 import { prisma } from "@/lib/prisma";
 import { galleryPhotoSelect, serializeGalleryPhoto } from "@/lib/galleryPhotoData";
 import { deleteManagedGalleryImage } from "@/lib/galleryStorage";
 
 export const dynamic = "force-dynamic";
+
+function positiveInteger(value, fallback, maximum) {
+  const parsed = Number.parseInt(value || "", 10);
+  return Number.isInteger(parsed) && parsed > 0 ? Math.min(parsed, maximum) : fallback;
+}
 
 function isValidImageUrl(value) {
   try {
@@ -18,11 +24,22 @@ export async function GET(request) {
   const auth = await authorizeAdminRequest(request);
   if (auth.response) return auth.response;
   try {
-    const photos = await prisma.galleryPhoto.findMany({
-      orderBy: { createdAt: "desc" },
-      select: galleryPhotoSelect,
+    const { searchParams } = new URL(request.url);
+    const page = positiveInteger(searchParams.get("page"), 1, 100000);
+    const limit = positiveInteger(searchParams.get("limit"), 24, 50);
+    const [photos, total] = await prisma.$transaction([
+      prisma.galleryPhoto.findMany({
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        skip: (page - 1) * limit,
+        take: limit,
+        select: galleryPhotoSelect,
+      }),
+      prisma.galleryPhoto.count(),
+    ]);
+    return Response.json({
+      data: photos.map(serializeGalleryPhoto),
+      pagination: { page, limit, total, totalPages: Math.max(1, Math.ceil(total / limit)) },
     });
-    return Response.json({ data: photos.map(serializeGalleryPhoto) });
   } catch (error) {
     console.error("GET /api/admin/gallery", error);
     return Response.json({ error: "Failed to load gallery photos." }, { status: 500 });
@@ -32,12 +49,9 @@ export async function GET(request) {
 export async function POST(request) {
   const auth = await authorizeAdminRequest(request);
   if (auth.response) return auth.response;
-  let body;
-  try {
-    body = await request.json();
-  } catch {
-    return Response.json({ error: "Invalid JSON body." }, { status: 400 });
-  }
+  const parsed = await readAdminJson(request);
+  if (parsed.response) return parsed.response;
+  const body = parsed.data;
 
   const src = typeof body?.src === "string" ? body.src.trim() : "";
   if (!src || !isValidImageUrl(src)) return Response.json({ error: "A valid image URL is required." }, { status: 422 });

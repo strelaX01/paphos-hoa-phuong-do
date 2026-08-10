@@ -1,5 +1,7 @@
+import Image from 'next/image'
 import Link from 'next/link'
 import { connection } from 'next/server'
+import { ArrowUpRight, CalendarDays, Mail, MapPin, Phone, ShoppingBag } from 'lucide-react'
 import {
   getRestaurantProfileData,
   phoneHref,
@@ -29,106 +31,69 @@ export default async function Footer({ restaurantData }) {
   const isExternalAddress = /^https?:\/\//i.test(addressHref)
 
   return (
-    <footer id="site-footer" className="bg-[#1E1A18] text-white" role="contentinfo">
-      <div className="h-px bg-gradient-to-r from-transparent via-[#D4A017]/40 to-transparent" />
-
-      <div className="mx-auto max-w-7xl px-6 sm:px-8 lg:px-12">
-        <div className="grid grid-cols-1 gap-10 py-14 sm:grid-cols-2 lg:grid-cols-[2fr_1fr_1fr_1.5fr] lg:gap-12 lg:py-16">
+    <footer id="site-footer" className="border-t border-[#D4A017]/35 bg-[#1E1A18] text-white" role="contentinfo">
+      <div className="mx-auto max-w-7xl px-5 sm:px-8 lg:px-12">
+        <div className="grid gap-7 border-b border-white/10 py-9 md:grid-cols-[1fr_auto] md:items-center lg:py-11">
           <div>
-            <p className="mb-0.5 font-display text-xl font-bold text-white">{profile.name}</p>
-            <p className="mb-5 text-[10px] uppercase tracking-[0.28em] text-[#D4A017]">Vietnamese &middot; Cyprus</p>
-            <p className="max-w-[230px] text-[13px] leading-relaxed text-white/35">
-              Authentic Vietnamese cuisine crafted with passion. Served with genuine hospitality in Paphos, Cyprus.
-            </p>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#D4A017]">Vietnamese dining in Paphos</p>
+            <h2 className="mt-3 max-w-2xl font-display text-3xl leading-tight text-white sm:text-4xl">A warm table, honest flavours, and food made to share.</h2>
           </div>
-
-          {Object.entries(footerNav).map(([heading, links]) => (
-            <div key={heading}>
-              <h3 className="mb-5 text-[10px] font-semibold uppercase tracking-[0.3em] text-white/30">
-                {heading}
-              </h3>
-              <ul className="space-y-3">
-                {links.map((link) => (
-                  <li key={link.href}>
-                    <Link
-                      href={link.href}
-                      className="text-[13px] text-white/50 transition-colors duration-200 hover:text-white"
-                    >
-                      {link.label}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
-
-          <div>
-            <h3 className="mb-5 text-[10px] font-semibold uppercase tracking-[0.3em] text-white/30">
-              Opening Hours
-            </h3>
-            <ul className="mb-6 space-y-3">
-              {openingHours.map((entry) => (
-                <li key={entry.id || entry.day} className="flex items-baseline justify-between gap-4">
-                  <span className="whitespace-nowrap text-[12px] text-white/35">{entry.day}</span>
-                  <span className="whitespace-nowrap text-[12px] font-medium text-white/60">
-                    {entry.isClosed ? 'Closed' : entry.hours}
-                  </span>
-                </li>
-              ))}
-            </ul>
-
-            <div className="space-y-2 border-t border-white/[0.07] pt-5">
-              {phoneNumbers.map((phone) => (
-                <a
-                  key={phone}
-                  href={phoneHref(phone)}
-                  className="flex items-center gap-2 text-[13px] text-white/45 transition-colors duration-200 hover:text-white/80"
-                >
-                  <svg className="h-3 w-3 flex-shrink-0 text-[#D4A017]" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z" />
-                  </svg>
-                  {phone}
-                </a>
-              ))}
-
-              {profile.email && (
-                <a
-                  href={`mailto:${profile.email}`}
-                  className="flex items-center gap-2 break-all text-[13px] text-white/45 transition-colors duration-200 hover:text-white/80"
-                >
-                  <svg className="h-3 w-3 flex-shrink-0 text-[#D4A017]" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4-8 5-8-5V6l8 5 8-5v2z" />
-                  </svg>
-                  {profile.email}
-                </a>
-              )}
-
-              {profile.address && (
-                <a
-                  href={addressHref}
-                  target={isExternalAddress ? '_blank' : undefined}
-                  rel={isExternalAddress ? 'noreferrer' : undefined}
-                  className="flex items-start gap-2 text-[13px] text-white/45 transition-colors duration-200 hover:text-white/80"
-                >
-                  <svg className="mt-0.5 h-3 w-3 flex-shrink-0 text-[#D4A017]" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" />
-                  </svg>
-                  {profile.address}
-                </a>
-              )}
-            </div>
+          <div className="grid grid-cols-2 gap-2 sm:flex">
+            <Link href="/book-table" className="inline-flex min-h-12 items-center justify-center gap-2 bg-[#A31F24] px-4 text-center text-[11px] font-bold uppercase tracking-[0.12em] text-white transition-colors hover:bg-[#BF2930] sm:px-5">
+              <CalendarDays className="size-4" />Book a table
+            </Link>
+            <Link href="/delivery" className="inline-flex min-h-12 items-center justify-center gap-2 border border-white/25 px-4 text-center text-[11px] font-bold uppercase tracking-[0.12em] text-white transition-colors hover:border-[#D4A017] hover:text-[#F2C94C] sm:px-5">
+              <ShoppingBag className="size-4" />Order food
+            </Link>
           </div>
         </div>
 
-        <div className="flex flex-col items-center justify-between gap-3 border-t border-white/[0.07] py-5 sm:flex-row">
-          <p className="text-center text-[11px] text-white/20">
-            &copy; {year} {profile.name}. All rights reserved.
-          </p>
-          <nav aria-label="Legal" className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2">
-            <Link href="/privacy-policy" className="text-[11px] text-white/35 transition-colors hover:text-white/75">Privacy</Link>
-            <Link href="/terms-and-conditions" className="text-[11px] text-white/35 transition-colors hover:text-white/75">Terms</Link>
-            <Link href="/cookie-policy" className="text-[11px] text-white/35 transition-colors hover:text-white/75">Cookies</Link>
-          </nav>
+        <div className="grid grid-cols-2 gap-x-6 py-10 lg:grid-cols-12 lg:gap-x-10 lg:py-14">
+          <section className="col-span-2 border-b border-white/10 pb-8 lg:col-span-4 lg:border-b-0 lg:pb-0" aria-labelledby="footer-restaurant">
+            <div className="flex items-center gap-4">
+              <div className="flex size-16 shrink-0 items-center justify-center bg-[#F8F3E9] p-2">
+                <Image src="/images/hoa-phuong-do-logo.png" alt="" width={92} height={64} className="h-full w-full object-contain" />
+              </div>
+              <div>
+                <h2 id="footer-restaurant" className="font-display text-2xl leading-none text-white">{profile.name}</h2>
+                <p className="mt-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#D4A017]">Vietnamese &amp; Asian cuisine</p>
+              </div>
+            </div>
+            <p className="mt-6 max-w-sm text-sm leading-6 text-white/65">Authentic Vietnamese cooking, fresh ingredients, and welcoming hospitality in Kissonerga.</p>
+            <div className="mt-6 space-y-3">
+              {profile.address && <a href={addressHref} target={isExternalAddress ? '_blank' : undefined} rel={isExternalAddress ? 'noopener noreferrer' : undefined} className="group flex items-start gap-3 text-sm leading-6 text-white/70 transition-colors hover:text-white"><MapPin className="mt-1 size-4 shrink-0 text-[#D4A017]" /><span>{profile.address}</span>{isExternalAddress ? <ArrowUpRight className="mt-1 size-3.5 shrink-0 opacity-60 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" /> : null}</a>}
+              {phoneNumbers.map((phone) => <a key={phone} href={phoneHref(phone)} className="flex items-center gap-3 text-sm text-white/70 transition-colors hover:text-white"><Phone className="size-4 shrink-0 text-[#D4A017]" />{phone}</a>)}
+              {profile.email && <a href={`mailto:${profile.email}`} className="flex items-center gap-3 break-all text-sm text-white/70 transition-colors hover:text-white"><Mail className="size-4 shrink-0 text-[#D4A017]" />{profile.email}</a>}
+            </div>
+          </section>
+
+          {Object.entries(footerNav).map(([heading, links]) => (
+            <nav key={heading} aria-label={heading} className="border-b border-white/10 py-8 lg:col-span-2 lg:border-b-0 lg:py-0">
+              <h3 className="mb-5 text-[10px] font-semibold uppercase tracking-[0.24em] text-white/45">{heading}</h3>
+              <ul className="space-y-3.5">
+                {links.map((link) => <li key={link.href}><Link href={link.href} className="group inline-flex items-center gap-1.5 text-sm text-white/70 transition-colors hover:text-[#F2C94C]">{link.label}<ArrowUpRight className="size-3 opacity-0 transition-all group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:opacity-100" /></Link></li>)}
+              </ul>
+            </nav>
+          ))}
+
+          <section className="col-span-2 pt-8 lg:col-span-4 lg:pt-0" aria-labelledby="footer-hours">
+            <h3 id="footer-hours" className="mb-5 text-[10px] font-semibold uppercase tracking-[0.24em] text-white/45">Opening hours</h3>
+            <ul className="divide-y divide-white/[0.07] border-y border-white/[0.07]">
+              {openingHours.map((entry) => <li key={entry.id || entry.day} className="flex min-h-10 items-center justify-between gap-5 text-sm"><span className="text-white/60">{entry.day}</span><span className={`whitespace-nowrap font-medium ${entry.isClosed ? 'text-[#E79A9D]' : 'text-white'}`}>{entry.isClosed ? 'Closed' : entry.hours}</span></li>)}
+            </ul>
+          </section>
+        </div>
+
+        <div className="grid gap-4 border-t border-white/10 py-5 text-[11px] text-white/45 sm:grid-cols-[1fr_auto] sm:items-center">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-5">
+            <p>&copy; {year} {profile.name}. All rights reserved.</p>
+            <nav aria-label="Legal" className="flex flex-wrap gap-x-4 gap-y-2">
+              <Link href="/privacy-policy" className="transition-colors hover:text-white">Privacy</Link>
+              <Link href="/terms-and-conditions" className="transition-colors hover:text-white">Terms</Link>
+              <Link href="/cookie-policy" className="transition-colors hover:text-white">Cookies</Link>
+            </nav>
+          </div>
+          <a href="https://www.slavasoft.tech/" target="_blank" rel="noopener noreferrer" className="group inline-flex w-fit items-center gap-1.5 text-white/55 transition-colors hover:text-[#F2C94C]">Website by <span className="font-semibold text-white/80 group-hover:text-[#F2C94C]">SlavaSoft</span><ArrowUpRight className="size-3.5 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" /></a>
         </div>
       </div>
     </footer>

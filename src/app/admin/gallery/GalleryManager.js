@@ -1,11 +1,12 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { ImagePlus, LoaderCircle, Trash2, Upload, X } from "lucide-react"
 
 import AdminShell from "@/app/admin/_components/AdminShell"
 import AdminToast from "@/app/admin/_components/AdminToast"
 import { CardGridSkeleton } from "@/app/components/shared/SkeletonBlocks"
+import PaginationControls from "@/app/components/shared/PaginationControls"
 import { dedupeClientRequest } from "@/lib/dedupeClientRequest"
 import { Button } from "@/components/ui/button"
 
@@ -13,6 +14,7 @@ const MAX_SOURCE_SIZE = 20 * 1024 * 1024
 const MAX_UPLOAD_SIZE = 3 * 1024 * 1024
 const COMPRESSION_THRESHOLD = 500 * 1024
 const allowedTypes = new Set(["image/jpeg", "image/png", "image/webp"])
+const PAGE_SIZE = 24
 
 async function readApi(response) {
   const payload = await response.json().catch(() => ({}))
@@ -72,6 +74,8 @@ async function compressImage(file) {
 
 export default function GalleryManager() {
   const [photos, setPhotos] = useState([])
+  const [page, setPage] = useState(1)
+  const [pagination, setPagination] = useState({ total: 0, totalPages: 1 })
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
   const [uploadLabel, setUploadLabel] = useState("")
@@ -87,13 +91,17 @@ export default function GalleryManager() {
     setToast({ id: toastIdRef.current, message, tone })
   }
 
-  useEffect(() => {
+  const loadPhotos = useCallback((pageNumber) => {
     let active = true
-    dedupeClientRequest("/api/admin/gallery", () => {
-      return fetch("/api/admin/gallery").then(readApi)
+    const url = `/api/admin/gallery?page=${pageNumber}&limit=${PAGE_SIZE}`
+    const request = dedupeClientRequest(url, () => {
+      return fetch(url).then(readApi)
     })
       .then((payload) => {
-        if (active) setPhotos(payload.data)
+        if (active) {
+          setPhotos(payload.data)
+          setPagination(payload.pagination)
+        }
       })
       .catch((error) => {
         if (active) showToast(error.message || "Could not load gallery.", "error")
@@ -101,8 +109,14 @@ export default function GalleryManager() {
       .finally(() => {
         if (active) setLoading(false)
       })
-    return () => { active = false }
+    request.cancel = () => { active = false }
+    return request
   }, [])
+
+  useEffect(() => {
+    const request = loadPhotos(page)
+    return () => { request.cancel?.() }
+  }, [loadPhotos, page])
 
   const handleFiles = async (event) => {
     const files = Array.from(event.target.files || [])
@@ -148,10 +162,14 @@ export default function GalleryManager() {
         }
       }
 
-      setPhotos((previous) => [...uploadedPhotos.reverse(), ...previous])
+      setPage(1)
+      await loadPhotos(1)
       showToast(`${uploadedPhotos.length} photo${uploadedPhotos.length === 1 ? "" : "s"} uploaded.`)
     } catch (error) {
-      if (uploadedPhotos.length) setPhotos((previous) => [...uploadedPhotos.reverse(), ...previous])
+      if (uploadedPhotos.length) {
+        setPage(1)
+        await loadPhotos(1)
+      }
       showToast(error.message || "Could not upload photos.", "error")
     } finally {
       nextPreviews.forEach((preview) => URL.revokeObjectURL(preview.url))
@@ -165,7 +183,9 @@ export default function GalleryManager() {
     setDeletingId(photo.id)
     try {
       await fetch(`/api/admin/gallery/${photo.id}`, { method: "DELETE" }).then(readApi)
-      setPhotos((previous) => previous.filter((entry) => entry.id !== photo.id))
+      const nextPage = photos.length === 1 && page > 1 ? page - 1 : page
+      setPage(nextPage)
+      await loadPhotos(nextPage)
       setPhotoToDelete(null)
       showToast("Photo deleted.")
     } catch (error) {
@@ -218,7 +238,7 @@ export default function GalleryManager() {
 
         <section>
           <div className="mb-4 flex items-end justify-between gap-4">
-            <div><h2 className="font-display text-xl font-semibold">Photos</h2><p className="text-sm text-[#756D62]">{photos.length} published photos</p></div>
+            <div><h2 className="font-display text-xl font-semibold">Photos</h2><p className="text-sm text-[#756D62]">{pagination.total} published photos</p></div>
           </div>
 
           {loading ? (
@@ -249,6 +269,9 @@ export default function GalleryManager() {
               <p className="mt-3 font-semibold">No gallery photos yet.</p>
             </div>
           )}
+          {pagination.totalPages > 1 ? (
+            <PaginationControls page={page} totalPages={pagination.totalPages} onPageChange={(nextPage) => { setLoading(true); setPage(nextPage) }} className="mt-6" />
+          ) : null}
         </section>
       </div>
 

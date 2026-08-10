@@ -20,7 +20,7 @@ export default function VideoSpecialsSection({ videos = [] }) {
       className="bg-[#1E1A18] py-20 lg:py-28"
     >
       <div className="site-container">
-        <div className="mb-12 flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between lg:mb-14">
+        <div data-home-reveal="rise" className="mb-12 flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between lg:mb-14">
           <div>
             <span className="mb-3 block text-[11px] font-semibold uppercase tracking-[0.3em] text-[#D4A017]">
               Featured Specials

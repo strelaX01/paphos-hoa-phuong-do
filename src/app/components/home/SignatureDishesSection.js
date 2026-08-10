@@ -19,7 +19,7 @@ export default function SignatureDishesSection({ dishes = [], openingStatus }) {
   return (
     <section id="signature-dishes" aria-label="Menu preview" className="bg-[#F8F3EA] py-20 lg:py-28">
       <div className="site-container">
-        <div className="mb-12 flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between lg:mb-14">
+        <div data-home-reveal="rise" className="mb-12 flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between lg:mb-14">
           <div>
             <span className="mb-3 block text-[11px] font-semibold uppercase tracking-[0.3em] text-[#D4A017]">From Our Menu</span>
             <h2 className="font-display text-3xl font-bold leading-[1.1] text-[#2B2B2B] sm:text-4xl lg:text-[44px]">A Taste of What We Serve</h2>
@@ -45,7 +45,7 @@ export default function SignatureDishesSection({ dishes = [], openingStatus }) {
           </div>
         )}
 
-        <div className="mt-14 flex flex-wrap items-center justify-between gap-4 border-t border-[#E8DFC8] pt-6">
+        <div data-home-reveal="rise" className="mt-14 flex flex-wrap items-center justify-between gap-4 border-t border-[#E8DFC8] pt-6">
           <p className="text-[11px] uppercase tracking-[0.2em] text-[#9C9489]">{openingStatus?.text || 'See opening hours'}</p>
           <p className="text-[11px] uppercase tracking-[0.2em] text-[#9C9489]">Prepared fresh to order</p>
         </div>
@@ -56,7 +56,11 @@ export default function SignatureDishesSection({ dishes = [], openingStatus }) {
 
 function EditorialDishCard({ className = '', dish, featured = false, index }) {
   return (
-    <article className={`group relative isolate overflow-hidden border border-[#E1D5C1] bg-[#2B2B2B] ${className}`}>
+    <article
+      data-home-reveal="rise"
+      className={`group relative isolate overflow-hidden border border-[#E1D5C1] bg-[#2B2B2B] ${className}`}
+      style={{ '--home-reveal-delay': `${Math.min(index, 3) * 75}ms` }}
+    >
       <Image
         src={dish.image}
         alt={dish.name}

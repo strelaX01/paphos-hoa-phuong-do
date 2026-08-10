@@ -5,12 +5,12 @@ const phonePattern = /^\+?[\d\s().-]+$/;
 const slugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const idPattern = /^[A-Za-z0-9_-]{1,64}$/;
 
-function moneyCents(value) {
+function moneyCents(value, { allowZero = false } = {}) {
   if (typeof value !== "number" && typeof value !== "string") return null;
   const normalized = String(value).trim();
   if (!/^\d+(?:\.\d{1,2})?$/.test(normalized)) return null;
   const cents = Math.round(Number(normalized) * 100);
-  return Number.isSafeInteger(cents) && cents >= 1 && cents <= 10000 ? cents : null;
+  return Number.isSafeInteger(cents) && cents >= (allowZero ? 0 : 1) && cents <= 10000 ? cents : null;
 }
 
 export function validateDeliveryOrderInput(input) {
@@ -25,7 +25,7 @@ export function validateDeliveryOrderInput(input) {
   const deliveryFeeConsent = input?.deliveryFeeConsent === true;
   const acceptedNearbyFeeCents = moneyCents(input?.acceptedNearbyDeliveryFee);
   const acceptedFartherFeeCents = moneyCents(input?.acceptedFartherDeliveryFee);
-  const acceptedDeliveryFeeCents = input?.acceptedDeliveryFee === null || input?.acceptedDeliveryFee === undefined ? null : moneyCents(input.acceptedDeliveryFee);
+  const acceptedDeliveryFeeCents = input?.acceptedDeliveryFee === null || input?.acceptedDeliveryFee === undefined ? null : moneyCents(input.acceptedDeliveryFee, { allowZero: true });
   const routingMode = input?.routingMode === "manual" ? "manual" : input?.routingMode === "automatic" ? "automatic" : "";
   const latitude = Number(input?.deliveryLocation?.latitude);
   const longitude = Number(input?.deliveryLocation?.longitude);

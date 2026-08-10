@@ -60,46 +60,63 @@ function createJustifiedRows(items, ratios, containerWidth) {
   })
 }
 
-export default function GalleryGridClient({ items, paginate = true }) {
-  const galleryItems = items
-  const [page, setPage] = useState(1)
-  const [isLoading, setIsLoading] = useState(false)
+export default function GalleryGridClient({ items, paginate = true, pagination = null }) {
+  const serverPaginated = Boolean(pagination)
+  const [galleryItems, setGalleryItems] = useState(items)
+  const [page, setPage] = useState(pagination?.page || 1)
+  const [totalPages, setTotalPages] = useState(pagination?.totalPages || Math.max(1, Math.ceil(items.length / ITEMS_PER_PAGE)))
+  const [pageLoading, setPageLoading] = useState(false)
   const [activeIndex, setActiveIndex] = useState(null)
   const [previewRatios, setPreviewRatios] = useState(null)
   const [previewVisible, setPreviewVisible] = useState(false)
   const [previewWidth, setPreviewWidth] = useState(0)
   const touchStartRef = useRef(null)
   const previewContainerRef = useRef(null)
-  const totalPages = paginate ? Math.max(1, Math.ceil(galleryItems.length / ITEMS_PER_PAGE)) : 1
   const pageItems = useMemo(
-    () => paginate
+    () => paginate && !serverPaginated
       ? galleryItems.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE)
       : galleryItems,
-    [galleryItems, page, paginate]
+    [galleryItems, page, paginate, serverPaginated]
   )
   const activeItem = activeIndex === null ? null : pageItems[activeIndex]
+  const effectiveRatios = useMemo(
+    () => pageItems.map((item, index) => previewRatios?.[index] || 4 / 3),
+    [pageItems, previewRatios]
+  )
   const previewRows = useMemo(
-    () => previewRatios
-      ? createJustifiedRows(pageItems, previewRatios, previewWidth)
-      : [],
-    [pageItems, previewRatios, previewWidth]
+    () => createJustifiedRows(pageItems, effectiveRatios, previewWidth),
+    [effectiveRatios, pageItems, previewWidth]
   )
 
   useEffect(() => {
-    if (!previewVisible) return undefined
+    if (!previewVisible || previewWidth < 640) return undefined
 
     let active = true
-    Promise.all(pageItems.map((item) => new Promise((resolve) => {
+    const pendingImages = pageItems.map((item, index) => {
       const image = new window.Image()
-      image.onload = () => resolve(image.naturalWidth / image.naturalHeight)
-      image.onerror = () => resolve(4 / 3)
+      image.onload = () => {
+        if (!active || !image.naturalWidth || !image.naturalHeight) return
+        const ratio = image.naturalWidth / image.naturalHeight
+        setPreviewRatios((current) => {
+          const next = current?.length === pageItems.length ? [...current] : Array(pageItems.length).fill(4 / 3)
+          next[index] = ratio
+          return next
+        })
+      }
+      image.onerror = () => {}
       image.src = item.src
-    }))).then((ratios) => {
-      if (active) setPreviewRatios(ratios)
+      return image
     })
 
-    return () => { active = false }
-  }, [pageItems, previewVisible])
+    return () => {
+      active = false
+      pendingImages.forEach((image) => {
+        if (!image) return
+        image.onload = null
+        image.onerror = null
+      })
+    }
+  }, [pageItems, previewVisible, previewWidth])
 
   useEffect(() => {
     if (!previewContainerRef.current || previewVisible) return undefined
@@ -152,13 +169,35 @@ export default function GalleryGridClient({ items, paginate = true }) {
     }
   }, [activeItem, showNext, showPrevious])
 
-  const updatePage = (nextPage) => {
+  const updatePage = async (nextPage) => {
     const safePage = Math.min(Math.max(nextPage, 1), totalPages)
+    if (safePage === page) return
+
     setActiveIndex(null)
     setPreviewRatios(null)
-    setIsLoading(true)
-    setPage(safePage)
-    window.setTimeout(() => setIsLoading(false), 220)
+    if (serverPaginated) {
+      setPageLoading(true)
+      try {
+        const response = await fetch(`/api/gallery?page=${safePage}&limit=${ITEMS_PER_PAGE}`, { cache: 'no-store' })
+        const payload = await response.json().catch(() => ({}))
+        if (!response.ok) throw new Error(payload.error || 'Could not load gallery photos.')
+        setGalleryItems(payload.data)
+        setTotalPages(payload.pagination.totalPages)
+        setPage(payload.pagination.page)
+      } catch {
+        setPageLoading(false)
+        return
+      }
+      setPageLoading(false)
+    } else {
+      setPage(safePage)
+    }
+    window.requestAnimationFrame(() => {
+      const container = previewContainerRef.current
+      if (!container) return
+      const top = container.getBoundingClientRect().top + window.scrollY - 96
+      window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' })
+    })
   }
 
   const handleTouchStart = (event) => {
@@ -187,11 +226,9 @@ export default function GalleryGridClient({ items, paginate = true }) {
           <h3 className="mt-4 font-display text-2xl font-bold text-[#2B2B2B]">Our gallery is being updated.</h3>
           <p className="mt-2 text-sm text-[#6B6560]">Please check back soon for new restaurant moments.</p>
         </div>
-      ) : isLoading ? (
-        <CardGridSkeleton count={ITEMS_PER_PAGE} />
       ) : (
         <div ref={previewContainerRef}>
-          {!previewRatios || !previewWidth ? (
+          {pageLoading || !previewWidth ? (
             <CardGridSkeleton count={4} />
           ) : previewWidth < 640 ? (
             <div className="space-y-3">
@@ -221,7 +258,7 @@ export default function GalleryGridClient({ items, paginate = true }) {
         </div>
       )}
 
-      {paginate && galleryItems.length > ITEMS_PER_PAGE ? (
+      {paginate && totalPages > 1 ? (
         <PaginationControls page={page} totalPages={totalPages} onPageChange={updatePage} className="mt-8" />
       ) : null}
 

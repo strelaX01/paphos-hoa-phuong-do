@@ -3,16 +3,18 @@ import { randomBytes } from "node:crypto";
 import { buildDeliveryFeeConsentText, centsToMoney, getDeliveryAvailability, getDeliveryAvailabilityMessage } from "@/lib/deliveryConfig";
 import { normalizeDeliveryPricing } from "@/lib/deliveryPricingData";
 import { DeliveryRoutingError, quoteDeliveryRoute } from "@/lib/deliveryRouting";
+import { checkPublicWriteRateLimit } from "@/lib/authRateLimit";
 import { prisma } from "@/lib/prisma";
-import { checkRateLimit } from "@/lib/rateLimit";
+import { readLimitedJson } from "@/lib/readLimitedJson";
 import { validateDeliveryOrderInput } from "@/lib/validations/deliveryOrder";
 import { getRestaurantProfileData } from "@/lib/restaurantProfileData";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const RATE_LIMIT = { key: "public-delivery-order", limit: 5, windowMs: 15 * 60 * 1000 };
+const RATE_LIMIT = { namespace: "public-delivery-order", limit: 5, windowMs: 15 * 60 * 1000 };
 const MAX_BODY_BYTES = 32 * 1024;
+const IDEMPOTENCY_KEY_PATTERN = /^[a-zA-Z0-9_-]{16,128}$/;
 
 function json(payload, status, rateHeaders = {}) {
   return Response.json(payload, { status, headers: { ...rateHeaders, "Cache-Control": "no-store" } });
@@ -24,13 +26,7 @@ function createOrderNumber() {
   return `HPD-${date}-${randomBytes(3).toString("hex").toUpperCase()}`;
 }
 
-function sameItems(previousItems, pricedItems) {
-  if (previousItems.length !== pricedItems.length) return false;
-  const expected = new Map(pricedItems.map((item) => [`${item.menuItemId}:${item.variantId || "base"}`, `${item.quantity}:${item.note || ""}`]));
-  return previousItems.every((item) => expected.get(`${item.menuItemId}:${item.variantId || "base"}`) === `${item.quantity}:${item.note || ""}`);
-}
-
-async function createOrder(data, pricedItems, totals) {
+async function createOrder(data, pricedItems, totals, idempotencyKey) {
   return prisma.$transaction(async (tx) => {
     let customer = await tx.customer.findFirst({ where: { phone: data.phone }, orderBy: { updatedAt: "desc" } });
     if (customer) {
@@ -46,6 +42,7 @@ async function createOrder(data, pricedItems, totals) {
     return tx.order.create({
       data: {
         orderNumber: createOrderNumber(),
+        idempotencyKey,
         status: "PENDING",
         paymentMethod: "CASH",
         paymentStatus: "PENDING",
@@ -77,22 +74,33 @@ async function createOrder(data, pricedItems, totals) {
 }
 
 export async function POST(request) {
-  const rate = checkRateLimit(request, RATE_LIMIT);
+  const rate = await checkPublicWriteRateLimit(request, RATE_LIMIT);
   if (!rate.allowed) return json({ error: "Too many order attempts. Please try again later." }, 429, rate.headers);
 
-  const contentLength = Number(request.headers.get("content-length") || 0);
-  if (contentLength > MAX_BODY_BYTES) return json({ error: "Request body is too large." }, 413, rate.headers);
-
-  let body;
-  try {
-    const rawBody = await request.text();
-    if (new TextEncoder().encode(rawBody).byteLength > MAX_BODY_BYTES) return json({ error: "Request body is too large." }, 413, rate.headers);
-    body = JSON.parse(rawBody);
-  } catch {
-    return json({ error: "Invalid JSON body." }, 400, rate.headers);
+  const parsed = await readLimitedJson(request, MAX_BODY_BYTES);
+  if (parsed.error) return json({ error: parsed.error }, parsed.status, rate.headers);
+  const body = parsed.data;
+  const idempotencyKey = (request.headers.get("idempotency-key") || "").trim();
+  if (!IDEMPOTENCY_KEY_PATTERN.test(idempotencyKey)) {
+    return json({ error: "A valid idempotency key is required." }, 400, rate.headers);
   }
 
   if (typeof body?.website === "string" && body.website.trim()) return json({ data: { reference: "RECEIVED", status: "PENDING" } }, 201, rate.headers);
+
+  try {
+    const existingRequest = await prisma.order.findUnique({
+      where: { idempotencyKey },
+      select: { orderNumber: true, status: true, subtotal: true, deliveryFee: true, total: true, distanceKm: true },
+    });
+    if (existingRequest) {
+      const deliveryFeeConfirmed = existingRequest.distanceKm !== null;
+      return json({ data: { reference: existingRequest.orderNumber, status: existingRequest.status, subtotal: Number(existingRequest.subtotal), deliveryFee: deliveryFeeConfirmed ? Number(existingRequest.deliveryFee) : null, total: deliveryFeeConfirmed ? Number(existingRequest.total) : null, deliveryFeeConfirmed, duplicate: true } }, 200, rate.headers);
+    }
+  } catch (error) {
+    console.error("Failed to check order idempotency", error);
+    return json({ error: "Could not verify this order request. Please try again." }, 503, rate.headers);
+  }
+
   const validation = validateDeliveryOrderInput(body);
   if (!validation.isValid) return json({ errors: validation.errors }, 422, rate.headers);
 
@@ -120,7 +128,7 @@ export async function POST(request) {
           select: { id: true, label: true, price: true },
         },
       },
-    }), prisma.storefrontSettings.findUnique({ where: { id: "default" }, select: { nearbyDeliveryFee: true, fartherDeliveryFee: true } })]);
+    }), prisma.storefrontSettings.findUnique({ where: { id: "default" }, select: { nearbyDeliveryFee: true, fartherDeliveryFee: true, freeDeliveryEnabled: true, freeDeliveryMaxKm: true, freeDeliveryMinimum: true } })]);
     const pricing = normalizeDeliveryPricing(storefrontSettings);
     if (validation.data.acceptedNearbyFeeCents !== pricing.nearbyFeeCents || validation.data.acceptedFartherFeeCents !== pricing.fartherFeeCents) {
       return json({ error: "Delivery fees changed while you were checking out. Review and accept the updated fees.", code: "DELIVERY_PRICING_CHANGED", deliveryPricing: pricing }, 409, rate.headers);
@@ -152,7 +160,10 @@ export async function POST(request) {
     const subtotalCents = pricedItems.reduce((sum, item) => sum + item.lineTotalCents, 0);
     let routeQuote = null;
     try {
-      routeQuote = await quoteDeliveryRoute({ latitude: validation.data.latitude, longitude: validation.data.longitude });
+      routeQuote = await quoteDeliveryRoute(
+        { latitude: validation.data.latitude, longitude: validation.data.longitude },
+        { subtotalCents },
+      );
     } catch (error) {
       const canUseManualFallback = validation.data.routingMode === "manual" && error instanceof DeliveryRoutingError && ["ROUTING_UNAVAILABLE", "ROUTING_RATE_LIMITED"].includes(error.code);
       if (!canUseManualFallback) {
@@ -169,37 +180,26 @@ export async function POST(request) {
       : buildDeliveryFeeConsentText(pricing.nearbyFeeCents, pricing.fartherFeeCents);
     const totals = { subtotalCents, deliveryFeeCents, routeQuote, nearbyFeeCents: pricing.nearbyFeeCents, fartherFeeCents: pricing.fartherFeeCents, deliveryFeeConsentText };
 
-    const duplicateSince = new Date(Date.now() - 2 * 60 * 1000);
-    const recentOrders = await prisma.order.findMany({
-      where: { customerPhone: validation.data.phone, createdAt: { gte: duplicateSince }, status: { not: "CANCELLED" } },
-      orderBy: { createdAt: "desc" },
-      select: { id: true, orderNumber: true, status: true, subtotal: true, deliveryFee: true, total: true, deliveryStreet: true, deliveryZone: true, deliveryLatitude: true, deliveryLongitude: true, deliveryFeeConsentAt: true, items: { select: { menuItemId: true, variantId: true, quantity: true, note: true } } },
-    });
-    const duplicate = recentOrders.find((order) => order.deliveryStreet === validation.data.street && order.deliveryZone === validation.data.area && Math.abs(Number(order.deliveryLatitude) - validation.data.latitude) < 0.00001 && Math.abs(Number(order.deliveryLongitude) - validation.data.longitude) < 0.00001 && Math.round(Number(order.subtotal) * 100) === subtotalCents && sameItems(order.items, pricedItems));
-    if (duplicate) {
-      let resolvedDuplicate = duplicate;
-      if (!duplicate.deliveryFeeConsentAt || Math.round(Number(duplicate.deliveryFee) * 100) !== deliveryFeeCents) {
-        resolvedDuplicate = await prisma.order.update({
-          where: { id: duplicate.id },
-          data: { deliveryFeeConsentAt: new Date(), deliveryFeeConsentText: totals.deliveryFeeConsentText, deliveryFeePolicyNearby: centsToMoney(pricing.nearbyFeeCents), deliveryFeePolicyFarther: centsToMoney(pricing.fartherFeeCents), distanceKm: routeQuote?.distanceKm, etaMinutes: routeQuote?.etaMinutes, deliveryFee: centsToMoney(deliveryFeeCents), total: centsToMoney(subtotalCents + deliveryFeeCents) },
-          select: { id: true, orderNumber: true, status: true, subtotal: true, deliveryFee: true, total: true },
-        });
-      }
-      const feeConfirmed = Number(resolvedDuplicate.deliveryFee) > 0;
-      return json({ data: { reference: resolvedDuplicate.orderNumber, status: resolvedDuplicate.status, subtotal: Number(resolvedDuplicate.subtotal), deliveryFee: feeConfirmed ? Number(resolvedDuplicate.deliveryFee) : null, total: feeConfirmed ? Number(resolvedDuplicate.total) : null, deliveryFeeConfirmed: feeConfirmed, duplicate: true } }, 200, rate.headers);
-    }
-
     let order;
     for (let attempt = 0; attempt < 3; attempt += 1) {
       try {
-        order = await createOrder(validation.data, pricedItems, totals);
+        order = await createOrder(validation.data, pricedItems, totals, idempotencyKey);
         break;
       } catch (error) {
-        if (error.code !== "P2002" || attempt === 2) throw error;
+        if (error.code !== "P2002") throw error;
+        const existing = await prisma.order.findUnique({
+          where: { idempotencyKey },
+          select: { id: true, orderNumber: true, status: true, subtotal: true, deliveryFee: true, total: true, deliveryFeeConsentAt: true, distanceKm: true, createdAt: true },
+        });
+        if (existing) {
+          order = existing;
+          break;
+        }
+        if (attempt === 2) throw error;
       }
     }
 
-    const deliveryFeeConfirmed = Number(order.deliveryFee) > 0;
+    const deliveryFeeConfirmed = Boolean(routeQuote);
     return json({ data: { reference: order.orderNumber, status: order.status, subtotal: Number(order.subtotal), deliveryFee: deliveryFeeConfirmed ? Number(order.deliveryFee) : null, total: deliveryFeeConfirmed ? Number(order.total) : null, deliveryFeeConfirmed, createdAt: order.createdAt } }, 201, rate.headers);
   } catch (error) {
     console.error("POST /api/orders", error);

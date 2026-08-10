@@ -3,8 +3,7 @@ import Link from 'next/link'
 import Footer from '@/app/components/layout/Footer'
 import Header from '@/app/components/layout/Header'
 import HeroImage from '@/app/components/shared/HeroImage'
-import MenuNav from './MenuNav'
-import MenuSectionItems from './MenuSectionItems'
+import MenuCatalog from './MenuCatalog'
 import { getPublicMenuPageSections } from '@/lib/publicMenuData'
 import { createPageMetadata } from '@/lib/seo'
 
@@ -19,22 +18,12 @@ export const metadata = createPageMetadata({
 
 export default async function MenuPage() {
   const menuSections = await getMenuSections()
-  const categoryLinks = menuSections?.map((section) => ({
-    href: `#${section.id}`,
-    label: section.title,
-  })) || []
-
   return (
     <>
       <Header />
       <main className="bg-[#F8F3EA]">
         <MenuHero />
-        {categoryLinks.length ? <MenuNav categoryLinks={categoryLinks} /> : null}
-        <div className="py-16 lg:py-24">
-          {menuSections === null ? <MenuUnavailable /> : menuSections.length ? menuSections.map((section) => (
-            <MenuSection key={section.id} section={section} />
-          )) : <EmptyMenu />}
-        </div>
+        {menuSections === null ? <div className="py-16 lg:py-24"><MenuUnavailable /></div> : menuSections.length ? <MenuCatalog menuSections={menuSections} /> : <div className="py-16 lg:py-24"><EmptyMenu /></div>}
         <MenuCTA />
       </main>
       <Footer />
@@ -92,33 +81,6 @@ function MenuHero() {
             </Link>
           </div>
         </div>
-      </div>
-    </section>
-  )
-}
-
-function MenuSection({ section }) {
-  return (
-    <section
-      id={section.id}
-      className="scroll-mt-36 bg-[#F8F3EA] py-12 lg:scroll-mt-48 lg:py-16"
-    >
-      <div className="site-container">
-        <div className="mb-10 grid gap-6 lg:grid-cols-[0.8fr_1.2fr] lg:items-end">
-          <div>
-            <span className="mb-3 block text-[11px] font-semibold uppercase tracking-[0.3em] text-[#D4A017]">
-              {section.eyebrow}
-            </span>
-            <h2 className="font-display text-4xl font-bold leading-[1.08] text-[#2B2B2B] lg:text-[48px]">
-              {section.title}
-            </h2>
-          </div>
-          <p className="max-w-2xl text-[14px] leading-relaxed text-[#6B6560]">
-            {section.description}
-          </p>
-        </div>
-
-        <MenuSectionItems items={section.items} />
       </div>
     </section>
   )

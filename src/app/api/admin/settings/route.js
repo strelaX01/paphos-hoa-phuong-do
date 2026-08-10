@@ -1,4 +1,5 @@
 import { authorizeAdminRequest } from "@/lib/adminApiAuth"
+import { readAdminJson } from "@/lib/adminJsonRequest"
 import { getOpeningHoursForDate, WEEK_DAYS } from "@/lib/openingHours"
 import { prisma } from "@/lib/prisma"
 import { validateRestaurantSettings } from "@/lib/validations/restaurantSettings"
@@ -73,6 +74,9 @@ function serialize(profile, openingHours, storefront, notice) {
       endsAt: dateValue(storefront?.effectEndsAt),
       nearbyDeliveryFee: Number(storefront?.nearbyDeliveryFee ?? 3).toFixed(2),
       fartherDeliveryFee: Number(storefront?.fartherDeliveryFee ?? 3.5).toFixed(2),
+      freeDeliveryEnabled: storefront?.freeDeliveryEnabled || false,
+      freeDeliveryMaxKm: Number(storefront?.freeDeliveryMaxKm ?? 2).toFixed(2),
+      freeDeliveryMinimum: Number(storefront?.freeDeliveryMinimum ?? 20).toFixed(2),
       restaurantLatitude: storefront?.restaurantLatitude === null || storefront?.restaurantLatitude === undefined ? "" : Number(storefront.restaurantLatitude).toFixed(7),
       restaurantLongitude: storefront?.restaurantLongitude === null || storefront?.restaurantLongitude === undefined ? "" : Number(storefront.restaurantLongitude).toFixed(7),
       nearbyDeliveryMaxKm: Number(storefront?.nearbyDeliveryMaxKm ?? 5).toFixed(2),
@@ -113,8 +117,9 @@ export async function GET(request) {
 export async function PUT(request) {
   const auth = await authorizeAdminRequest(request)
   if (auth.response) return auth.response
-  let body
-  try { body = await request.json() } catch { return Response.json({ error: "Invalid JSON body." }, { status: 400 }) }
+  const parsed = await readAdminJson(request)
+  if (parsed.response) return parsed.response
+  const body = parsed.data
   const validation = validateRestaurantSettings(body)
   if (!validation.isValid) return Response.json({ errors: validation.errors }, { status: 422 })
 

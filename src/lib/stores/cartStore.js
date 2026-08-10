@@ -25,10 +25,10 @@ export const useCartStore = create(
   persist(
     (set) => ({
       items: [],
-      deliveryPricing: { nearbyDeliveryFee: DELIVERY_CONFIG.nearbyFeeCents / 100, fartherDeliveryFee: DELIVERY_CONFIG.fartherFeeCents / 100, status: 'idle' },
+      deliveryPricing: { nearbyDeliveryFee: DELIVERY_CONFIG.nearbyFeeCents / 100, fartherDeliveryFee: DELIVERY_CONFIG.fartherFeeCents / 100, freeDeliveryEnabled: false, freeDeliveryMaxKm: 2, freeDeliveryMinimum: 20, status: 'idle' },
       beginDeliveryPricingLoad: () => set((state) => ({ deliveryPricing: { ...state.deliveryPricing, status: 'loading' } })),
       failDeliveryPricingLoad: () => set((state) => ({ deliveryPricing: { ...state.deliveryPricing, status: 'error' } })),
-      setDeliveryPricing: ({ nearbyDeliveryFee, fartherDeliveryFee }) => set({ deliveryPricing: { nearbyDeliveryFee: Number(nearbyDeliveryFee), fartherDeliveryFee: Number(fartherDeliveryFee), status: 'ready' } }),
+      setDeliveryPricing: ({ nearbyDeliveryFee, fartherDeliveryFee, freeDeliveryEnabled, freeDeliveryMaxKm, freeDeliveryMinimum }) => set({ deliveryPricing: { nearbyDeliveryFee: Number(nearbyDeliveryFee), fartherDeliveryFee: Number(fartherDeliveryFee), freeDeliveryEnabled: freeDeliveryEnabled === true, freeDeliveryMaxKm: Number(freeDeliveryMaxKm || 0), freeDeliveryMinimum: Number(freeDeliveryMinimum || 0), status: 'ready' } }),
       addItem: (dish) =>
         set((state) => {
           const cartKey = getCartItemKey(dish)
@@ -50,9 +50,14 @@ export const useCartStore = create(
         })),
       updateQty: (cartKey, delta) =>
         set((state) => ({
-          items: state.items
-            .map((item) => (item.cartKey || getCartItemKey(item)) === cartKey ? { ...item, qty: Math.min(item.qty + delta, DELIVERY_CONFIG.maxItemQuantity) } : item)
-            .filter((item) => item.qty > 0),
+          items: state.items.map((item) => {
+            if ((item.cartKey || getCartItemKey(item)) !== cartKey) return item
+
+            const currentQty = Number.isFinite(Number(item.qty)) ? Math.trunc(Number(item.qty)) : 1
+            const quantityDelta = Number.isFinite(Number(delta)) ? Math.trunc(Number(delta)) : 0
+            const nextQty = Math.max(1, Math.min(currentQty + quantityDelta, DELIVERY_CONFIG.maxItemQuantity))
+            return nextQty === currentQty ? item : { ...item, qty: nextQty }
+          }),
         })),
       updateNote: (cartKey, note) =>
         set((state) => ({

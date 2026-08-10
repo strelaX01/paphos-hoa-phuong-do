@@ -1,13 +1,19 @@
 import { authorizeAdminRequest } from "@/lib/adminApiAuth";
+import { readAdminJson } from "@/lib/adminJsonRequest";
 import { prisma } from "@/lib/prisma";
 import { deleteManagedGalleryImage, uploadGalleryImage, validateGalleryImage } from "@/lib/galleryStorage";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+const MAX_REQUEST_BYTES = 4 * 1024 * 1024;
 
 export async function POST(request) {
   const auth = await authorizeAdminRequest(request);
   if (auth.response) return auth.response;
+  const contentLength = Number(request.headers.get("content-length"));
+  if (Number.isFinite(contentLength) && contentLength > MAX_REQUEST_BYTES) {
+    return Response.json({ error: "Upload request is too large." }, { status: 413 });
+  }
   let formData;
   try {
     formData = await request.formData();
@@ -30,12 +36,9 @@ export async function POST(request) {
 export async function DELETE(request) {
   const auth = await authorizeAdminRequest(request);
   if (auth.response) return auth.response;
-  let body;
-  try {
-    body = await request.json();
-  } catch {
-    return Response.json({ error: "Invalid JSON body." }, { status: 400 });
-  }
+  const parsed = await readAdminJson(request);
+  if (parsed.response) return parsed.response;
+  const body = parsed.data;
 
   const url = typeof body?.url === "string" ? body.url.trim() : "";
   if (!url) return Response.json({ error: "Image URL is required." }, { status: 400 });

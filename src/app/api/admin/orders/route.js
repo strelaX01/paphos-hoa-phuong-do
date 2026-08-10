@@ -1,4 +1,5 @@
 import { authorizeAdminRequest } from "@/lib/adminApiAuth";
+import { getCyprusDayRange } from "@/lib/cyprusTime";
 import { orderAdminSelect, orderDriverSelect, serializeAdminOrder, serializeDriverOrder } from "@/lib/orderAdminData";
 import { DRIVER_ORDER_STATUSES, ORDER_STATUSES } from "@/lib/orderStatus";
 import { prisma } from "@/lib/prisma";
@@ -9,20 +10,6 @@ export const dynamic = "force-dynamic";
 function positiveInteger(value, fallback, maximum) {
   const parsed = Number.parseInt(value || "", 10);
   return Number.isInteger(parsed) && parsed > 0 ? Math.min(parsed, maximum) : fallback;
-}
-
-function cyprusDayRange() {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Nicosia",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(new Date());
-  const read = (type) => parts.find((part) => part.type === type)?.value;
-  const start = new Date(`${read("year")}-${read("month")}-${read("day")}T00:00:00.000Z`);
-  const end = new Date(start);
-  end.setUTCDate(end.getUTCDate() + 1);
-  return { gte: start, lt: end };
 }
 
 export async function GET(request) {
@@ -52,8 +39,8 @@ export async function GET(request) {
   };
 
   try {
-    const today = cyprusDayRange();
-    const [orders, total, pending, kitchen, delivery, ready] = await prisma.$transaction([
+    const today = getCyprusDayRange();
+    const [orders, total, metrics] = await prisma.$transaction([
       prisma.order.findMany({
         where,
         orderBy: { createdAt: "desc" },
@@ -62,22 +49,26 @@ export async function GET(request) {
         select: isDriver ? orderDriverSelect : orderAdminSelect,
       }),
       prisma.order.count({ where }),
-      prisma.order.count({ where: { status: "PENDING" } }),
-      prisma.order.count({ where: { status: { in: ["PREPARING", "PENDING_PICKUP"] } } }),
-      prisma.order.count({ where: { status: "EN_ROUTE" } }),
-      prisma.order.count({ where: { status: "PENDING_PICKUP" } }),
+      prisma.$queryRaw`
+        SELECT
+          COUNT(*) FILTER (WHERE "status" = CAST('PENDING' AS "OrderStatus"))::int AS "pending",
+          COUNT(*) FILTER (WHERE "status" IN (CAST('PREPARING' AS "OrderStatus"), CAST('PENDING_PICKUP' AS "OrderStatus")))::int AS "kitchen",
+          COUNT(*) FILTER (WHERE "status" = CAST('EN_ROUTE' AS "OrderStatus"))::int AS "delivery",
+          COUNT(*) FILTER (WHERE "status" = CAST('PENDING_PICKUP' AS "OrderStatus"))::int AS "ready",
+          COALESCE(SUM("total") FILTER (
+            WHERE "createdAt" >= ${today.gte}
+              AND "createdAt" < ${today.lt}
+              AND "status" <> CAST('CANCELLED' AS "OrderStatus")
+          ), 0) AS "todayRevenue"
+        FROM "Order"
+      `,
     ]);
-    const todayRevenue = isDriver
-      ? 0
-      : Number((await prisma.order.aggregate({
-        where: { createdAt: today, status: { not: "CANCELLED" } },
-        _sum: { total: true },
-      }))._sum.total || 0);
+    const summary = metrics[0];
 
     return Response.json({
       data: orders.map(isDriver ? serializeDriverOrder : serializeAdminOrder),
       pagination: { page, limit, total, totalPages: Math.max(1, Math.ceil(total / limit)) },
-      summary: { pending, kitchen, delivery, ready, ...(isDriver ? {} : { todayRevenue }) },
+      summary: { pending: summary.pending, kitchen: summary.kitchen, delivery: summary.delivery, ready: summary.ready, ...(isDriver ? {} : { todayRevenue: Number(summary.todayRevenue) }) },
     }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     console.error("GET /api/admin/orders", error);

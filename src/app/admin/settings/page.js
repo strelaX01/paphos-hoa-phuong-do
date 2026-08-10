@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react"
 import dynamic from "next/dynamic"
-import { BellRing, CalendarDays, Euro, Eye, LoaderCircle, LocateFixed, Megaphone, Plus, Save, Sparkles, Trash2, X } from "lucide-react"
+import { BellRing, CalendarDays, CircleOff, Euro, Eye, Gift, LoaderCircle, LocateFixed, Megaphone, Plus, Save, Sparkles, Trash2, Truck, X } from "lucide-react"
 
 import AdminShell from "@/app/admin/_components/AdminShell"
 import AdminToast from "@/app/admin/_components/AdminToast"
@@ -107,6 +107,9 @@ const initialSettings = {
   restaurantMapUrl: "https://maps.google.com",
   nearbyDeliveryFee: "3.00",
   fartherDeliveryFee: "3.50",
+  freeDeliveryEnabled: false,
+  freeDeliveryMaxKm: "2.00",
+  freeDeliveryMinimum: "20.00",
   restaurantLatitude: "",
   restaurantLongitude: "",
   nearbyDeliveryMaxKm: "5.00",
@@ -170,6 +173,9 @@ export default function AdminSettingsPage() {
           festivalEffectEndDate: data.storefront.endsAt,
           nearbyDeliveryFee: data.storefront.nearbyDeliveryFee,
           fartherDeliveryFee: data.storefront.fartherDeliveryFee,
+          freeDeliveryEnabled: data.storefront.freeDeliveryEnabled,
+          freeDeliveryMaxKm: data.storefront.freeDeliveryMaxKm,
+          freeDeliveryMinimum: data.storefront.freeDeliveryMinimum,
           restaurantLatitude: data.storefront.restaurantLatitude,
           restaurantLongitude: data.storefront.restaurantLongitude,
           nearbyDeliveryMaxKm: data.storefront.nearbyDeliveryMaxKm,
@@ -262,7 +268,7 @@ export default function AdminSettingsPage() {
         body: JSON.stringify({
           profile: { email: settings.restaurantEmail, phones: settings.phoneNumbers.map((entry) => entry.value), address: settings.restaurantAddress, mapUrl: settings.restaurantMapUrl },
           openingHours: settings.openingHours.map(({ day, openTime, closeTime, isClosed }) => ({ day, openTime, closeTime, isClosed })),
-          storefront: { festivalEffectEnabled: settings.festivalEffectEnabled, festivalEffect: effectToApi[settings.festivalEffect], effectIntensity: settings.effectIntensity, startsAt: settings.festivalEffectStartDate, endsAt: settings.festivalEffectEndDate, nearbyDeliveryFee: settings.nearbyDeliveryFee, fartherDeliveryFee: settings.fartherDeliveryFee, restaurantLatitude: settings.restaurantLatitude, restaurantLongitude: settings.restaurantLongitude, nearbyDeliveryMaxKm: settings.nearbyDeliveryMaxKm, maximumDeliveryKm: settings.maximumDeliveryKm },
+          storefront: { festivalEffectEnabled: settings.festivalEffectEnabled, festivalEffect: effectToApi[settings.festivalEffect], effectIntensity: settings.effectIntensity, startsAt: settings.festivalEffectStartDate, endsAt: settings.festivalEffectEndDate, nearbyDeliveryFee: settings.nearbyDeliveryFee, fartherDeliveryFee: settings.fartherDeliveryFee, freeDeliveryEnabled: settings.freeDeliveryEnabled, freeDeliveryMaxKm: settings.freeDeliveryMaxKm, freeDeliveryMinimum: settings.freeDeliveryMinimum, restaurantLatitude: settings.restaurantLatitude, restaurantLongitude: settings.restaurantLongitude, nearbyDeliveryMaxKm: settings.nearbyDeliveryMaxKm, maximumDeliveryKm: settings.maximumDeliveryKm },
           notice: { enabled: settings.announcementEnabled, type: noticeTypeToApi[settings.announcementType], priority: settings.announcementPriority.toUpperCase(), title: settings.announcementTitle, message: settings.announcementMessage, ctaEnabled: settings.announcementCtaEnabled, ctaLabel: activeCtaDestination.label, ctaHref: activeCtaDestination.href, startsAt: settings.announcementStartDate, endsAt: settings.announcementEndDate },
         }),
       }).then(readApi)
@@ -303,14 +309,50 @@ export default function AdminSettingsPage() {
           <Card className="border-[#E4DAC9] bg-white">
             <CardHeader className="flex-row items-start gap-3">
               <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-[#F6F1E8] text-[#8B1E1E]"><Euro className="size-5" /></div>
-              <div><CardTitle className="font-display text-xl">Delivery pricing</CardTitle><CardDescription>Set the two delivery fees shown to customers and used for new orders.</CardDescription></div>
+              <div><CardTitle className="font-display text-xl">Delivery pricing</CardTitle><CardDescription>Fees are calculated automatically from driving distance and cart value.</CardDescription></div>
             </CardHeader>
             <CardContent>
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                <MoneyInput label="Nearby delivery fee" value={settings.nearbyDeliveryFee} onChange={(value) => updateSetting("nearbyDeliveryFee", value)} disabled={loading} />
-                <MoneyInput label="Farther delivery fee" value={settings.fartherDeliveryFee} onChange={(value) => updateSetting("fartherDeliveryFee", value)} disabled={loading} />
-                <DecimalInput label="Nearby up to (km)" value={settings.nearbyDeliveryMaxKm} onChange={(value) => updateSetting("nearbyDeliveryMaxKm", value)} disabled={loading} />
-                <DecimalInput label="Maximum distance (km)" value={settings.maximumDeliveryKm} onChange={(value) => updateSetting("maximumDeliveryKm", value)} disabled={loading} />
+              <div className="overflow-hidden border border-[#E4DAC9] bg-white">
+                <div className="hidden grid-cols-[minmax(14rem,1.25fr)_minmax(12rem,1fr)_minmax(9rem,.65fr)_minmax(12rem,1fr)] gap-5 border-b border-[#E4DAC9] bg-[#F6F1E8] px-4 py-3 lg:grid">
+                  {['Delivery zone', 'Driving distance', 'Fee', 'Condition'].map((label) => <span key={label} className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#756D62]">{label}</span>)}
+                </div>
+                <div className="divide-y divide-[#E4DAC9]">
+                  <PricingPolicyRow
+                    icon={<Gift className="size-5" />}
+                    title="Free delivery"
+                    description="Reward nearby, higher-value orders."
+                    tone={settings.freeDeliveryEnabled ? "green" : "muted"}
+                    action={<ToggleSwitch checked={settings.freeDeliveryEnabled} label="Free delivery" onChange={(checked) => updateSetting("freeDeliveryEnabled", checked)} disabled={loading} />}
+                    distance={<RangeEditor start="0" value={settings.freeDeliveryMaxKm} onChange={(value) => updateSetting("freeDeliveryMaxKm", value)} disabled={loading || !settings.freeDeliveryEnabled} label="Free delivery maximum distance" />}
+                    fee={<span className={`font-semibold ${settings.freeDeliveryEnabled ? "text-emerald-700" : "text-[#8C8378]"}`}>Free</span>}
+                    condition={<MoneyInput compact label="Minimum order" value={settings.freeDeliveryMinimum} onChange={(value) => updateSetting("freeDeliveryMinimum", value)} disabled={loading || !settings.freeDeliveryEnabled} />}
+                  />
+                  <PricingPolicyRow
+                    icon={<Truck className="size-5" />}
+                    title="Nearby"
+                    description="Standard local delivery."
+                    distance={<RangeEditor start={settings.freeDeliveryEnabled ? settings.freeDeliveryMaxKm : "0"} value={settings.nearbyDeliveryMaxKm} onChange={(value) => updateSetting("nearbyDeliveryMaxKm", value)} disabled={loading} label="Nearby maximum distance" />}
+                    fee={<MoneyInput compact label="Nearby delivery fee" value={settings.nearbyDeliveryFee} onChange={(value) => updateSetting("nearbyDeliveryFee", value)} disabled={loading} />}
+                    condition={<span className="text-sm text-[#5F574E]">All orders</span>}
+                  />
+                  <PricingPolicyRow
+                    icon={<Truck className="size-5" />}
+                    title="Farther"
+                    description="Longer routes within the service area."
+                    distance={<RangeEditor start={settings.nearbyDeliveryMaxKm} value={settings.maximumDeliveryKm} onChange={(value) => updateSetting("maximumDeliveryKm", value)} disabled={loading} label="Maximum delivery distance" />}
+                    fee={<MoneyInput compact label="Farther delivery fee" value={settings.fartherDeliveryFee} onChange={(value) => updateSetting("fartherDeliveryFee", value)} disabled={loading} />}
+                    condition={<span className="text-sm text-[#5F574E]">All orders</span>}
+                  />
+                  <PricingPolicyRow
+                    icon={<CircleOff className="size-5" />}
+                    title="Outside area"
+                    description="Orders cannot be placed beyond the limit."
+                    tone="muted"
+                    distance={<span className="text-sm font-medium tabular-nums text-[#5F574E]">Over {formatDistance(settings.maximumDeliveryKm)} km</span>}
+                    fee={<span className="font-semibold text-[#8B1E1E]">Unavailable</span>}
+                    condition={<span className="text-sm text-[#8C8378]">Ordering blocked</span>}
+                  />
+                </div>
               </div>
               <div className="mt-5 overflow-hidden rounded-lg border border-[#E4DAC9]">
                 <div className="flex flex-col gap-3 bg-[#FAF7F0] p-4 sm:flex-row sm:items-center sm:justify-between">
@@ -617,14 +659,48 @@ function StorefrontNoticePreview({ activeCtaDestination, activeNoticeType, activ
   )
 }
 
-function ToggleSwitch({ checked, label, onChange }) {
+function PricingPolicyRow({ action, condition, description, distance, fee, icon, title, tone = "default" }) {
+  const iconClass = tone === "green" ? "bg-emerald-50 text-emerald-700" : tone === "muted" ? "bg-[#EEE8DD] text-[#756D62]" : "bg-white text-[#8B1E1E]"
+  return (
+    <div className="grid gap-4 bg-[#FAF7F0]/55 p-4 lg:grid-cols-[minmax(14rem,1.25fr)_minmax(12rem,1fr)_minmax(9rem,.65fr)_minmax(12rem,1fr)] lg:items-center lg:gap-5">
+      <div className="flex min-w-0 items-start gap-3">
+        <div className={`flex size-10 shrink-0 items-center justify-center ${iconClass}`}>{icon}</div>
+        <div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-3"><p className="font-semibold text-[#2B2B2B]">{title}</p>{action ? <span className="inline-flex shrink-0">{action}</span> : null}</div><p className="mt-1 text-xs leading-relaxed text-[#756D62]">{description}</p></div>
+      </div>
+      <PricingPolicyCell label="Driving distance">{distance}</PricingPolicyCell>
+      <PricingPolicyCell label="Fee">{fee}</PricingPolicyCell>
+      <PricingPolicyCell label="Condition">{condition}</PricingPolicyCell>
+    </div>
+  )
+}
+
+function PricingPolicyCell({ children, label }) {
+  return <div className="min-w-0"><p className="mb-1.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-[#8C8378] lg:hidden">{label}</p><div className="flex min-h-10 items-center">{children}</div></div>
+}
+
+function RangeEditor({ disabled, label, onChange, start, value }) {
+  return (
+    <div className="grid w-full grid-cols-[auto_auto_minmax(0,1fr)] items-center gap-2 text-sm tabular-nums text-[#756D62]">
+      <span>{formatDistance(start)}</span><span aria-hidden="true">–</span>
+      <div className="flex min-w-0 items-center gap-2"><DecimalInput compact label={label} value={value} onChange={onChange} disabled={disabled} /><span className="shrink-0 text-xs font-semibold uppercase">km</span></div>
+    </div>
+  )
+}
+
+function formatDistance(value) {
+  const distance = Number(value)
+  return Number.isFinite(distance) ? distance.toFixed(1) : "0.0"
+}
+
+function ToggleSwitch({ checked, disabled = false, label, onChange }) {
   return (
     <button
       type="button"
       onClick={() => onChange(!checked)}
+      disabled={disabled}
       className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${
         checked ? "bg-[#8B1E1E]" : "bg-[#D8CDBB]"
-      }`}
+      } disabled:cursor-not-allowed disabled:opacity-50`}
       aria-label={label}
       aria-pressed={checked}
     >
@@ -646,7 +722,7 @@ function FormField({ children, label }) {
   )
 }
 
-function MoneyInput({ disabled, label, onChange, value }) {
+function MoneyInput({ compact = false, disabled, label, onChange, value }) {
   const inputRef = useRef(null)
   const [isEditing, setIsEditing] = useState(false)
 
@@ -660,9 +736,8 @@ function MoneyInput({ disabled, label, onChange, value }) {
     setIsEditing(false)
   }
 
-  return (
-    <FormField label={label}>
-      <span className="block">
+  const input = (
+      <span className="block w-full">
         <input
           ref={inputRef}
           type="text"
@@ -677,13 +752,12 @@ function MoneyInput({ disabled, label, onChange, value }) {
           aria-label={`${label} in euro`}
         />
       </span>
-    </FormField>
   )
+  return compact ? input : <FormField label={label}>{input}</FormField>
 }
 
-function DecimalInput({ disabled, label, onChange, value }) {
-  return (
-    <FormField label={label}>
+function DecimalInput({ compact = false, disabled, label, onChange, value }) {
+  const input = (
       <input
         type="text"
         inputMode="decimal"
@@ -696,9 +770,10 @@ function DecimalInput({ disabled, label, onChange, value }) {
         className={`${fieldClassName} tabular-nums`}
         placeholder="0.00"
         disabled={disabled}
+        aria-label={label}
       />
-    </FormField>
   )
+  return compact ? input : <FormField label={label}>{input}</FormField>
 }
 
 function formatEuroInput(value) {

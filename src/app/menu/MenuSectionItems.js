@@ -7,7 +7,7 @@ import MenuAddToCart from './MenuAddToCart'
 
 const ITEMS_PER_PAGE = 6
 
-export default function MenuSectionItems({ items }) {
+export default function MenuSectionItems({ items, showCategory = false }) {
   const [page, setPage] = useState(1)
 
   const totalPages = Math.max(1, Math.ceil(items.length / ITEMS_PER_PAGE))
@@ -22,7 +22,7 @@ export default function MenuSectionItems({ items }) {
     <>
       <div className="grid gap-5 lg:grid-cols-3 lg:gap-7">
         {pageItems.map((item) => (
-          <MenuItemCard key={`${item.id}`} item={item} />
+          <MenuItemCard key={`${item.id}`} item={item} showCategory={showCategory} />
         ))}
       </div>
 
@@ -36,7 +36,7 @@ export default function MenuSectionItems({ items }) {
   )
 }
 
-function MenuItemCard({ item }) {
+function MenuItemCard({ item, showCategory }) {
   const [imageFailed, setImageFailed] = useState(false)
   const hasRemoteImage = Boolean(item.image) && !imageFailed
 
@@ -62,6 +62,7 @@ function MenuItemCard({ item }) {
       </div>
 
       <div className="p-5">
+        {showCategory && item.searchCategory ? <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.16em] text-[#9d2023]">{item.searchCategory}</p> : null}
         <h3 className="font-display text-2xl font-bold leading-tight text-[#2B2B2B] mb-3">
           {item.name}
         </h3>

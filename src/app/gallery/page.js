@@ -5,7 +5,7 @@ import { connection } from 'next/server'
 import Footer from '@/app/components/layout/Footer'
 import Header from '@/app/components/layout/Header'
 import HeroImage from '@/app/components/shared/HeroImage'
-import { getPublishedGalleryPhotosOrEmpty } from '@/lib/publicGalleryData'
+import { getPublishedGalleryPageOrEmpty } from '@/lib/publicGalleryData'
 import { getRestaurantProfileData } from '@/lib/restaurantProfileData'
 import { createPageMetadata } from '@/lib/seo'
 import GalleryGridClient from './GalleryGridClient'
@@ -39,7 +39,7 @@ export default async function GalleryPage() {
   await connection()
   const [restaurantData, galleryItems] = await Promise.all([
     getRestaurantProfileData(),
-    getPublishedGalleryPhotosOrEmpty(),
+    getPublishedGalleryPageOrEmpty({ page: 1, limit: 6 }),
   ])
 
   return (
@@ -47,7 +47,7 @@ export default async function GalleryPage() {
       <Header />
       <main className="overflow-x-hidden bg-[#F8F3EA]">
         <GalleryHero />
-        <GalleryGrid items={galleryItems} />
+        <GalleryGrid galleryPage={galleryItems} />
         <GalleryNotes />
       </main>
       <Footer restaurantData={restaurantData} />
@@ -87,7 +87,7 @@ function GalleryHero() {
   )
 }
 
-function GalleryGrid({ items }) {
+function GalleryGrid({ galleryPage }) {
   return (
     <section className="py-16 lg:py-24">
       <div className="site-container">
@@ -108,7 +108,7 @@ function GalleryGrid({ items }) {
           </Link>
         </div>
 
-        <GalleryGridClient items={items} />
+        <GalleryGridClient items={galleryPage.items} pagination={galleryPage} />
       </div>
     </section>
   )

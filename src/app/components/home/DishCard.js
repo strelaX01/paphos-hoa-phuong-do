@@ -6,7 +6,7 @@ import Image from 'next/image'
  */
 export default function DishCard({ dish, index }) {
   return (
-    <article className="group flex flex-col">
+    <article data-home-reveal="rise" className="group flex flex-col" style={{ '--home-reveal-delay': `${Math.min(index, 3) * 75}ms` }}>
       {/* Image */}
       <div className="relative overflow-hidden aspect-[4/3] bg-[#E8DFC8] mb-4">
         <Image

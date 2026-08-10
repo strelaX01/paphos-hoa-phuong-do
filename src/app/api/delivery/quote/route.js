@@ -18,7 +18,11 @@ export async function POST(request) {
     return Response.json({ error: error.message === "large" ? "Request body is too large." : "Invalid JSON body." }, { status: error.message === "large" ? 413 : 400, headers: rate.headers })
   }
   try {
-    const quote = await quoteDeliveryRoute(body)
+    const subtotalCents = Math.round(Number(body?.subtotal) * 100)
+    if (!Number.isSafeInteger(subtotalCents) || subtotalCents < 0 || subtotalCents > 1000000) {
+      return Response.json({ error: "Cart subtotal is invalid." }, { status: 422, headers: rate.headers })
+    }
+    const quote = await quoteDeliveryRoute(body, { subtotalCents })
     return Response.json({ data: quote }, { headers: { ...rate.headers, "Cache-Control": "no-store" } })
   } catch (error) {
     const isRoutingError = error instanceof DeliveryRoutingError

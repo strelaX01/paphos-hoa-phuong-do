@@ -54,7 +54,22 @@ async function consume(key, limit, windowMs) {
 
   return {
     allowed: entry.count <= limit,
+    count: entry.count,
+    resetAt: new Date(entry.resetAt),
     retryAfter: Math.max(1, Math.ceil((new Date(entry.resetAt).getTime() - now.getTime()) / 1000)),
+  };
+}
+
+export async function checkPublicWriteRateLimit(request, { namespace, limit, windowMs }) {
+  const result = await consume(rateKey(namespace, getClientIp(request)), limit, windowMs);
+  return {
+    allowed: result.allowed,
+    headers: {
+      "X-RateLimit-Limit": String(limit),
+      "X-RateLimit-Remaining": String(Math.max(0, limit - result.count)),
+      "X-RateLimit-Reset": String(Math.ceil(result.resetAt.getTime() / 1000)),
+      ...(!result.allowed ? { "Retry-After": String(result.retryAfter) } : {}),
+    },
   };
 }
 

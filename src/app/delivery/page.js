@@ -24,6 +24,9 @@ export default async function DeliveryPage() {
   const openingStatus = getTodayOpeningStatus(restaurantData.openingHours)
   const nearbyFee = formatMoney(pricing.nearbyDeliveryFee)
   const fartherFee = formatMoney(pricing.fartherDeliveryFee)
+  const freeDeliveryText = pricing.freeDeliveryEnabled
+    ? ` Orders of ${formatMoney(pricing.freeDeliveryMinimum)} or more get free delivery within ${pricing.freeDeliveryMaxKm.toFixed(1)} km.`
+    : ''
 
   return (
     <>
@@ -40,7 +43,7 @@ export default async function DeliveryPage() {
                 Vietnamese dishes delivered fresh.
               </h2>
               <p className="mt-4 max-w-2xl text-[14px] leading-relaxed text-[#6B6560]">
-                Add dishes to your cart and send the order request. Delivery is {nearbyFee} nearby and {fartherFee} for farther areas.
+                Add dishes to your cart and send the order request. Delivery is {nearbyFee} nearby and {fartherFee} for farther areas.{freeDeliveryText}
               </p>
             </div>
             <DeliveryOrderClient />

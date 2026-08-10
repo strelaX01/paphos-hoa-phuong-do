@@ -1,30 +1,27 @@
 import { authorizeAdminRequest } from "@/lib/adminApiAuth";
+import { readAdminJson } from "@/lib/adminJsonRequest";
 import { prisma } from "@/lib/prisma";
 import { reservationAdminSelect, serializeAdminReservation } from "@/lib/reservationAdminData";
 import { validateAdminReservationInput } from "@/lib/validations/adminReservation";
+import { RESERVATION_STATUSES } from "@/lib/reservationStatus";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-const STATUSES = ["PENDING", "CONFIRMED", "SEATED", "COMPLETED", "CANCELLED", "NO_SHOW"];
 
 export async function PATCH(request, context) {
   const auth = await authorizeAdminRequest(request);
   if (auth.response) return auth.response;
   const { reservationId } = await context.params;
 
-  let body;
-  try {
-    body = await request.json();
-  } catch {
-    return Response.json({ error: "Invalid JSON body." }, { status: 400 });
-  }
+  const parsed = await readAdminJson(request);
+  if (parsed.response) return parsed.response;
+  const body = parsed.data;
 
   const status = typeof body?.status === "string" ? body.status.trim().toUpperCase() : "";
   const hasInternalNote = Object.prototype.hasOwnProperty.call(body || {}, "internalNote");
   const internalNote = typeof body?.internalNote === "string" ? body.internalNote.trim() : "";
 
-  if (status && !STATUSES.includes(status)) return Response.json({ error: "Invalid reservation status." }, { status: 422 });
+  if (status && !RESERVATION_STATUSES.includes(status)) return Response.json({ error: "Invalid reservation status." }, { status: 422 });
   if (hasInternalNote && typeof body.internalNote !== "string") return Response.json({ error: "Internal note must be text." }, { status: 422 });
   if (internalNote.length > 2000) return Response.json({ error: "Internal note must be 2000 characters or fewer." }, { status: 422 });
   if (!status && !hasInternalNote) return Response.json({ error: "Provide a status or internal note to update." }, { status: 422 });
@@ -51,12 +48,9 @@ export async function PUT(request, context) {
   if (auth.response) return auth.response;
   const { reservationId } = await context.params;
 
-  let body;
-  try {
-    body = await request.json();
-  } catch {
-    return Response.json({ error: "Invalid JSON body." }, { status: 400 });
-  }
+  const parsed = await readAdminJson(request);
+  if (parsed.response) return parsed.response;
+  const body = parsed.data;
 
   const validation = validateAdminReservationInput(body);
   if (!validation.isValid) return Response.json({ errors: validation.errors }, { status: 422 });

@@ -19,6 +19,7 @@ export default function ReservationForm({ openingHours }) {
   const [selectedDate, setSelectedDate] = useState('')
   const [selectedTime, setSelectedTime] = useState('')
   const formRef = useRef(null)
+  const idempotencyKeyRef = useRef('')
   const minDate = getCyprusDateString()
   const lastBookingDate = new Date(`${minDate}T12:00:00.000Z`)
   lastBookingDate.setUTCDate(lastBookingDate.getUTCDate() + 180)
@@ -74,11 +75,12 @@ export default function ReservationForm({ openingHours }) {
 
     const formData = new FormData(event.currentTarget)
     const body = Object.fromEntries(formData.entries())
+    if (!idempotencyKeyRef.current) idempotencyKeyRef.current = crypto.randomUUID()
 
     try {
       const response = await fetch('/api/reservations', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': idempotencyKeyRef.current },
         body: JSON.stringify(body),
       })
       const payload = await response.json().catch(() => ({}))
@@ -92,6 +94,7 @@ export default function ReservationForm({ openingHours }) {
       formRef.current?.reset()
       setSelectedDate('')
       setSelectedTime('')
+      idempotencyKeyRef.current = ''
     } catch (error) {
       setState({ success: false, error: error.message || 'Could not send reservation request.' })
     } finally {
@@ -117,10 +120,8 @@ export default function ReservationForm({ openingHours }) {
       <Field label="Email" name="email" type="email" icon={<Mail className="size-4" />} placeholder="you@example.com" maxLength={254} />
 
       <div className="grid gap-4 sm:grid-cols-3">
-        <Field
-          label="Date"
+        <DateField
           name="date"
-          type="date"
           min={minDate}
           max={maxDate}
           value={selectedDate}
@@ -128,7 +129,6 @@ export default function ReservationForm({ openingHours }) {
             setSelectedDate(event.target.value)
             setSelectedTime('')
           }}
-          icon={<Calendar className="size-4" />}
         />
 
         <label className="block">
@@ -308,4 +308,63 @@ function Field({ inputMode, label, max, maxLength, min, minLength, name, icon, o
       </span>
     </label>
   )
+}
+
+function DateField({ max, min, name, onChange, value }) {
+  const inputRef = useRef(null)
+
+  const openPicker = () => {
+    const input = inputRef.current
+    if (!input) return
+    if (typeof input.showPicker === 'function') {
+      try {
+        input.showPicker()
+        return
+      } catch {
+        // Fall back to the native click behavior on browsers that restrict showPicker().
+      }
+    }
+    input.focus()
+    input.click()
+  }
+
+  return (
+    <div className="block">
+      <span className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.2em] text-[#8B6F47]">
+        Date
+      </span>
+      <div className="relative">
+        <button
+          type="button"
+          onClick={openPicker}
+          className="flex h-12 w-full items-center border border-[#E8DFC8] bg-white/70 px-3 text-left text-[#2B2B2B] outline-none transition-all hover:border-[#D4A017] focus-visible:border-[#D4A017] focus-visible:ring-2 focus-visible:ring-[#D4A017]/20"
+          aria-label={`Choose reservation date. Current value: ${value ? formatDisplayDate(value) : 'not selected'}`}
+          aria-haspopup="dialog"
+        >
+          <Calendar className="size-4 shrink-0 text-[#8B1E1E]" aria-hidden="true" />
+          <span className={`min-w-0 flex-1 px-3 text-[14px] tabular-nums ${value ? "text-[#2B2B2B]" : "text-[#9C9489]"}`}>
+            {formatDisplayDate(value)}
+          </span>
+        </button>
+        <input
+          ref={inputRef}
+          name={name}
+          type="date"
+          required
+          min={min}
+          max={max}
+          value={value}
+          onChange={onChange}
+          aria-label="Reservation date, day month year"
+          tabIndex={-1}
+          className="pointer-events-none absolute bottom-0 left-0 size-px opacity-0"
+        />
+      </div>
+    </div>
+  )
+}
+
+function formatDisplayDate(value) {
+  const [year, month, day] = String(value || '').split('-')
+  return year && month && day ? `${day}/${month}/${year}` : 'DD/MM/YYYY'
 }

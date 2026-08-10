@@ -35,6 +35,7 @@ export default function CheckoutClient({ initialAvailability, openingHours }) {
   const router = useRouter()
   const cart = useCart()
   const formRef = useRef(null)
+  const idempotencyKeyRef = useRef("")
   const stepHeadingRef = useRef(null)
   const [checkoutStep, setCheckoutStep] = useState(1)
   const [isPending, setIsPending] = useState(false)
@@ -71,13 +72,23 @@ export default function CheckoutClient({ initialAvailability, openingHours }) {
   }
 
   function applyResolvedAddress(nextAddress) {
-    setAddress({
-      street: String(nextAddress?.street || ""),
-      details: String(nextAddress?.details || ""),
-      area: String(nextAddress?.area || ""),
-      label: String(nextAddress?.label || ""),
-      hasHouseNumber: nextAddress?.hasHouseNumber === true,
-      postalCode: String(nextAddress?.postalCode || ""),
+    setAddress((current) => {
+      const street = String(nextAddress?.street || current.street || "")
+      const area = String(nextAddress?.area || current.area || "")
+      const postalCode = String(nextAddress?.postalCode || current.postalCode || "")
+      const providerLabel = String(nextAddress?.label || "")
+      const label = nextAddress?.area || !area
+        ? providerLabel
+        : [street, area, postalCode, "Cyprus"].filter(Boolean).join(", ")
+
+      return {
+        street,
+        details: String(nextAddress?.details ?? current.details ?? ""),
+        area,
+        label,
+        hasHouseNumber: nextAddress?.hasHouseNumber === true,
+        postalCode,
+      }
     })
   }
 
@@ -148,9 +159,10 @@ export default function CheckoutClient({ initialAvailability, openingHours }) {
     }
 
     try {
+      if (!idempotencyKeyRef.current) idempotencyKeyRef.current = crypto.randomUUID()
       const payload = await fetch("/api/orders", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKeyRef.current },
         body: JSON.stringify(body),
       }).then(readApi)
       setResult({ success: true, ...payload.data })
@@ -159,6 +171,7 @@ export default function CheckoutClient({ initialAvailability, openingHours }) {
       setDeliveryFeeAccepted(false)
       setDestination(null)
       setDeliveryQuote(null)
+      idempotencyKeyRef.current = ""
       setAddress({ street: "", details: "", area: "", label: "", hasHouseNumber: null, postalCode: "" })
       setContact({ name: "", phone: "", email: "" })
       setDeliveryNotes("")
@@ -203,10 +216,10 @@ export default function CheckoutClient({ initialAvailability, openingHours }) {
             {checkoutStep === 1 ? (
               <div className="space-y-4">
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <Input name="name" label="Full name" minLength={2} maxLength={100} autoComplete="name" value={contact.name} onChange={(event) => updateContact("name", event.target.value)} />
-                  <Input name="phone" label="Phone number" type="tel" minLength={6} maxLength={30} autoComplete="tel" inputMode="tel" pattern="\+?[0-9 ()\-.]{6,30}" value={contact.phone} onChange={(event) => updateContact("phone", sanitizePhone(event.target.value))} />
+                  <Input name="name" label="Full name" minLength={2} maxLength={100} autoComplete="name" placeholder="e.g. Maria Georgiou" value={contact.name} onChange={(event) => updateContact("name", event.target.value)} />
+                  <Input name="phone" label="Phone number" type="tel" minLength={6} maxLength={30} autoComplete="tel" inputMode="tel" pattern="\+?[0-9 ()\-.]{6,30}" placeholder="e.g. +357 99 123456" value={contact.phone} onChange={(event) => updateContact("phone", sanitizePhone(event.target.value))} />
                 </div>
-                <Input name="email" label="Email (optional)" type="email" maxLength={254} autoComplete="email" required={false} value={contact.email} onChange={(event) => updateContact("email", event.target.value)} />
+                <Input name="email" label="Email (optional)" type="email" maxLength={254} autoComplete="email" placeholder="e.g. name@example.com" required={false} value={contact.email} onChange={(event) => updateContact("email", event.target.value)} />
                 <div className="border border-[#E8DFC8] bg-white/55 px-4 py-3"><p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#8B6F47]">Payment</p><p className="mt-1 text-sm font-semibold text-[#2B2B2B]">Cash on delivery</p></div>
                 <button type="button" onClick={goToDeliveryStep} className="flex w-full items-center justify-center gap-2 bg-[#8B1E1E] px-7 py-4 text-[13px] font-semibold uppercase tracking-[0.14em] text-white transition-colors hover:bg-[#A02424]">Continue to delivery <ArrowRight className="size-4" /></button>
               </div>
@@ -219,18 +232,19 @@ export default function CheckoutClient({ initialAvailability, openingHours }) {
                   <div className="border-l-2 border-[#D4A017] bg-[#FFF9E9] px-4 py-3" role="status" aria-live="polite">
                     <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#8B6F47]">Address found from the pin</p>
                     <p className="mt-1 text-sm font-semibold leading-relaxed text-[#2B2B2B]">{address.label}</p>
-                    <p className="mt-1 text-xs leading-relaxed text-[#6B6560]">{address.hasHouseNumber ? "Please verify this is the correct entrance before ordering." : "The map found the street, but not a house number. Complete the house, building, or apartment field above."}</p>
+                    <p className="mt-1 text-xs leading-relaxed text-[#6B6560]">{!address.area ? "The map found the street, but could not verify the area or village. Enter it manually above, then confirm the pin is at the correct entrance." : address.hasHouseNumber ? "Please verify this is the correct entrance before ordering." : "The map found the street, but not a house number. Complete the house, building, or apartment field above."}</p>
                   </div>
                 ) : null}
                 <DeliveryLocationPicker
                   addressQuery={[address.details, address.street, address.area].filter(Boolean).join(", ")}
                   destination={destination}
                   quote={deliveryQuote}
+                  subtotal={cart.subtotal}
                   onDestinationChange={setDestination}
                   onQuoteChange={updateQuote}
                   onAddressSelected={applyResolvedAddress}
                 />
-                <p className="border-l-2 border-[#D4A017] bg-[#F2EAD8] px-4 py-3 text-[13px] leading-relaxed text-[#5F5547]">Nearby routes cost {formatMoney(cart.nearbyDeliveryFee)} and farther routes cost {formatMoney(cart.fartherDeliveryFee)}. The server verifies the driving distance again when the order is placed.</p>
+                <p className="border-l-2 border-[#D4A017] bg-[#F2EAD8] px-4 py-3 text-[13px] leading-relaxed text-[#5F5547]">{deliveryPricingSummary(cart)} The server verifies the cart and driving distance again when the order is placed.</p>
                 <label className="block"><span className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.2em] text-[#8B6F47]">Delivery notes</span><textarea name="notes" rows={4} maxLength={1000} value={deliveryNotes} onChange={(event) => setDeliveryNotes(event.target.value)} placeholder="Door code, floor, landmark, or preferred call instructions" className="w-full resize-y border border-[#E8DFC8] bg-white/70 px-4 py-3 text-base leading-relaxed text-[#2B2B2B] outline-none placeholder:text-[#9C9489] focus:border-[#D4A017] focus:ring-2 focus:ring-[#D4A017]/20 sm:text-[14px]" /></label>
                 <label className="flex cursor-pointer items-start gap-3 border border-[#D4A017]/45 bg-[#FFF9E9] p-4 text-[#2B2B2B] transition-colors hover:border-[#D4A017]">
                   <input type="checkbox" name="deliveryFeeConsent" required checked={deliveryFeeAccepted} onChange={(event) => setDeliveryFeeAccepted(event.target.checked)} disabled={!pricingReady || !locationReady} className="mt-0.5 size-5 shrink-0 accent-[#8B1E1E] disabled:cursor-not-allowed" aria-describedby="delivery-fee-consent-copy" />
@@ -291,54 +305,68 @@ function EmptyCart() {
 
 function OrderSummary({ cart, locked, quote }) {
   return (
-    <aside className="border border-[#D4A017]/25 bg-[#1E1A18] p-5 text-white shadow-2xl shadow-black/10 lg:sticky lg:top-24">
-      <div className="mb-5 flex items-center justify-between border-b border-white/10 pb-4">
+    <aside className="border border-[#dfd4c4] bg-[#fbf8f2] text-[#2b241e] shadow-[0_18px_45px_rgba(52,39,27,0.1)] lg:sticky lg:top-24">
+      <div className="flex min-h-[88px] items-center justify-between border-b border-[#e4dac9] px-5 py-4 sm:px-6">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.25em] text-[#D4A017]">Your Order</p>
-          <h2 className="mt-1 font-display text-3xl font-bold">Summary</h2>
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#9d2023]">Your order</p>
+          <div className="mt-1 flex items-baseline gap-2.5">
+            <h2 className="font-display text-[28px] font-semibold leading-none">Summary</h2>
+            <span className="text-[11px] text-[#81766b]">{cart.itemCount} {cart.itemCount === 1 ? "item" : "items"}</span>
+          </div>
         </div>
-        <div className="flex size-12 items-center justify-center bg-[#8B1E1E]"><ShoppingBag className="size-5" /></div>
+        <div className="flex size-11 items-center justify-center bg-[#9d2023] text-white"><ShoppingBag className="size-5" /></div>
       </div>
 
-      <div className="max-h-[440px] space-y-3 overflow-y-auto pr-1">
+      <div className="max-h-[480px] divide-y divide-[#e4dac9] overflow-y-auto px-5 sm:px-6">
         {cart.items.map((item) => {
           const cartKey = item.cartKey || getCartItemKey(item)
           return (
-          <div key={cartKey} className="border border-white/10 bg-white/[0.03] p-3">
-            <div className="grid grid-cols-[64px_1fr_auto] gap-3">
-              <div className="relative size-16 overflow-hidden bg-white/10">
-                {item.image ? <Image src={item.image} alt={item.name} fill className="object-cover" sizes="64px" /> : null}
+          <article key={cartKey} className="py-5">
+            <div className="grid grid-cols-[64px_minmax(0,1fr)_36px] gap-3">
+              <div className="relative size-16 overflow-hidden border border-[#e4dac9] bg-[#f1eadf]">
+                {item.image ? <Image src={item.image} alt={item.name} fill className="object-cover" sizes="64px" /> : <span className="grid h-full place-items-center text-[#a89c8c]"><ShoppingBag className="size-5" /></span>}
               </div>
               <div className="min-w-0">
-                <p className="truncate font-display text-lg font-bold leading-tight">{item.name}</p>
-                {item.variantLabel ? <p className="mt-0.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#D4A017]">{item.variantLabel}</p> : null}
-                <p className="mt-0.5 text-[12px] text-white/45">{formatMoney(item.price)}</p>
-                <div className="mt-3 flex items-center gap-2">
-                  <QtyButton disabled={locked} onClick={() => cart.updateQty(cartKey, -1)} label={`Decrease ${item.name}`}><Minus className="size-3.5" /></QtyButton>
-                  <span className="min-w-8 text-center text-[13px] font-semibold">{item.qty}</span>
-                  <QtyButton disabled={locked || item.qty >= DELIVERY_CONFIG.maxItemQuantity} onClick={() => cart.updateQty(cartKey, 1)} label={`Increase ${item.name}`}><Plus className="size-3.5" /></QtyButton>
-                </div>
+                <p className="line-clamp-2 text-[14px] font-semibold leading-snug text-[#2b241e]">{item.name}</p>
+                {item.variantLabel ? <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.12em] text-[#9d2023]">{item.variantLabel}</p> : null}
+                <p className="mt-1 text-[12px] font-semibold tabular-nums text-[#9d2023]">{formatMoney(item.price)}</p>
               </div>
-              <button type="button" disabled={locked} onClick={() => cart.removeItem(cartKey)} className="text-white/35 transition-colors hover:text-[#D4A017] disabled:opacity-30" aria-label={`Remove ${item.name}`}>
+              <button type="button" disabled={locked} onClick={() => cart.removeItem(cartKey)} className="flex size-9 items-center justify-center border border-[#e4dac9] text-[#9d2023] transition-colors hover:border-[#9d2023] hover:bg-[#9d2023] hover:text-white disabled:cursor-not-allowed disabled:opacity-40" aria-label={`Remove ${item.name}`}>
                 <Trash2 className="size-4" />
               </button>
             </div>
-            <input value={item.note || ""} onChange={(event) => cart.updateNote(cartKey, event.target.value)} disabled={locked} maxLength={300} placeholder="Kitchen note for this dish" className="mt-3 h-10 w-full border border-white/15 bg-transparent px-2 text-base text-white outline-none placeholder:text-white/30 focus:border-[#D4A017] sm:h-9 sm:text-xs" />
-          </div>
+
+            <div className="mt-4 flex items-center justify-between gap-3">
+              <div className="grid h-9 w-[112px] shrink-0 grid-cols-[36px_1fr_36px] border border-[#d9cdbb] bg-white">
+                <QtyButton disabled={locked || Number(item.qty) <= 1} onClick={() => cart.updateQty(cartKey, -1)} label={`Decrease ${item.name}`}><Minus className="size-3.5" /></QtyButton>
+                <span className="grid place-items-center border-x border-[#e4dac9] text-[13px] font-semibold tabular-nums">{item.qty}</span>
+                <QtyButton disabled={locked || Number(item.qty) >= DELIVERY_CONFIG.maxItemQuantity} onClick={() => cart.updateQty(cartKey, 1)} label={`Increase ${item.name}`}><Plus className="size-3.5" /></QtyButton>
+              </div>
+              <span className="min-w-[72px] text-right text-[12px] font-medium leading-none tabular-nums text-[#81766b]">{formatMoney(Number(item.price) * Number(item.qty))}</span>
+            </div>
+
+            <input value={item.note || ""} onChange={(event) => cart.updateNote(cartKey, event.target.value)} disabled={locked} maxLength={300} placeholder="Add a kitchen note (optional)" className="mt-3 h-11 w-full border border-[#d9cdbb] bg-white px-3 text-base text-[#2b241e] outline-none placeholder:text-[#9a9085] focus:border-[#9d2023] disabled:cursor-not-allowed disabled:bg-[#f1eadf] sm:h-10 sm:text-sm" />
+          </article>
           )
         })}
       </div>
 
-      <div className="mt-5 space-y-2 border-t border-white/10 pt-4 text-[13px]">
+      <div className="space-y-2 border-t border-[#e4dac9] bg-white px-5 py-5 text-[13px] sm:px-6">
         <PriceRow label="Subtotal" value={formatMoney(cart.subtotal)} />
         <PriceRow label="Delivery fee" value={quote?.mode === "automatic" ? formatMoney(quote.fee) : "To be confirmed"} />
         {quote?.mode === "automatic" ? <PriceRow label="Total" value={formatMoney(cart.subtotal + quote.fee)} strong /> : null}
-        <p className="pt-2 text-[11px] leading-relaxed text-white/40">
-          {quote?.mode === "automatic" ? `Calculated from the confirmed ${quote.distanceKm.toFixed(1)} km driving route.` : `Nearby routes cost ${formatMoney(cart.nearbyDeliveryFee)} and farther routes cost ${formatMoney(cart.fartherDeliveryFee)}. The restaurant will confirm the final amount.`}
+        <p className="mt-3 border-l-2 border-[#d4a017] pl-3 pt-0 text-[11px] leading-relaxed text-[#81766b]">
+          {quote?.mode === "automatic" ? `Calculated from the confirmed ${quote.distanceKm.toFixed(1)} km driving route.` : `${deliveryPricingSummary(cart)} The restaurant will confirm the final amount.`}
         </p>
       </div>
     </aside>
   )
+}
+
+function deliveryPricingSummary(cart) {
+  const paidTiers = `Nearby routes cost ${formatMoney(cart.nearbyDeliveryFee)} and farther routes cost ${formatMoney(cart.fartherDeliveryFee)}.`
+  if (!cart.freeDeliveryEnabled) return paidTiers
+  return `Free delivery within ${Number(cart.freeDeliveryMaxKm).toFixed(1)} km on orders of ${formatMoney(cart.freeDeliveryMinimum)} or more. ${paidTiers}`
 }
 
 function OrderSuccessModal({ onClose, order }) {
@@ -357,6 +385,6 @@ function OrderSuccessModal({ onClose, order }) {
 function Input({ autoComplete, inputMode, label, maxLength, minLength, name, onChange, pattern, placeholder, required = true, sanitize, type = "text", value }) {
   return <label className="block"><span className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.2em] text-[#8B6F47]">{label}</span><input name={name} type={type} required={required} minLength={minLength} maxLength={maxLength} pattern={pattern} inputMode={inputMode} autoComplete={autoComplete} placeholder={placeholder} value={value ?? ""} onChange={onChange} onInput={sanitize ? (event) => { event.currentTarget.value = sanitize(event.currentTarget.value) } : undefined} className="h-12 w-full border border-[#E8DFC8] bg-white/70 px-4 text-base text-[#2B2B2B] outline-none placeholder:text-[#9C9489] focus:border-[#D4A017] focus:ring-2 focus:ring-[#D4A017]/20 sm:text-[14px]" /></label>
 }
-function QtyButton({ children, disabled, label, onClick }) { return <button type="button" disabled={disabled} onClick={onClick} className="flex size-8 items-center justify-center border border-white/15 text-white/70 hover:border-[#D4A017]/60 hover:text-[#D4A017] disabled:cursor-not-allowed disabled:opacity-30" aria-label={label}>{children}</button> }
-function PriceRow({ label, strong = false, value }) { return <div className={`flex justify-between ${strong ? "border-t border-white/10 pt-2 font-bold text-white" : "text-white/45"}`}><span>{label}</span><span className="tabular-nums">{value}</span></div> }
+function QtyButton({ children, disabled, label, onClick }) { return <button type="button" disabled={disabled} onClick={onClick} className="flex items-center justify-center text-[#5f574f] transition-colors hover:bg-[#f4ede2] hover:text-[#9d2023] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#d4a017] disabled:cursor-not-allowed disabled:bg-[#f4ede2]/55 disabled:text-[#b8afa4]" aria-label={label}>{children}</button> }
+function PriceRow({ label, strong = false, value }) { return <div className={`flex items-baseline justify-between gap-4 ${strong ? "mt-3 border-t border-[#e4dac9] pt-3 font-bold text-[#2b241e]" : "text-[#81766b]"}`}><span>{label}</span><span className={`text-right tabular-nums ${strong ? "text-base" : "font-medium text-[#5f574f]"}`}>{value}</span></div> }
 function sanitizePhone(value) { return value.replace(/[^\d+\s().-]/g, "").replace(/(?!^)\+/g, "") }

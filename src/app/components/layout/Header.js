@@ -17,7 +17,7 @@ function routeIsActive(pathname, href) {
 export default function Header() {
   const [isScrolled, setIsScrolled] = useState(false)
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
-  const closeButtonRef = useRef(null)
+  const mobileDialogRef = useRef(null)
   const pathname = usePathname()
 
   const forceSolid = NO_HERO_ROUTES.some((route) => pathname.startsWith(route))
@@ -40,7 +40,7 @@ export default function Header() {
 
     document.body.style.overflow = 'hidden'
     window.addEventListener('keydown', onKeyDown)
-    closeButtonRef.current?.focus()
+    mobileDialogRef.current?.focus({ preventScroll: true })
 
     return () => {
       document.body.style.overflow = previousOverflow
@@ -54,7 +54,7 @@ export default function Header() {
         className={`fixed inset-x-0 top-0 z-50 transition-[background-color,border-color,box-shadow] duration-500 ${
           solidStyle
             ? 'border-b border-[#dfd3bd] bg-[#faf6ee]/95 shadow-[0_10px_35px_rgba(35,25,17,0.06)] backdrop-blur-xl'
-            : 'border-b border-white/15 bg-[#15110e]/20 backdrop-blur-[3px]'
+            : 'border-b border-transparent bg-[#15110e]/20 backdrop-blur-[3px]'
         }`}
       >
         <div className="site-container">
@@ -96,11 +96,11 @@ export default function Header() {
               })}
             </nav>
 
-            <div className="hidden shrink-0 items-center gap-3 lg:flex">
+            <div className="flex shrink-0 items-center gap-1.5 lg:gap-3">
               <CartButton isScrolled={solidStyle} />
               <Link
                 href="/book-table"
-                className={`header-reserve group relative flex h-11 items-center overflow-hidden border px-4 text-[11px] font-bold uppercase tracking-[0.08em] transition-colors duration-300 xl:px-5 ${
+                className={`header-reserve group relative hidden h-11 items-center overflow-hidden border px-4 text-[11px] font-bold uppercase tracking-[0.08em] transition-colors duration-300 lg:flex xl:px-5 ${
                   solidStyle
                     ? 'border-[#9d2023] text-white'
                     : 'border-white/55 text-white hover:border-[#d4a017]'
@@ -111,14 +111,10 @@ export default function Header() {
                 <span className="relative">Reserve</span>
                 <ArrowUpRight className="relative ml-2 h-4 w-4 transition-transform duration-300 group-hover:-translate-y-0.5 group-hover:translate-x-0.5" strokeWidth={1.8} aria-hidden="true" />
               </Link>
-            </div>
-
-            <div className="flex shrink-0 items-center gap-1.5 lg:hidden">
-              <CartButton isScrolled={solidStyle} />
               <button
                 type="button"
                 onClick={() => setIsMobileMenuOpen(true)}
-                className={`grid h-10 w-10 place-items-center border transition-colors duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d4a017] ${
+                className={`grid h-10 w-10 place-items-center border transition-colors duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d4a017] lg:hidden ${
                   solidStyle ? 'border-[#dfd3bd] text-[#211a15]' : 'border-white/35 text-white'
                 }`}
                 aria-expanded={isMobileMenuOpen}
@@ -133,7 +129,7 @@ export default function Header() {
       </header>
 
       <div
-        className={`fixed inset-0 z-[65] bg-[#160f0c]/70 backdrop-blur-sm transition-opacity duration-500 lg:hidden ${
+        className={`fixed inset-0 z-[65] bg-[#160f0c]/62 backdrop-blur-[2px] transition-opacity duration-300 lg:hidden ${
           isMobileMenuOpen ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0'
         }`}
         onClick={() => setIsMobileMenuOpen(false)}
@@ -141,36 +137,35 @@ export default function Header() {
       />
 
       <div
+        ref={mobileDialogRef}
         id="mobile-navigation"
         role="dialog"
         aria-modal="true"
         aria-label="Navigation"
         aria-hidden={!isMobileMenuOpen}
         inert={!isMobileMenuOpen}
-        className={`fixed inset-0 z-[70] flex flex-col overflow-hidden bg-[#17110e] transition-transform duration-500 lg:hidden ${
+        tabIndex={-1}
+        className={`fixed bottom-0 right-0 top-0 z-[70] flex w-[min(88vw,370px)] flex-col overflow-hidden bg-[#fbf8f2] shadow-[-24px_0_60px_rgba(20,13,9,0.2)] outline-none transition-transform duration-[450ms] lg:hidden ${
           isMobileMenuOpen ? 'hpd-mobile-menu-open translate-x-0' : 'translate-x-full'
         }`}
       >
-        <Image src="/images/hpd8.png" alt="" fill sizes="100vw" className="object-cover opacity-45" priority />
-        <div className="absolute inset-0 bg-[#160f0c]/75" />
-
-        <div className="relative z-10 flex h-[78px] shrink-0 items-center justify-between border-b border-white/15 px-5">
+        <div className="flex h-[78px] shrink-0 items-center justify-between border-b border-[#e4dac9] px-6">
           <Link href="/" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center" aria-label="Hoa Phuong Do home">
-            <Image src="/images/hoa-phuong-do-logo.png" alt="Hoa Phuong Do" width={100} height={64} className="h-[62px] w-auto object-contain drop-shadow-[0_2px_7px_rgba(0,0,0,0.5)]" />
+            <Image src="/images/hoa-phuong-do-logo.png" alt="Hoa Phuong Do" width={100} height={64} className="h-[62px] w-auto object-contain" />
           </Link>
           <button
-            ref={closeButtonRef}
             type="button"
             onClick={() => setIsMobileMenuOpen(false)}
-            className="grid h-10 w-10 place-items-center border border-white/35 text-white transition-colors hover:border-[#e5bd43] hover:text-[#e5bd43] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d4a017]"
+            className="grid h-10 w-10 place-items-center border border-[#d9cdbb] text-[#2b241e] transition-colors hover:border-[#9d2023] hover:text-[#9d2023] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d4a017]"
             aria-label="Close menu"
           >
             <X className="h-5 w-5" strokeWidth={1.6} aria-hidden="true" />
           </button>
         </div>
 
-        <div className="relative z-10 flex min-h-0 flex-1 flex-col">
-          <nav className="flex min-h-0 flex-1 flex-col justify-center px-6 py-4 sm:mx-auto sm:w-full sm:max-w-xl sm:px-9" aria-label="Mobile navigation">
+        <div className="flex min-h-0 flex-1 flex-col">
+          <nav className="flex min-h-0 flex-1 flex-col px-7 pb-5 pt-8" aria-label="Mobile navigation">
+            <p className="mb-3 text-[9px] font-bold uppercase tracking-[0.2em] text-[#9d2023]">Navigation</p>
             {navLinks.map((link, index) => {
               const isActive = routeIsActive(pathname, link.href)
               return (
@@ -178,35 +173,32 @@ export default function Header() {
                   key={link.href}
                   href={link.href}
                   onClick={() => setIsMobileMenuOpen(false)}
-                  className={`hpd-mobile-nav-item group relative flex min-h-[50px] items-center border-b border-white/15 py-2 pl-4 transition-colors ${
-                    isActive ? 'text-[#e5bd43]' : 'text-white hover:text-[#e5bd43]'
+                  className={`hpd-mobile-nav-item group relative flex min-h-[54px] items-center border-b border-[#e4dac9] py-2 pl-4 transition-colors ${
+                    isActive ? 'text-[#9d2023]' : 'text-[#2b241e] hover:text-[#9d2023]'
                   }`}
                   style={{ '--mobile-nav-delay': `${110 + index * 60}ms` }}
                   aria-current={isActive ? 'page' : undefined}
                 >
-                  <span className={`absolute inset-y-3 left-0 w-[2px] origin-center bg-[#e5bd43] transition-transform duration-300 ${isActive ? 'scale-y-100' : 'scale-y-0 group-hover:scale-y-100'}`} />
-                  <span className="font-[family-name:var(--font-display-local)] text-[clamp(1.55rem,7vw,2.05rem)] leading-none">
+                  <span className={`absolute inset-y-3.5 left-0 w-[3px] origin-center bg-[#9d2023] transition-transform duration-300 ${isActive ? 'scale-y-100' : 'scale-y-0 group-hover:scale-y-100'}`} />
+                  <span className="text-[17px] font-medium leading-none">
                     {link.label}
                   </span>
-                  <ArrowUpRight className={`ml-auto h-4 w-4 transition-[transform,opacity] duration-300 ${isActive ? 'opacity-100' : 'opacity-0 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:opacity-100'}`} strokeWidth={1.5} aria-hidden="true" />
+                  <ArrowUpRight className={`ml-auto h-4 w-4 transition-[transform,opacity] duration-300 ${isActive ? 'opacity-100' : 'opacity-0 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:opacity-100'}`} strokeWidth={1.6} aria-hidden="true" />
                 </Link>
               )
             })}
-
-            <div className="hpd-mobile-nav-item mt-5 grid grid-cols-2 gap-2.5" style={{ '--mobile-nav-delay': '500ms' }}>
-              <Link href="/book-table" onClick={() => setIsMobileMenuOpen(false)} className="flex min-h-12 items-center justify-center bg-[#a72024] px-3 text-[10px] font-bold uppercase tracking-[0.1em] text-white">
-                <CalendarDays className="mr-2 h-4 w-4" strokeWidth={1.8} aria-hidden="true" />
-                Reserve
-              </Link>
-              <Link href="/delivery" onClick={() => setIsMobileMenuOpen(false)} className="flex min-h-12 items-center justify-center border border-white/35 px-3 text-[10px] font-bold uppercase tracking-[0.1em] text-white">
-                Order food
-                <ArrowUpRight className="ml-2 h-4 w-4" strokeWidth={1.8} aria-hidden="true" />
-              </Link>
-            </div>
           </nav>
-          <p className="shrink-0 border-t border-white/15 px-6 py-4 text-center text-[9px] font-semibold uppercase tracking-[0.18em] text-white/55">
-            Kissonerga, Cyprus
-          </p>
+
+          <div className="hpd-mobile-nav-item shrink-0 border-t border-[#e4dac9] px-7 py-6" style={{ '--mobile-nav-delay': '470ms' }}>
+            <Link href="/book-table" onClick={() => setIsMobileMenuOpen(false)} className="flex min-h-[52px] items-center justify-center bg-[#9d2023] px-4 text-[11px] font-bold uppercase tracking-[0.1em] text-white transition-colors hover:bg-[#821a1d]">
+              <CalendarDays className="mr-2.5 h-4 w-4" strokeWidth={1.8} aria-hidden="true" />
+              Reserve a table
+            </Link>
+            <Link href="/delivery" onClick={() => setIsMobileMenuOpen(false)} className="mt-3 flex min-h-[48px] items-center justify-center border border-[#cfc1ad] px-4 text-[11px] font-bold uppercase tracking-[0.1em] text-[#2b241e] transition-colors hover:border-[#9d2023] hover:text-[#9d2023]">
+              Order delivery
+              <ArrowUpRight className="ml-2 h-4 w-4" strokeWidth={1.8} aria-hidden="true" />
+            </Link>
+          </div>
         </div>
       </div>
     </>

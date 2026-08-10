@@ -106,36 +106,37 @@ export function AdminNotificationsProvider({ children, role }) {
       if (countRequestInFlightRef.current) return
       countRequestInFlightRef.current = true
 
-      Promise.allSettled([
-        fetch("/api/admin/orders/summary", { cache: "no-store" }).then((response) => response.ok ? response.json() : Promise.reject()),
-        role === "ADMIN"
-          ? fetch("/api/admin/reservations/summary", { cache: "no-store" }).then((response) => response.ok ? response.json() : Promise.reject())
-          : Promise.resolve(null),
-      ]).then(([ordersResult, reservationsResult]) => {
+      if (document.visibilityState === "hidden") {
+        countRequestInFlightRef.current = false
+        return
+      }
+
+      fetch("/api/admin/orders/summary", { cache: "no-store" })
+        .then((response) => response.ok ? response.json() : Promise.reject())
+        .then((payload) => {
         if (!active) return
         let hasNewRecord = false
 
-        if (ordersResult.status === "fulfilled") {
-          setPendingOrders(ordersResult.value.data.pending)
-          hasNewRecord = handleLatestRecord("orders", ordersResult.value.data.latestCreatedAt, "new-order-received") || hasNewRecord
-        }
-        if (reservationsResult.status === "fulfilled" && reservationsResult.value) {
-          setPendingReservations(reservationsResult.value.data.pending)
-          hasNewRecord = handleLatestRecord("reservations", reservationsResult.value.data.latestCreatedAt, "new-reservation-received") || hasNewRecord
+        setPendingOrders(payload.data.pending)
+        hasNewRecord = handleLatestRecord("orders", payload.data.latestCreatedAt, "new-order-received") || hasNewRecord
+        if (role === "ADMIN") {
+          setPendingReservations(payload.data.pendingReservations)
+          hasNewRecord = handleLatestRecord("reservations", payload.data.latestReservationCreatedAt, "new-reservation-received") || hasNewRecord
         }
 
         try {
           window.sessionStorage.setItem(NOTIFICATION_STATE_KEY, JSON.stringify(latestCreatedAtRef.current))
         } catch {}
         if (hasNewRecord) playNotificationSound()
-      }).finally(() => { countRequestInFlightRef.current = false })
+      }).catch(() => {}).finally(() => { countRequestInFlightRef.current = false })
     }
 
     loadCounts()
-    const interval = window.setInterval(loadCounts, 5000)
+    const interval = window.setInterval(loadCounts, 10_000)
     window.addEventListener("pointerdown", unlockAudio)
     window.addEventListener("keydown", unlockAudio)
     window.addEventListener("focus", loadCounts)
+    document.addEventListener("visibilitychange", loadCounts)
     window.addEventListener("order-count-changed", loadCounts)
     window.addEventListener("reservation-count-changed", loadCounts)
 
@@ -151,6 +152,7 @@ export function AdminNotificationsProvider({ children, role }) {
       window.removeEventListener("pointerdown", unlockAudio)
       window.removeEventListener("keydown", unlockAudio)
       window.removeEventListener("focus", loadCounts)
+      document.removeEventListener("visibilitychange", loadCounts)
       window.removeEventListener("order-count-changed", loadCounts)
       window.removeEventListener("reservation-count-changed", loadCounts)
     }

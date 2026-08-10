@@ -8,6 +8,7 @@ import DiningPromiseSection from '@/app/components/home/DiningPromiseSection'
 import GalleryPreview from '@/app/components/home/GalleryPreview'
 import VisitUsSection from '@/app/components/home/VisitUsSection'
 import BookingCTA from '@/app/components/home/BookingCTA'
+import HomeMotionController from '@/app/components/home/HomeMotionController'
 import RestaurantJsonLd from '@/app/components/shared/RestaurantJsonLd'
 import { connection } from 'next/server'
 import { getRestaurantProfileData, getTodayOpeningStatus } from '@/lib/restaurantProfileData'
@@ -37,6 +38,7 @@ export default async function Home() {
       <RestaurantJsonLd restaurantData={restaurantData} />
       <Header />
       <main>
+        <HomeMotionController />
         <HeroSection
           openingStatus={todayOpeningStatus}
           restaurantProfile={restaurantData.profile}

@@ -195,6 +195,9 @@
   * {
     @apply border-border outline-ring/50;
   }
+  html {
+    scrollbar-color: #81766b #211a15;
+  }
   body {
     @apply bg-background text-foreground;
   }
@@ -335,6 +338,79 @@
 
   .header-nav-line,
   .header-reserve-fill {
+    transition: none;
+  }
+}
+
+.home-hero-media {
+  animation: home-hero-image-enter 1400ms cubic-bezier(0.2, 0.72, 0.2, 1) both;
+}
+
+.home-hero-intro {
+  animation: home-hero-content-enter 720ms cubic-bezier(0.2, 0.78, 0.2, 1) var(--home-intro-delay, 0ms) both;
+}
+
+html.home-motion-active [data-home-reveal] {
+  opacity: 0;
+  transform: translate3d(0, 24px, 0);
+  transition:
+    opacity 700ms cubic-bezier(0.2, 0.72, 0.2, 1),
+    transform 700ms cubic-bezier(0.2, 0.72, 0.2, 1);
+  transition-delay: var(--home-reveal-delay, 0ms);
+  will-change: opacity, transform;
+}
+
+html.home-motion-active [data-home-reveal="image-left"] {
+  transform: translate3d(-24px, 0, 0) scale(0.985);
+}
+
+html.home-motion-active [data-home-reveal="from-right"] {
+  transform: translate3d(24px, 0, 0);
+}
+
+html.home-motion-active [data-home-reveal="soft-scale"] {
+  transform: translate3d(0, 12px, 0) scale(0.985);
+}
+
+html.home-motion-active [data-home-reveal].is-home-visible {
+  opacity: 1;
+  transform: translate3d(0, 0, 0) scale(1);
+  will-change: auto;
+}
+
+@keyframes home-hero-image-enter {
+  from { opacity: 0.72; transform: scale(1.035); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes home-hero-content-enter {
+  from { opacity: 0; transform: translate3d(0, 18px, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+
+@media (max-width: 640px) {
+  html.home-motion-active [data-home-reveal],
+  html.home-motion-active [data-home-reveal="image-left"],
+  html.home-motion-active [data-home-reveal="from-right"] {
+    transform: translate3d(0, 16px, 0);
+    transition-duration: 560ms;
+  }
+
+  html.home-motion-active [data-home-reveal].is-home-visible {
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-hero-media,
+  .home-hero-intro {
+    animation: none;
+  }
+
+  html.home-motion-active [data-home-reveal],
+  html.home-motion-active [data-home-reveal].is-home-visible {
+    opacity: 1;
+    transform: none;
     transition: none;
   }
 }

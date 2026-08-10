@@ -10,10 +10,10 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { dedupeClientRequest } from "@/lib/dedupeClientRequest"
+import { RESERVATION_STATUSES } from "@/lib/reservationStatus"
 
-const STATUSES = ["PENDING", "CONFIRMED", "SEATED", "COMPLETED", "CANCELLED", "NO_SHOW"]
-const statusVariant = { PENDING: "warning", CONFIRMED: "confirmed", SEATED: "info", COMPLETED: "success", CANCELLED: "destructive", NO_SHOW: "secondary" }
-const statusRowAccent = { PENDING: "border-l-amber-400", CONFIRMED: "border-l-teal-500", SEATED: "border-l-sky-500", COMPLETED: "border-l-emerald-500", CANCELLED: "border-l-red-500", NO_SHOW: "border-l-gray-400" }
+const statusVariant = { PENDING: "warning", CONFIRMED: "info", COMPLETED: "success", CANCELLED: "destructive" }
+const statusRowAccent = { PENDING: "border-l-amber-400", CONFIRMED: "border-l-sky-500", COMPLETED: "border-l-emerald-500", CANCELLED: "border-l-red-500" }
 const fieldClassName = "w-full rounded-md border border-[#E4DAC9] bg-white px-3 py-2 text-sm outline-none focus:border-[#8B1E1E] focus:ring-2 focus:ring-[#8B1E1E]/10"
 
 async function readApi(response) {
@@ -146,7 +146,7 @@ export default function ReservationsManager() {
             <div><h2 className="font-display text-xl font-semibold">Reservation list</h2><p className="text-sm text-[#756D62]">{pagination.total} matching bookings</p></div>
             <div className="flex flex-col gap-2 sm:flex-row">
               <label className="relative"><span className="sr-only">Search reservations</span><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[#756D62]" /><input value={query} onChange={(event) => { const nextQuery = event.target.value; if (nextQuery.trim() !== deferredQuery) setLoading(true); setQuery(nextQuery); setPage(1) }} className="h-9 w-full rounded-md border border-[#E4DAC9] bg-white pl-9 pr-3 text-sm outline-none focus:border-[#8B1E1E] sm:w-64" placeholder="Name, email, or phone" /></label>
-              <label><span className="sr-only">Filter by status</span><select value={status} onChange={(event) => { setLoading(true); setStatus(event.target.value); setPage(1) }} className="h-9 w-full rounded-md border border-[#E4DAC9] bg-white px-3 text-sm outline-none focus:border-[#8B1E1E] sm:w-44"><option value="">All statuses</option>{STATUSES.map((option) => <option key={option} value={option}>{formatStatus(option)}</option>)}</select></label>
+              <label><span className="sr-only">Filter by status</span><select value={status} onChange={(event) => { setLoading(true); setStatus(event.target.value); setPage(1) }} className="h-9 w-full rounded-md border border-[#E4DAC9] bg-white px-3 text-sm outline-none focus:border-[#8B1E1E] sm:w-44"><option value="">All statuses</option>{RESERVATION_STATUSES.map((option) => <option key={option} value={option}>{formatStatus(option)}</option>)}</select></label>
             </div>
           </div>
           {loading ? <ResponsiveListSkeleton rows={6} columns={7} /> : reservations.length ? (
@@ -165,7 +165,7 @@ function ReservationsList({ busyId, onDelete, onEdit, onStatus, reservations }) 
   return <>
     <div className="hidden overflow-x-auto border border-[#E4DAC9] bg-white lg:block">
       <table className="w-full min-w-[1120px] text-left text-sm">
-        <thead className="border-b border-[#D8CEBD] bg-[#F6F1E8] text-[11px] font-semibold uppercase text-[#756D62]"><tr><th className="px-4 py-3">Reservation</th><th className="px-4 py-3">Guest</th><th className="px-4 py-3 text-center">Party</th><th className="px-4 py-3">Requests</th><th className="px-4 py-3">Received</th><th className="px-4 py-3">Status</th><th className="px-4 py-3 text-right">Actions</th></tr></thead>
+        <thead className="border-b border-[#D8CEBD] bg-[#F6F1E8] text-[11px] font-semibold uppercase text-[#756D62]"><tr><th className="px-4 py-3">Reservation</th><th className="px-4 py-3">Guest</th><th className="px-4 py-3 text-center">Guests</th><th className="px-4 py-3">Requests</th><th className="px-4 py-3">Received</th><th className="px-4 py-3">Status</th><th className="px-4 py-3 text-right">Actions</th></tr></thead>
         <tbody className="divide-y divide-[#D8CEBD]">{reservations.map((reservation, index) => <ReservationRow key={reservation.id} reservation={reservation} index={index} busy={busyId === reservation.id} onDelete={() => onDelete(reservation)} onEdit={() => onEdit(reservation)} onStatus={(nextStatus) => onStatus(reservation, nextStatus)} />)}</tbody>
       </table>
     </div>
@@ -175,11 +175,13 @@ function ReservationsList({ busyId, onDelete, onEdit, onStatus, reservations }) 
 
 function ReservationRow({ busy, index, onDelete, onEdit, onStatus, reservation }) {
   const rowTone = reservation.status === "PENDING"
-    ? "bg-[#FFF0C2] hover:bg-[#FFE4A3]"
-    : ["CANCELLED", "NO_SHOW"].includes(reservation.status)
-      ? `${index % 2 ? "bg-red-50/55" : "bg-red-50/30"} hover:bg-red-100/70`
-      : `${index % 2 ? "bg-[#FBF8F2]" : "bg-white"} hover:bg-[#F3ECDD]`
-  return <tr className={`${rowTone} align-middle transition-colors`}>
+    ? "[&>td]:bg-[#FFF0C2] hover:[&>td]:bg-[#FFE4A3]"
+    : reservation.status === "CANCELLED"
+      ? `${index % 2 ? "[&>td]:bg-red-50/55" : "[&>td]:bg-red-50/30"} hover:[&>td]:bg-red-100/70`
+      : reservation.status === "CONFIRMED"
+        ? "[&>td]:bg-sky-50/65 hover:[&>td]:bg-sky-100/70"
+        : "[&>td]:bg-emerald-50/45 hover:[&>td]:bg-emerald-100/55"
+  return <tr className={`${rowTone} align-middle [&>td]:transition-colors`}>
     <td className={`whitespace-nowrap border-l-4 px-4 py-4 ${statusRowAccent[reservation.status] || "border-l-[#D8CEBD]"}`}><p className="font-semibold">{formatDateOnly(reservation.date)}</p><p className="mt-1 text-sm font-bold text-[#8B1E1E]">{reservation.time}</p></td>
     <td className="px-4 py-4"><button type="button" onClick={onEdit} className="max-w-48 truncate font-semibold hover:text-[#8B1E1E] hover:underline">{reservation.name}</button><p className="mt-1 whitespace-nowrap text-xs text-[#756D62]">{reservation.phone}</p><p className="mt-0.5 max-w-48 truncate text-xs text-[#756D62]">{reservation.email}</p></td>
     <td className="px-4 py-4 text-center"><span className="inline-flex min-w-8 items-center justify-center rounded-md bg-white px-2 py-1 font-bold tabular-nums ring-1 ring-black/8">{reservation.guests}</span></td>
@@ -191,12 +193,18 @@ function ReservationRow({ busy, index, onDelete, onEdit, onStatus, reservation }
 }
 
 function ReservationMobileRow({ busy, onDelete, onEdit, onStatus, reservation }) {
-  const background = reservation.status === "PENDING" ? "border-[#D4A017] bg-[#FFF0C2] shadow-[inset_4px_0_0_#B7791F]" : ["CANCELLED", "NO_SHOW"].includes(reservation.status) ? "border-red-200 bg-red-50/35" : "border-[#E4DAC9] bg-white"
+  const background = reservation.status === "PENDING"
+    ? "border-[#D4A017] bg-[#FFF0C2] shadow-[inset_4px_0_0_#B7791F]"
+    : reservation.status === "CANCELLED"
+      ? "border-red-200 bg-red-50/35"
+      : reservation.status === "CONFIRMED"
+        ? "border-sky-200 bg-sky-50/65 shadow-[inset_4px_0_0_#0EA5E9]"
+        : "border-emerald-200 bg-emerald-50/45 shadow-[inset_4px_0_0_#10B981]"
   return <article className={`border p-4 ${background}`}><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate font-semibold">{reservation.name}</p><p className="mt-1 truncate text-xs text-[#756D62]">{reservation.email} | {reservation.phone}</p></div><Badge variant={statusVariant[reservation.status]}>{formatStatus(reservation.status)}</Badge></div><div className="mt-4 grid grid-cols-3 gap-3 border-y border-black/8 py-3 text-sm"><Info label="Date" value={formatDateOnly(reservation.date)} /><Info label="Time" value={reservation.time} /><Info label="Guests" value={reservation.guests} /></div>{reservation.requests ? <p className="mt-3 line-clamp-2 text-sm text-[#756D62]">{reservation.requests}</p> : null}<div className="mt-4"><ReservationActions reservation={reservation} busy={busy} onDelete={onDelete} onEdit={onEdit} onStatus={onStatus} /></div></article>
 }
 
 function ReservationActions({ busy, compact = false, onDelete, onEdit, onStatus, reservation }) {
-  return <div className="flex flex-wrap items-center justify-end gap-2"><select value={reservation.status} onChange={(event) => onStatus(event.target.value)} disabled={busy} aria-label={`Status for ${reservation.name}`} className="h-9 rounded-md border border-[#E4DAC9] bg-white px-2 text-sm outline-none">{STATUSES.map((option) => <option key={option} value={option}>{formatStatus(option)}</option>)}</select><Button variant="outline" size={compact ? "icon-sm" : "sm"} onClick={onEdit} aria-label={`Edit reservation for ${reservation.name}`} title="Edit reservation"><Pencil className="size-4" />{compact ? null : "Edit"}</Button><Button variant="destructive" size="icon-sm" onClick={onDelete} disabled={busy} aria-label={`Delete reservation for ${reservation.name}`} title="Delete reservation"><Trash2 className="size-4" /></Button></div>
+  return <div className="flex flex-wrap items-center justify-end gap-2"><select value={reservation.status} onChange={(event) => onStatus(event.target.value)} disabled={busy} aria-label={`Status for ${reservation.name}`} className="h-9 rounded-md border border-[#E4DAC9] bg-white px-2 text-sm outline-none">{RESERVATION_STATUSES.map((option) => <option key={option} value={option}>{formatStatus(option)}</option>)}</select><Button variant="outline" size={compact ? "icon-sm" : "sm"} onClick={onEdit} aria-label={`Edit reservation for ${reservation.name}`} title="Edit reservation"><Pencil className="size-4" />{compact ? null : "Edit"}</Button><Button variant="destructive" size="icon-sm" onClick={onDelete} disabled={busy} aria-label={`Delete reservation for ${reservation.name}`} title="Delete reservation"><Trash2 className="size-4" /></Button></div>
 }
 
 function ReservationModal({ busy, onClose, onSave, reservation }) {
@@ -204,7 +212,7 @@ function ReservationModal({ busy, onClose, onSave, reservation }) {
   const [error, setError] = useState("")
   const update = (field, value) => { setForm((current) => ({ ...current, [field]: value })); setError("") }
   const save = async (event) => { event.preventDefault(); setError(""); try { await onSave(form) } catch (saveError) { setError(saveError.message || "Could not save reservation.") } }
-  return <Modal title="Edit reservation" onClose={onClose} locked={busy}><form className="space-y-5 p-5" onSubmit={save}><p className="text-sm font-semibold">{reservation.name} <span className="font-normal text-[#756D62]">| Received {formatDateTime(reservation.createdAt)}</span></p><div className="grid gap-4 sm:grid-cols-2"><EditField label="Guest name"><input required minLength={2} maxLength={100} value={form.name} onChange={(event) => update("name", event.target.value)} className={fieldClassName} /></EditField><EditField label="Email"><input required type="email" maxLength={254} value={form.email} onChange={(event) => update("email", event.target.value)} className={fieldClassName} /></EditField><EditField label="Phone"><input required type="tel" maxLength={30} value={form.phone} onChange={(event) => update("phone", sanitizePhone(event.target.value))} className={fieldClassName} /></EditField><EditField label="Guests"><input required type="number" min="1" max="20" value={form.guests} onChange={(event) => update("guests", event.target.value)} className={fieldClassName} /></EditField><EditField label="Date"><input required type="date" value={form.date} onChange={(event) => update("date", event.target.value)} className={fieldClassName} /></EditField><EditField label="Time"><input required type="time" value={form.time} onChange={(event) => update("time", event.target.value)} className={fieldClassName} /></EditField></div><EditField label="Status"><select value={form.status} onChange={(event) => update("status", event.target.value)} className={fieldClassName}>{STATUSES.map((option) => <option key={option} value={option}>{formatStatus(option)}</option>)}</select></EditField><EditField label="Special requests"><textarea value={form.requests} onChange={(event) => update("requests", event.target.value)} maxLength={1000} rows={3} className={fieldClassName} /></EditField><EditField label="Internal note"><textarea value={form.internalNote} onChange={(event) => update("internalNote", event.target.value)} maxLength={2000} rows={4} className={fieldClassName} placeholder="Visible to admin only" /></EditField>{error ? <p className="bg-red-50 px-3 py-2 text-sm font-medium text-red-700">{error}</p> : null}<div className="flex justify-end gap-2 border-t border-[#E4DAC9] pt-4"><Button type="button" variant="outline" onClick={onClose} disabled={busy}>Cancel</Button><Button type="submit" disabled={busy}>{busy ? <LoaderCircle className="size-4 animate-spin" /> : <Pencil className="size-4" />}{busy ? "Saving..." : "Save changes"}</Button></div></form></Modal>
+  return <Modal title="Edit reservation" onClose={onClose} locked={busy}><form className="space-y-5 p-5" onSubmit={save}><p className="text-sm font-semibold">{reservation.name} <span className="font-normal text-[#756D62]">| Received {formatDateTime(reservation.createdAt)}</span></p><div className="grid gap-4 sm:grid-cols-2"><EditField label="Guest name"><input required minLength={2} maxLength={100} value={form.name} onChange={(event) => update("name", event.target.value)} className={fieldClassName} /></EditField><EditField label="Email"><input required type="email" maxLength={254} value={form.email} onChange={(event) => update("email", event.target.value)} className={fieldClassName} /></EditField><EditField label="Phone"><input required type="tel" maxLength={30} value={form.phone} onChange={(event) => update("phone", sanitizePhone(event.target.value))} className={fieldClassName} /></EditField><EditField label="Guests"><input required type="number" min="1" max="20" value={form.guests} onChange={(event) => update("guests", event.target.value)} className={fieldClassName} /></EditField><EditField label="Date"><input required type="date" value={form.date} onChange={(event) => update("date", event.target.value)} className={fieldClassName} /></EditField><EditField label="Time"><input required type="time" value={form.time} onChange={(event) => update("time", event.target.value)} className={fieldClassName} /></EditField></div><EditField label="Status"><select value={form.status} onChange={(event) => update("status", event.target.value)} className={fieldClassName}>{RESERVATION_STATUSES.map((option) => <option key={option} value={option}>{formatStatus(option)}</option>)}</select></EditField><EditField label="Special requests"><textarea value={form.requests} onChange={(event) => update("requests", event.target.value)} maxLength={1000} rows={3} className={fieldClassName} /></EditField><EditField label="Internal note"><textarea value={form.internalNote} onChange={(event) => update("internalNote", event.target.value)} maxLength={2000} rows={4} className={fieldClassName} placeholder="Visible to admin only" /></EditField>{error ? <p className="bg-red-50 px-3 py-2 text-sm font-medium text-red-700">{error}</p> : null}<div className="flex justify-end gap-2 border-t border-[#E4DAC9] pt-4"><Button type="button" variant="outline" onClick={onClose} disabled={busy}>Cancel</Button><Button type="submit" disabled={busy}>{busy ? <LoaderCircle className="size-4 animate-spin" /> : <Pencil className="size-4" />}{busy ? "Saving..." : "Save changes"}</Button></div></form></Modal>
 }
 
 function DeleteReservationModal({ busy, onCancel, onConfirm, reservation }) {

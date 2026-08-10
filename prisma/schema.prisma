@@ -176,6 +176,8 @@ model MenuCategory {
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
   items     MenuItem[]
+
+  @@index([isActive, title])
 }
 
 model MenuItem {
@@ -198,6 +200,7 @@ model MenuItem {
   variants    MenuItemVariant[]
 
   @@index([categoryId])
+  @@index([categoryId, isActive, sortOrder])
 }
 
 model MenuItemVariant {
@@ -219,6 +222,7 @@ model MenuItemVariant {
 model Order {
   id                       String               @id @default(cuid())
   orderNumber              String               @unique
+  idempotencyKey           String?              @unique
   status                   OrderStatus          @default(PENDING)
   paymentMethod            PaymentMethod        @default(CASH)
   paymentStatus            PaymentStatus        @default(PENDING)
@@ -263,6 +267,7 @@ model Order {
   @@index([driverId])
   @@index([status])
   @@index([createdAt])
+  @@index([status, createdAt])
 }
 
 model OrderItem {
@@ -299,25 +304,29 @@ model OrderTimelineEvent {
 }
 
 model Reservation {
-  id           String            @id @default(cuid())
-  customerId   String?
-  customer     Customer?         @relation(fields: [customerId], references: [id], onDelete: SetNull)
-  customerName String
-  email        String
-  phone        String
-  partySize    Int
-  date         DateTime
-  time         String
-  status       ReservationStatus @default(PENDING)
-  requests     String?
-  internalNote String?
-  createdAt    DateTime          @default(now())
-  updatedAt    DateTime          @updatedAt
+  id             String            @id @default(cuid())
+  idempotencyKey String?           @unique
+  customerId     String?
+  customer       Customer?         @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  customerName   String
+  email          String
+  phone          String
+  partySize      Int
+  date           DateTime
+  time           String
+  status         ReservationStatus @default(PENDING)
+  requests       String?
+  internalNote   String?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
 
   @@index([customerId])
   @@index([date])
   @@index([status])
   @@index([createdAt])
+  @@index([date, status])
+  @@index([phone, date, time, createdAt])
+  @@index([email, date, time, createdAt])
 }
 
 model MediaAsset {
@@ -345,6 +354,8 @@ model GalleryPhoto {
   status    ContentStatus @default(PUBLISHED)
   createdAt DateTime      @default(now())
   updatedAt DateTime      @updatedAt
+
+  @@index([status, createdAt])
 }
 
 model VideoSpecial {
@@ -361,6 +372,8 @@ model VideoSpecial {
   status      ContentStatus @default(PUBLISHED)
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
+
+  @@index([status, createdAt])
 }
 
 model StorefrontSettings {
@@ -372,6 +385,9 @@ model StorefrontSettings {
   effectEndsAt          DateTime?
   nearbyDeliveryFee     Decimal        @default(3.00) @db.Decimal(10, 2)
   fartherDeliveryFee    Decimal        @default(3.50) @db.Decimal(10, 2)
+  freeDeliveryEnabled   Boolean        @default(false)
+  freeDeliveryMaxKm     Decimal        @default(2.00) @db.Decimal(8, 2)
+  freeDeliveryMinimum   Decimal        @default(20.00) @db.Decimal(10, 2)
   restaurantLatitude    Decimal?       @db.Decimal(10, 7)
   restaurantLongitude   Decimal?       @db.Decimal(10, 7)
   nearbyDeliveryMaxKm   Decimal        @default(5.00) @db.Decimal(8, 2)

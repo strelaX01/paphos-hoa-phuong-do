@@ -1,6 +1,7 @@
+import { RESERVATION_STATUSES } from "@/lib/reservationStatus";
+
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const phonePattern = /^\+?[\d\s().-]+$/;
-const statuses = ["PENDING", "CONFIRMED", "SEATED", "COMPLETED", "CANCELLED", "NO_SHOW"];
 
 export function validateAdminReservationInput(input) {
   const errors = {};
@@ -21,7 +22,7 @@ export function validateAdminReservationInput(input) {
   if (!Number.isInteger(partySize) || partySize < 1 || partySize > 20) errors.guests = "Party size must be between 1 and 20.";
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(Date.parse(`${date}T12:00:00.000Z`))) errors.date = "Enter a valid reservation date.";
   if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) errors.time = "Enter a valid reservation time.";
-  if (!statuses.includes(status)) errors.status = "Select a valid reservation status.";
+  if (!RESERVATION_STATUSES.includes(status)) errors.status = "Select a valid reservation status.";
   if (requests.length > 1000) errors.requests = "Special requests must be 1000 characters or fewer.";
   if (internalNote.length > 2000) errors.internalNote = "Internal note must be 2000 characters or fewer.";
 

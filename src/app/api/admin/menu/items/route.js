@@ -14,7 +14,7 @@ function readPositiveInteger(value, fallback, maximum = Number.MAX_SAFE_INTEGER)
   return Number.isInteger(parsed) && parsed > 0 ? Math.min(parsed, maximum) : fallback;
 }
 
-function itemSelect() {
+function itemSelect({ activeVariantsOnly = false } = {}) {
   return {
     id: true,
     slug: true,
@@ -43,6 +43,7 @@ function itemSelect() {
       },
     },
     variants: {
+      ...(activeVariantsOnly ? { where: { isActive: true } } : {}),
       orderBy: [{ sortOrder: "asc" }, { label: "asc" }],
       select: { id: true, label: true, price: true, sortOrder: true, isActive: true },
     },
@@ -78,11 +79,14 @@ export async function GET(request) {
   if (auth.response) return auth.response;
   const { searchParams } = new URL(request.url);
   const categoryId = searchParams.get("categoryId");
+  const orderable = searchParams.get("orderable") === "true";
   const query = (searchParams.get("q") || "").trim().slice(0, 100);
   const requestedPage = readPositiveInteger(searchParams.get("page"), 1);
   const pageSize = readPositiveInteger(searchParams.get("pageSize"), DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE);
 
-  const where = {};
+  const where = orderable
+    ? { isActive: true, deliverable: true, category: { isActive: true } }
+    : {};
   if (categoryId) {
     where.categoryId = categoryId;
   }
@@ -106,7 +110,7 @@ export async function GET(request) {
     orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
     skip: (page - 1) * pageSize,
     take: pageSize,
-    select: itemSelect(),
+    select: itemSelect({ activeVariantsOnly: orderable }),
   });
 
   return Response.json({

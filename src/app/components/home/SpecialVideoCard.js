@@ -83,7 +83,11 @@ export default function SpecialVideoCard({ special, index, highlightLabel = null
   }
 
   return (
-    <article className="group flex min-w-0 flex-col">
+    <article
+      data-home-reveal="rise"
+      className="group flex min-w-0 flex-col"
+      style={{ '--home-reveal-delay': `${Math.min(index, 2) * 90}ms` }}
+    >
       <div className={`relative isolate aspect-[4/3] overflow-hidden rounded-md border border-white/10 bg-[#302823] transition-shadow duration-300 sm:aspect-video ${highlightLabel ? 'shadow-[0_18px_50px_rgba(0,0,0,0.32)]' : ''}`}>
         {!previewReady && !loadFailed ? (
           <div className="absolute inset-0 animate-pulse bg-white/5" aria-hidden="true" />

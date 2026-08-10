@@ -1,7 +1,8 @@
 import { prisma } from "@/lib/prisma";
+import { normalizeReservationStatus } from "@/lib/reservationStatus";
 
 const TIME_ZONE = "Asia/Nicosia";
-const FINAL_RESERVATION_STATUSES = ["CANCELLED", "NO_SHOW"];
+const FINAL_RESERVATION_STATUSES = ["COMPLETED", "CANCELLED", "NO_SHOW"];
 
 const dateKeyFormatter = new Intl.DateTimeFormat("en-CA", {
   timeZone: TIME_ZONE,
@@ -90,7 +91,7 @@ export async function getAdminDashboardData() {
       select: { partySize: true, status: true },
     }),
     prisma.reservation.findMany({
-      where: { date: { gte: todayStart }, status: { in: ["PENDING", "CONFIRMED"] } },
+      where: { date: { gte: todayStart }, status: { in: ["PENDING", "CONFIRMED", "SEATED"] } },
       orderBy: [{ date: "asc" }, { time: "asc" }],
       take: 5,
       select: { id: true, customerName: true, partySize: true, date: true, time: true, status: true },
@@ -175,6 +176,7 @@ export async function getAdminDashboardData() {
     })),
     upcomingReservations: upcomingReservations.map((reservation) => ({
       ...reservation,
+      status: normalizeReservationStatus(reservation.status),
       date: reservation.date.toISOString(),
     })),
   };
