@@ -35,7 +35,7 @@ export default async function Footer({ restaurantData }) {
       <div className="mx-auto max-w-7xl px-5 sm:px-8 lg:px-12">
         <div className="grid gap-7 border-b border-white/10 py-9 md:grid-cols-[1fr_auto] md:items-center lg:py-11">
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#D4A017]">Vietnamese dining in Paphos</p>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#D4A017]">Vietnamese dining in Kissonerga</p>
             <h2 className="mt-3 max-w-2xl font-display text-3xl leading-tight text-white sm:text-4xl">A warm table, honest flavours, and food made to share.</h2>
           </div>
           <div className="grid grid-cols-2 gap-2 sm:flex">

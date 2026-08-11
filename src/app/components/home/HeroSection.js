@@ -33,7 +33,7 @@ export default function HeroSection({ openingStatus, restaurantProfile, menuItem
               <span className="block text-[33px] text-[#D4A017] sm:text-5xl lg:text-[58px]">Flavors in Cyprus</span>
             </h1>
             <p className="home-hero-intro mb-7 max-w-[20rem] text-[14px] leading-relaxed text-white/76 sm:mb-8 sm:max-w-md sm:text-base sm:text-white/65" style={{ '--home-intro-delay': '370ms' }}>
-              Experience authentic Vietnamese recipes, fresh ingredients, and warm hospitality in Paphos.
+              Experience authentic Vietnamese recipes, fresh ingredients, and warm hospitality in Kissonerga.
             </p>
 
             <div className="home-hero-intro mb-9 flex flex-col items-start gap-3 sm:mb-10 sm:flex-row sm:flex-wrap sm:items-center" style={{ '--home-intro-delay': '450ms' }}>

@@ -12,9 +12,9 @@ import { createPageMetadata } from '@/lib/seo'
 
 export const metadata = createPageMetadata({
   title: 'Contact and Opening Hours',
-  description: 'Find Hoa Phuong Do in Kissonerga, Paphos. View opening hours, phone numbers, email, address, and Google Maps directions.',
+  description: 'Find Hoa Phuong Do in Kissonerga, Cyprus. View opening hours, phone numbers, email, address, and Google Maps directions.',
   path: '/contact',
-  keywords: ['Hoa Phuong Do contact', 'Vietnamese restaurant opening hours Paphos', 'Kissonerga restaurant directions'],
+  keywords: ['Hoa Phuong Do contact', 'Vietnamese restaurant opening hours Kissonerga', 'Kissonerga restaurant directions'],
 })
 
 export default async function ContactPage() {

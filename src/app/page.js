@@ -21,7 +21,7 @@ export const metadata = createPageMetadata({
   description: DEFAULT_DESCRIPTION,
   path: '/',
   absoluteTitle: true,
-  keywords: ['Vietnamese restaurant Paphos', 'Vietnamese food Kissonerga', 'authentic pho Cyprus'],
+  keywords: ['Vietnamese restaurant Kissonerga', 'Vietnamese food Kissonerga', 'authentic pho Cyprus'],
 })
 
 export default async function Home() {

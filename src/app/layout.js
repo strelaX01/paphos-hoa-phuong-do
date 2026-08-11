@@ -28,7 +28,7 @@ export const metadata = {
   creator: SITE_NAME,
   publisher: SITE_NAME,
   category: 'food and drink',
-  keywords: ['Vietnamese restaurant Paphos', 'Vietnamese food Cyprus', 'Kissonerga restaurant', 'pho Paphos', 'Hoa Phuong Do'],
+  keywords: ['Vietnamese restaurant Kissonerga', 'Vietnamese food Cyprus', 'Kissonerga restaurant', 'pho Kissonerga', 'Hoa Phuong Do'],
   formatDetection: {
     email: false,
     address: false,
@@ -45,7 +45,7 @@ export const metadata = {
       url: SOCIAL_IMAGE,
       width: SOCIAL_IMAGE_WIDTH,
       height: SOCIAL_IMAGE_HEIGHT,
-      alt: 'Vietnamese food at Hoa Phuong Do in Paphos',
+      alt: 'Vietnamese food at Hoa Phuong Do in Kissonerga',
     }],
   },
   twitter: {

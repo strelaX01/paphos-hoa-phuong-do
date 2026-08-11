@@ -11,10 +11,10 @@ import { createPageMetadata } from '@/lib/seo'
 import DeliveryOrderClient from './DeliveryOrderClient'
 
 export const metadata = createPageMetadata({
-  title: 'Vietnamese Food Delivery in Paphos',
-  description: 'Order Vietnamese food delivery from Hoa Phuong Do in Kissonerga, Paphos, including pho, rice dishes, starters, vegetarian options, and drinks.',
+  title: 'Vietnamese Food Delivery in Kissonerga',
+  description: 'Order Vietnamese food delivery from Hoa Phuong Do in Kissonerga, Cyprus, including pho, rice dishes, starters, vegetarian options, and drinks.',
   path: '/delivery',
-  keywords: ['Vietnamese delivery Paphos', 'food delivery Kissonerga', 'order pho Cyprus'],
+  keywords: ['Vietnamese delivery Kissonerga', 'food delivery Kissonerga', 'order pho Cyprus'],
 })
 
 export default async function DeliveryPage() {

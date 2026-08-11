@@ -596,7 +596,7 @@ function FestivalSettingsPreview({ activeEffect, settings }) {
         <div className="relative z-10">
           <Badge className="bg-[#D4A017] text-[#2B2B2B]">{enabled ? activeEffect.label : "Disabled"}</Badge>
           <h3 className="mt-5 font-display text-3xl font-bold leading-tight">Hoa Phuong Do</h3>
-          <p className="mt-2 max-w-md text-sm text-white/65">Vietnamese dining in Paphos with warm service and seasonal moments.</p>
+          <p className="mt-2 max-w-md text-sm text-white/65">Vietnamese dining in Kissonerga with warm service and seasonal moments.</p>
         </div>
       </div>
     </div>

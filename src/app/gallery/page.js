@@ -12,7 +12,7 @@ import GalleryGridClient from './GalleryGridClient'
 
 export const metadata = createPageMetadata({
   title: 'Vietnamese Food and Restaurant Gallery',
-  description: 'See Vietnamese dishes, fresh ingredients, dining moments, and the welcoming atmosphere at Hoa Phuong Do in Kissonerga, Paphos.',
+  description: 'See Vietnamese dishes, fresh ingredients, dining moments, and the welcoming atmosphere at Hoa Phuong Do in Kissonerga, Cyprus.',
   path: '/gallery',
   keywords: ['Vietnamese food gallery', 'Hoa Phuong Do photos', 'restaurant Kissonerga'],
 })

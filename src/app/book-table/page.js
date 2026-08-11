@@ -10,10 +10,10 @@ import { createPageMetadata } from '@/lib/seo'
 import ReservationForm from './ReservationForm'
 
 export const metadata = createPageMetadata({
-  title: 'Book a Table in Paphos',
-  description: 'Reserve a table at Hoa Phuong Do Vietnamese restaurant in Kissonerga, Paphos for lunch, dinner, groups, and special occasions.',
+  title: 'Book a Table in Kissonerga',
+  description: 'Reserve a table at Hoa Phuong Do Vietnamese restaurant in Kissonerga, Cyprus for lunch, dinner, groups, and special occasions.',
   path: '/book-table',
-  keywords: ['book Vietnamese restaurant Paphos', 'reserve table Kissonerga', 'Hoa Phuong Do reservation'],
+  keywords: ['book Vietnamese restaurant Kissonerga', 'reserve table Kissonerga', 'Hoa Phuong Do reservation'],
 })
 
 const diningNotes = [

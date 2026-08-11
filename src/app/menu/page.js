@@ -10,10 +10,10 @@ import { createPageMetadata } from '@/lib/seo'
 export const dynamic = 'force-dynamic'
 
 export const metadata = createPageMetadata({
-  title: 'Vietnamese Menu in Paphos',
-  description: 'Explore the Hoa Phuong Do menu with Vietnamese pho, rice dishes, fresh starters, vegetarian options, drinks, and desserts in Paphos.',
+  title: 'Vietnamese Menu in Kissonerga',
+  description: 'Explore the Hoa Phuong Do menu with Vietnamese pho, rice dishes, fresh starters, vegetarian options, drinks, and desserts in Kissonerga.',
   path: '/menu',
-  keywords: ['Vietnamese menu Paphos', 'pho menu Cyprus', 'Vietnamese dishes Kissonerga'],
+  keywords: ['Vietnamese menu Kissonerga', 'pho menu Cyprus', 'Vietnamese dishes Kissonerga'],
 })
 
 export default async function MenuPage() {
