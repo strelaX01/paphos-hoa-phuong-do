@@ -36,8 +36,10 @@ export default function CheckoutClient({ initialAvailability, openingHours }) {
   const cart = useCart()
   const formRef = useRef(null)
   const idempotencyKeyRef = useRef("")
+  const stepTopRef = useRef(null)
   const stepHeadingRef = useRef(null)
   const [checkoutStep, setCheckoutStep] = useState(1)
+  const [stepDirection, setStepDirection] = useState("forward")
   const [isPending, setIsPending] = useState(false)
   const [result, setResult] = useState(null)
   const [contact, setContact] = useState({ name: "", phone: "", email: "" })
@@ -50,7 +52,7 @@ export default function CheckoutClient({ initialAvailability, openingHours }) {
   const pricingReady = cart.deliveryPricingStatus === "ready"
   const orderingOpen = deliveryAvailability?.isOpen === true
   const availabilityMessage = getDeliveryAvailabilityMessage(deliveryAvailability)
-  const locationReady = Boolean(destination && deliveryQuote)
+  const locationReady = Boolean(destination && deliveryQuote && deliveryQuote.requiresPinAdjustment !== true)
   const canPlaceOrder = !isPending && Boolean(cart.items.length) && deliveryFeeAccepted && pricingReady && orderingOpen && locationReady
   const deliveryFeeConsentText = deliveryQuote?.mode === "automatic"
     ? `I agree to the calculated delivery fee of ${formatMoney(deliveryQuote.fee)} for this ${deliveryQuote.distanceKm.toFixed(1)} km route and the pinned delivery point shown above.`
@@ -95,7 +97,8 @@ export default function CheckoutClient({ initialAvailability, openingHours }) {
   function focusStepHeading() {
     window.requestAnimationFrame(() => {
       stepHeadingRef.current?.focus({ preventScroll: true })
-      stepHeadingRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
+      const behavior = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth"
+      stepTopRef.current?.scrollIntoView({ behavior, block: "start" })
     })
   }
 
@@ -110,11 +113,13 @@ export default function CheckoutClient({ initialAvailability, openingHours }) {
       return
     }
     setResult(null)
+    setStepDirection("forward")
     setCheckoutStep(2)
     focusStepHeading()
   }
 
   function goToContactStep() {
+    setStepDirection("backward")
     setCheckoutStep(1)
     focusStepHeading()
   }
@@ -198,10 +203,15 @@ export default function CheckoutClient({ initialAvailability, openingHours }) {
   return (
     <>
       <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_420px] lg:items-start">
-        <section className="border border-[#E8DFC8] bg-[#FAF6EE] p-5 shadow-sm sm:p-8 lg:p-10">
-          <span className="mb-3 block text-[11px] font-semibold uppercase tracking-[0.3em] text-[#D4A017]">Checkout · Step {checkoutStep} of 2</span>
-          <h1 ref={stepHeadingRef} tabIndex={-1} className="scroll-mt-24 font-display text-4xl font-bold leading-tight text-[#2B2B2B] outline-none lg:scroll-mt-28 lg:text-[52px]">{checkoutStep === 1 ? "How can we reach you?" : "Where should we deliver?"}</h1>
-          <p className="mt-4 max-w-xl text-[14px] leading-relaxed text-[#6B6560]">{checkoutStep === 1 ? "We use these details only to confirm your order and delivery." : "Confirm the exact entrance and delivery fee before placing your order."}</p>
+        <section ref={stepTopRef} className="scroll-mt-20 border border-[#E8DFC8] bg-[#FAF6EE] p-5 shadow-sm sm:p-8 lg:scroll-mt-24 lg:p-10">
+          <div className="mb-4 flex items-center justify-between gap-4">
+            <span className="text-[10px] font-semibold uppercase tracking-[0.24em] text-[#8B6F47]">Secure checkout</span>
+            <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#8B1E1E]">Step {checkoutStep} of 2</span>
+          </div>
+          <div key={`checkout-heading-${checkoutStep}`} className={`checkout-step-enter checkout-step-enter--${stepDirection}`}>
+            <h1 ref={stepHeadingRef} tabIndex={-1} className="scroll-mt-24 font-display text-4xl font-bold leading-tight text-[#2B2B2B] outline-none lg:scroll-mt-28 lg:text-[52px]">{checkoutStep === 1 ? "How can we reach you?" : "Where should we deliver?"}</h1>
+            <p className="mt-3 max-w-xl text-[14px] leading-relaxed text-[#6B6560]">{checkoutStep === 1 ? "We use these details only to confirm your order and delivery." : "Confirm the exact entrance and delivery fee before placing your order."}</p>
+          </div>
 
           <CheckoutProgress step={checkoutStep} onContactClick={checkoutStep === 2 ? goToContactStep : undefined} />
 
@@ -214,7 +224,7 @@ export default function CheckoutClient({ initialAvailability, openingHours }) {
               title="Order not placed"
             />
             {checkoutStep === 1 ? (
-              <div className="space-y-4">
+              <div key="contact-step" className={`checkout-step-enter checkout-step-enter--${stepDirection} space-y-4`}>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <Input name="name" label="Full name" minLength={2} maxLength={100} autoComplete="name" placeholder="e.g. Maria Georgiou" value={contact.name} onChange={(event) => updateContact("name", event.target.value)} />
                   <Input name="phone" label="Phone number" type="tel" minLength={6} maxLength={30} autoComplete="tel" inputMode="tel" pattern="\+?[0-9 ()\-.]{6,30}" placeholder="e.g. +357 99 123456" value={contact.phone} onChange={(event) => updateContact("phone", sanitizePhone(event.target.value))} />
@@ -224,7 +234,7 @@ export default function CheckoutClient({ initialAvailability, openingHours }) {
                 <button type="button" onClick={goToDeliveryStep} className="flex w-full items-center justify-center gap-2 bg-[#8B1E1E] px-7 py-4 text-[13px] font-semibold uppercase tracking-[0.14em] text-white transition-colors hover:bg-[#A02424]">Continue to delivery <ArrowRight className="size-4" /></button>
               </div>
             ) : (
-              <div className="space-y-4">
+              <div key="delivery-step" className={`checkout-step-enter checkout-step-enter--${stepDirection} space-y-4`}>
                 <Input name="street" label="Street" minLength={2} maxLength={120} autoComplete="address-line1" placeholder="e.g. Vounou" value={address.street} onChange={(event) => updateAddress("street", event.target.value)} />
                 <Input name="addressDetails" label={`House / building / apartment${address.hasHouseNumber ? " (optional)" : ""}`} minLength={1} maxLength={75} autoComplete="address-line2" placeholder="e.g. No. 12, Building A, Apartment 3" required={!address.hasHouseNumber} value={address.details} onChange={(event) => updateAddress("details", event.target.value)} />
                 <Input name="area" label="Area / village" minLength={2} maxLength={100} autoComplete="address-level2" placeholder="e.g. Kissonerga" value={address.area} onChange={(event) => updateAddress("area", event.target.value)} />
@@ -236,7 +246,6 @@ export default function CheckoutClient({ initialAvailability, openingHours }) {
                   </div>
                 ) : null}
                 <DeliveryLocationPicker
-                  addressQuery={[address.details, address.street, address.area].filter(Boolean).join(", ")}
                   destination={destination}
                   quote={deliveryQuote}
                   subtotal={cart.subtotal}
@@ -248,7 +257,7 @@ export default function CheckoutClient({ initialAvailability, openingHours }) {
                 <label className="block"><span className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.2em] text-[#8B6F47]">Delivery notes</span><textarea name="notes" rows={4} maxLength={1000} value={deliveryNotes} onChange={(event) => setDeliveryNotes(event.target.value)} placeholder="Door code, floor, landmark, or preferred call instructions" className="w-full resize-y border border-[#E8DFC8] bg-white/70 px-4 py-3 text-base leading-relaxed text-[#2B2B2B] outline-none placeholder:text-[#9C9489] focus:border-[#D4A017] focus:ring-2 focus:ring-[#D4A017]/20 sm:text-[14px]" /></label>
                 <label className="flex cursor-pointer items-start gap-3 border border-[#D4A017]/45 bg-[#FFF9E9] p-4 text-[#2B2B2B] transition-colors hover:border-[#D4A017]">
                   <input type="checkbox" name="deliveryFeeConsent" required checked={deliveryFeeAccepted} onChange={(event) => setDeliveryFeeAccepted(event.target.checked)} disabled={!pricingReady || !locationReady} className="mt-0.5 size-5 shrink-0 accent-[#8B1E1E] disabled:cursor-not-allowed" aria-describedby="delivery-fee-consent-copy" />
-                  <span id="delivery-fee-consent-copy" className="text-[13px] leading-relaxed"><span className="block font-semibold">I agree to this delivery location and fee.</span><span className="mt-1 block text-[#6B6560]">{!locationReady ? "Confirm a valid delivery point on the map first." : pricingReady ? deliveryFeeConsentText : cart.deliveryPricingStatus === "error" ? "Delivery pricing could not be loaded. Refresh the page before ordering." : "Loading current delivery pricing..."}</span></span>
+                  <span id="delivery-fee-consent-copy" className="text-[13px] leading-relaxed"><span className="block font-semibold">I agree to this delivery location and fee.</span><span className="mt-1 block text-[#6B6560]">{deliveryQuote?.requiresPinAdjustment ? "Your device location is not precise enough. Tap or drag the pin to the exact entrance first." : !locationReady ? "Confirm a valid delivery point on the map first." : pricingReady ? deliveryFeeConsentText : cart.deliveryPricingStatus === "error" ? "Delivery pricing could not be loaded. Refresh the page before ordering." : "Loading current delivery pricing..."}</span></span>
                 </label>
                 <div className="grid grid-cols-[minmax(0,0.7fr)_minmax(0,1.3fr)] gap-3">
                   <button type="button" onClick={goToContactStep} disabled={isPending} className="flex min-w-0 items-center justify-center gap-2 border border-[#D7CEC0] bg-white px-3 py-4 text-[12px] font-semibold uppercase tracking-[0.1em] text-[#2B2B2B] hover:border-[#8B1E1E] disabled:opacity-60"><ArrowLeft className="size-4 shrink-0" /> Back</button>
@@ -267,30 +276,36 @@ export default function CheckoutClient({ initialAvailability, openingHours }) {
 
 function CheckoutProgress({ onContactClick, step }) {
   const steps = [
-    { number: 1, label: "Contact" },
-    { number: 2, label: "Delivery" },
+    { number: 1, label: "Contact", detail: "Your details" },
+    { number: 2, label: "Delivery", detail: "Address & fee" },
   ]
 
   return (
-    <ol className="mt-7 grid grid-cols-2 border-y border-[#E8DFC8]" aria-label="Checkout progress">
+    <ol className="relative mt-7 grid grid-cols-2 gap-5 border-y border-[#E8DFC8] py-4 sm:gap-8" aria-label="Checkout progress">
+      <span className="pointer-events-none absolute left-[25%] right-[25%] top-[31px] h-px bg-[#D7CEC0]" aria-hidden="true">
+        <span className={`block h-full origin-left bg-[#8B1E1E] transition-transform duration-300 ${step === 2 ? "scale-x-100" : "scale-x-0"}`} />
+      </span>
       {steps.map((item) => {
         const complete = step > item.number
         const active = step === item.number
         const content = (
           <>
-            <span className={`flex size-7 shrink-0 items-center justify-center border text-xs font-bold ${active || complete ? "border-[#8B1E1E] bg-[#8B1E1E] text-white" : "border-[#D7CEC0] text-[#8B6F47]"}`}>
+            <span className={`relative z-10 flex size-8 shrink-0 items-center justify-center border text-xs font-bold transition-colors duration-300 ${active || complete ? "border-[#8B1E1E] bg-[#8B1E1E] text-white" : "border-[#D7CEC0] bg-[#FAF6EE] text-[#8B6F47]"}`}>
               {complete ? <Check className="size-4" /> : item.number}
             </span>
-            <span className={`text-[11px] font-semibold uppercase tracking-[0.12em] ${active ? "text-[#8B1E1E]" : "text-[#6B6560]"}`}>{item.label}</span>
+            <span className="min-w-0 text-center">
+              <span className={`block text-[10px] font-semibold uppercase tracking-[0.14em] transition-colors ${active ? "text-[#8B1E1E]" : "text-[#5F5547]"}`}>{item.label}</span>
+              <span className="mt-0.5 block truncate text-[11px] text-[#8B8177]">{item.detail}</span>
+            </span>
           </>
         )
 
         return (
-          <li key={item.number} className={`flex min-w-0 items-center ${item.number === 1 ? "border-r border-[#E8DFC8]" : ""}`} aria-current={active ? "step" : undefined}>
+          <li key={item.number} className="flex min-w-0 items-center justify-center" aria-current={active ? "step" : undefined}>
             {item.number === 1 && onContactClick ? (
-              <button type="button" onClick={onContactClick} className="flex min-h-14 w-full items-center justify-center gap-2 px-3 text-left hover:bg-[#F2EAD8]">{content}</button>
+              <button type="button" onClick={onContactClick} className="flex min-h-16 w-full flex-col items-center justify-center gap-2 text-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D4A017]">{content}</button>
             ) : (
-              <div className="flex min-h-14 w-full items-center justify-center gap-2 px-3">{content}</div>
+              <div className="flex min-h-16 w-full flex-col items-center justify-center gap-2 text-center">{content}</div>
             )}
           </li>
         )

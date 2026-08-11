@@ -48,13 +48,22 @@ export default function ReservationsManager() {
   }
 
   useEffect(() => {
+    let refreshTimer
+    const refreshReservations = () => {
+      window.clearTimeout(refreshTimer)
+      refreshTimer = window.setTimeout(() => setRefreshKey((key) => key + 1), 75)
+    }
     const refreshNewReservations = () => {
-      setLoading(true)
       setPage(1)
-      setRefreshKey((key) => key + 1)
+      refreshReservations()
     }
     window.addEventListener("new-reservation-received", refreshNewReservations)
-    return () => window.removeEventListener("new-reservation-received", refreshNewReservations)
+    window.addEventListener("reservation-data-changed", refreshReservations)
+    return () => {
+      window.clearTimeout(refreshTimer)
+      window.removeEventListener("new-reservation-received", refreshNewReservations)
+      window.removeEventListener("reservation-data-changed", refreshReservations)
+    }
   }, [])
 
   useEffect(() => {
@@ -66,7 +75,7 @@ export default function ReservationsManager() {
     dedupeClientRequest(url, () => {
       return fetch(url).then(readApi)
     })
-      .then((payload) => { if (active) { setReservations(payload.data); setPagination(payload.pagination); setSummary(payload.summary) } })
+      .then((payload) => { if (active) { setReservations(payload.data); setSelected((current) => current ? payload.data.find((entry) => entry.id === current.id) || current : current); setPagination(payload.pagination); setSummary(payload.summary) } })
       .catch((error) => { if (active) showToast(error.message || "Could not load reservations.", "error") })
       .finally(() => { if (active) setLoading(false) })
     return () => { active = false }

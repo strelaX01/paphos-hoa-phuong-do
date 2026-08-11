@@ -1,9 +1,11 @@
 import { prisma } from "@/lib/prisma"
+import { unstable_cache } from "next/cache"
 
 const HEIGIT_API_URL = "https://api.heigit.org"
 const CYPRUS_BOUNDS = Object.freeze({ minLatitude: 34.4, maxLatitude: 35.8, minLongitude: 32, maxLongitude: 34.8 })
 const MAX_AUTOFILL_HOUSE_DISTANCE_KM = 0.025
-const AREA_LAYERS = Object.freeze(["locality", "localadmin", "borough", "neighbourhood"])
+const ROUTE_CACHE_SECONDS = 15 * 60
+const REVERSE_GEOCODE_CACHE_SECONDS = 24 * 60 * 60
 
 export class DeliveryRoutingError extends Error {
   constructor(message, code, status = 503) {
@@ -48,26 +50,13 @@ function firstText(...values) {
   return values.map((value) => String(value || "").trim()).find(Boolean) || ""
 }
 
-function featureName(feature) {
-  const properties = feature?.properties || {}
-  return firstText(properties.name, String(properties.label || "").split(",")[0])
-}
-
-function resolveArea(properties, features = []) {
-  const embeddedArea = firstText(
+function resolveArea(properties) {
+  return firstText(
     properties.locality,
     properties.localadmin,
     properties.borough,
     properties.neighbourhood,
   )
-  if (embeddedArea) return embeddedArea
-
-  for (const layer of AREA_LAYERS) {
-    const areaFeature = features.find((candidate) => candidate?.properties?.layer === layer)
-    const areaName = featureName(areaFeature)
-    if (areaName) return areaName
-  }
-  return ""
 }
 
 function formatResolvedLabel({ area, houseNumber, postalCode, streetName }) {
@@ -93,40 +82,11 @@ async function reverseGeocodeFeatures({ latitude, layers, longitude, size }) {
   return Array.isArray(payload.features) ? payload.features : []
 }
 
-export async function searchDeliveryAddresses(query) {
-  const text = String(query || "").trim().slice(0, 180)
-  if (text.length < 3) throw new DeliveryRoutingError("Enter at least 3 characters to search for an address.", "INVALID_ADDRESS", 422)
-  const params = new URLSearchParams({
-    text,
-    size: "6",
-    "boundary.country": "CYP",
-    "focus.point.lat": "34.79",
-    "focus.point.lon": "32.41",
-  })
-  const response = await callProvider(`${HEIGIT_API_URL}/pelias/v1/autocomplete?${params}`, {
-    headers: { Authorization: apiKey() },
-  }, "Address search is temporarily unavailable.")
-  const payload = await readJson(response, "Address search is temporarily unavailable.")
-  return (payload.features || []).flatMap((feature) => {
-    const [longitude, latitude] = feature?.geometry?.coordinates || []
-    if (!isCoordinateInCyprus(Number(latitude), Number(longitude))) return []
-    const properties = feature.properties || {}
-    const streetName = String(properties.street || properties.name || "").trim()
-    const houseNumber = String(properties.housenumber || "").trim()
-    const street = [houseNumber, streetName].filter(Boolean).join(" ")
-      || String(properties.label || text).split(",")[0].trim()
-    return [{
-      id: properties.gid || `${longitude}:${latitude}`,
-      label: String(properties.label || properties.name || text).slice(0, 300),
-      street: street.slice(0, 200),
-      area: String(properties.locality || properties.localadmin || properties.county || "Paphos").slice(0, 100),
-      hasHouseNumber: Boolean(houseNumber),
-      postalCode: String(properties.postalcode || "").slice(0, 20),
-      latitude: Number(latitude),
-      longitude: Number(longitude),
-    }]
-  })
-}
+const cachedReverseGeocodeFeatures = unstable_cache(
+  (latitude, longitude) => reverseGeocodeFeatures({ latitude, longitude, size: 5, layers: ["address", "street"] }),
+  ["delivery-reverse-geocode-v2"],
+  { revalidate: REVERSE_GEOCODE_CACHE_SECONDS },
+)
 
 export async function reverseDeliveryAddress(point) {
   const latitude = Number(point?.latitude)
@@ -135,12 +95,10 @@ export async function reverseDeliveryAddress(point) {
     throw new DeliveryRoutingError("Choose a delivery point inside Cyprus.", "INVALID_LOCATION", 422)
   }
 
-  const features = await reverseGeocodeFeatures({
-    latitude,
-    longitude,
-    size: 5,
-    layers: ["address", "street"],
-  })
+  const features = await cachedReverseGeocodeFeatures(
+    Number(latitude.toFixed(4)),
+    Number(longitude.toFixed(4)),
+  )
   const nearbyAddress = features.find((candidate) => {
     const properties = candidate?.properties || {}
     const distanceKm = Number(properties.distance)
@@ -160,20 +118,7 @@ export async function reverseDeliveryAddress(point) {
   const houseNumber = String(properties.housenumber || "").trim()
   const street = [houseNumber, streetName].filter(Boolean).join(" ")
     || String(properties.label || "").split(",")[0].trim()
-  let area = resolveArea(properties, features)
-  if (!area) {
-    try {
-      const areaFeatures = await reverseGeocodeFeatures({
-        latitude,
-        longitude,
-        size: AREA_LAYERS.length,
-        layers: AREA_LAYERS,
-      })
-      area = resolveArea({}, areaFeatures)
-    } catch {
-      // A valid street is still useful when the provider has no area boundary data.
-    }
-  }
+  const area = resolveArea(properties)
   const postalCode = String(properties.postalcode || "").trim()
 
   if (!street && !area) return null
@@ -235,6 +180,21 @@ function getDestinationStreet(feature) {
   return [...steps].reverse().map((step) => String(step?.name || "").trim()).find((name) => name && name !== "-") || ""
 }
 
+const cachedRouteFeature = unstable_cache(
+  async (originLatitude, originLongitude, destinationLatitude, destinationLongitude) => {
+    const response = await callProvider(`${HEIGIT_API_URL}/openrouteservice/v2/directions/driving-car/geojson`, {
+      method: "POST",
+      headers: { Authorization: apiKey(), "Content-Type": "application/json" },
+      body: JSON.stringify({ coordinates: [[originLongitude, originLatitude], [destinationLongitude, destinationLatitude]], instructions: true }),
+      timeoutMs: 10_000,
+    }, "The delivery route could not be calculated.")
+    const payload = await readJson(response, "The delivery route could not be calculated.")
+    return payload.features?.[0] || null
+  },
+  ["delivery-driving-route-v2"],
+  { revalidate: ROUTE_CACHE_SECONDS },
+)
+
 export async function quoteDeliveryRoute(destination, options = {}) {
   const latitude = Number(destination?.latitude)
   const longitude = Number(destination?.longitude)
@@ -243,14 +203,12 @@ export async function quoteDeliveryRoute(destination, options = {}) {
   }
   const settings = options.settings || await getDeliveryRoutingSettings()
   const subtotalCents = Number.isSafeInteger(options.subtotalCents) && options.subtotalCents >= 0 ? options.subtotalCents : 0
-  const response = await callProvider(`${HEIGIT_API_URL}/openrouteservice/v2/directions/driving-car/geojson`, {
-    method: "POST",
-    headers: { Authorization: apiKey(), "Content-Type": "application/json" },
-    body: JSON.stringify({ coordinates: [[settings.origin.longitude, settings.origin.latitude], [longitude, latitude]], instructions: true }),
-    timeoutMs: 10_000,
-  }, "The delivery route could not be calculated.")
-  const payload = await readJson(response, "The delivery route could not be calculated.")
-  const feature = payload.features?.[0]
+  const feature = await cachedRouteFeature(
+    Number(settings.origin.latitude.toFixed(5)),
+    Number(settings.origin.longitude.toFixed(5)),
+    Number(latitude.toFixed(4)),
+    Number(longitude.toFixed(4)),
+  )
   const distanceKm = Number(feature?.properties?.summary?.distance) / 1000
   const durationSeconds = Number(feature?.properties?.summary?.duration)
   if (!Number.isFinite(distanceKm) || !Number.isFinite(durationSeconds)) {
@@ -285,6 +243,8 @@ export async function quoteDeliveryRoute(destination, options = {}) {
     },
     maximumKm: settings.maximumKm,
     nearbyMaxKm: settings.nearbyMaxKm,
+    nearbyFeeCents: settings.nearbyFeeCents,
+    fartherFeeCents: settings.fartherFeeCents,
     destinationStreet: getDestinationStreet(feature).slice(0, 200),
     origin: settings.origin,
     route: reduceCoordinates(feature.geometry?.coordinates || []),

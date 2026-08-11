@@ -200,6 +200,67 @@ export function MapMarker({ latitude, longitude, draggable = false, onDragEnd, t
   return null
 }
 
+export function MapAccuracyCircle({ accuracy, latitude, longitude }) {
+  const map = useContext(MapContext)
+  const reactId = useId()
+  const sourceId = useRef(`accuracy-${reactId.replaceAll(":", "")}`)
+
+  useEffect(() => {
+    if (!map || !Number.isFinite(latitude) || !Number.isFinite(longitude) || !Number.isFinite(accuracy) || accuracy <= 0) return
+    const id = sourceId.current
+    const latitudeRadius = accuracy / 111_320
+    const longitudeRadius = accuracy / (111_320 * Math.cos(latitude * Math.PI / 180))
+    const coordinates = Array.from({ length: 65 }, (_, index) => {
+      const angle = (index / 64) * Math.PI * 2
+      return [longitude + Math.cos(angle) * longitudeRadius, latitude + Math.sin(angle) * latitudeRadius]
+    })
+    const data = { type: "Feature", properties: {}, geometry: { type: "Polygon", coordinates: [coordinates] } }
+    let cancelled = false
+    const addCircle = () => {
+      if (cancelled || map.getSource(id)) return
+      map.addSource(id, { type: "geojson", data })
+      map.addLayer({ id, type: "fill", source: id, paint: { "fill-color": "#2563EB", "fill-opacity": 0.12, "fill-outline-color": "#2563EB" } })
+    }
+    if (map.isStyleLoaded()) addCircle()
+    else map.once("load", addCircle)
+    return () => {
+      cancelled = true
+      map.off("load", addCircle)
+      if (map.getLayer(id)) map.removeLayer(id)
+      if (map.getSource(id)) map.removeSource(id)
+    }
+  }, [accuracy, latitude, longitude, map])
+
+  return null
+}
+
+export function MapPointMetadata({ latitude, longitude, onResolve }) {
+  const map = useContext(MapContext)
+  const resolveRef = useRef(onResolve)
+
+  useEffect(() => { resolveRef.current = onResolve }, [onResolve])
+
+  useEffect(() => {
+    if (!map || !Number.isFinite(latitude) || !Number.isFinite(longitude)) return
+    let cancelled = false
+    const resolveMetadata = () => {
+      if (cancelled || !map.isStyleLoaded()) return
+      const point = map.project([longitude, latitude])
+      const area = renderedAreaAtPoint(map, point)
+      const street = renderedStreetAtPoint(map, point)
+      if (area || street) resolveRef.current?.({ latitude, longitude, mapArea: area, mapStreet: street })
+    }
+    map.on("idle", resolveMetadata)
+    resolveMetadata()
+    return () => {
+      cancelled = true
+      map.off("idle", resolveMetadata)
+    }
+  }, [latitude, longitude, map])
+
+  return null
+}
+
 export function MapRoute({ coordinates = [] }) {
   const map = useContext(MapContext)
   const reactId = useId()

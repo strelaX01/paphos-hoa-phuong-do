@@ -59,13 +59,22 @@ export default function OrdersManager() {
   }
 
   useEffect(() => {
+    let refreshTimer
+    const refreshOrders = () => {
+      window.clearTimeout(refreshTimer)
+      refreshTimer = window.setTimeout(() => setRefreshKey((key) => key + 1), 75)
+    }
     const refreshNewOrders = () => {
-      setLoading(true)
       setPage(1)
-      setRefreshKey((key) => key + 1)
+      refreshOrders()
     }
     window.addEventListener("new-order-received", refreshNewOrders)
-    return () => window.removeEventListener("new-order-received", refreshNewOrders)
+    window.addEventListener("order-data-changed", refreshOrders)
+    return () => {
+      window.clearTimeout(refreshTimer)
+      window.removeEventListener("new-order-received", refreshNewOrders)
+      window.removeEventListener("order-data-changed", refreshOrders)
+    }
   }, [])
 
   useEffect(() => {
@@ -77,7 +86,7 @@ export default function OrdersManager() {
     dedupeClientRequest(url, () => {
       return fetch(url).then(readApi)
     })
-      .then((payload) => { if (active) { setOrders(payload.data); setSummary(payload.summary); setPagination(payload.pagination) } })
+      .then((payload) => { if (active) { setOrders(payload.data); setSelected((current) => current ? payload.data.find((entry) => entry.id === current.id) || current : current); setSummary(payload.summary); setPagination(payload.pagination) } })
       .catch((error) => { if (active) showToast(error.message || "Could not load orders.", "error") })
       .finally(() => { if (active) setLoading(false) })
     return () => { active = false }

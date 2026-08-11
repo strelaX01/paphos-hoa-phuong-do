@@ -132,6 +132,18 @@ export function AdminNotificationsProvider({ children, role }) {
     }
 
     loadCounts()
+    const events = new EventSource("/api/admin/events")
+    const handleOrderChange = () => {
+      window.dispatchEvent(new Event("order-data-changed"))
+      loadCounts()
+    }
+    const handleReservationChange = () => {
+      if (role !== "ADMIN") return
+      window.dispatchEvent(new Event("reservation-data-changed"))
+      loadCounts()
+    }
+    events.addEventListener("order-changed", handleOrderChange)
+    events.addEventListener("reservation-changed", handleReservationChange)
     const interval = window.setInterval(loadCounts, 10_000)
     window.addEventListener("pointerdown", unlockAudio)
     window.addEventListener("keydown", unlockAudio)
@@ -142,6 +154,7 @@ export function AdminNotificationsProvider({ children, role }) {
 
     return () => {
       active = false
+      events.close()
       window.clearInterval(interval)
       audioAbortController.abort()
       notificationAudioRef.current = null
