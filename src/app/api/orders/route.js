@@ -127,6 +127,7 @@ export async function POST(request) {
           orderBy: [{ sortOrder: "asc" }, { label: "asc" }],
           select: { id: true, label: true, price: true },
         },
+        _count: { select: { variants: true } },
       },
     }), prisma.storefrontSettings.findUnique({ where: { id: "default" }, select: { nearbyDeliveryFee: true, fartherDeliveryFee: true, freeDeliveryEnabled: true, freeDeliveryMaxKm: true, freeDeliveryMinimum: true } })]);
     const pricing = normalizeDeliveryPricing(storefrontSettings);
@@ -137,7 +138,7 @@ export async function POST(request) {
     const unavailable = validation.data.items.filter((item) => {
       const menuItem = menuBySlug.get(item.slug);
       if (!menuItem || !menuItem.isActive || !menuItem.deliverable || !menuItem.category.isActive) return true;
-      if (menuItem.variants.length) return !item.variantId || !menuItem.variants.some((variant) => variant.id === item.variantId);
+      if (menuItem._count.variants > 0) return !item.variantId || !menuItem.variants.some((variant) => variant.id === item.variantId);
       return Boolean(item.variantId);
     }).map((item) => `${item.slug}:${item.variantId || "base"}`);
     if (unavailable.length) return json({ error: "Some dishes are no longer available. Refresh the menu and review your cart.", unavailableItems: unavailable }, 409, rate.headers);

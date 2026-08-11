@@ -73,6 +73,12 @@ function MenuItemCard({ item, showCategory }) {
         <p className="text-[13px] leading-relaxed text-[#6B6560]">
           {item.description}
         </p>
+        {item.choices?.length ? (
+          <p className="mt-3 border-l-2 border-[#D4A017] pl-3 text-[12px] leading-relaxed text-[#4F493F]">
+            <span className="font-bold text-[#8B1E1E]">Choice:</span>{' '}
+            {item.choices.join(' / ')}
+          </p>
+        ) : null}
         {item.deliverable && <MenuAddToCart item={item} />}
       </div>
     </article>

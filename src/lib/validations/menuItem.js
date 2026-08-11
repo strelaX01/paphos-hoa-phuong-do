@@ -59,15 +59,15 @@ export function validateMenuItemInput(input, { partial = false } = {}) {
   const variants = [];
   if (pricingMode === "variants") {
     if (rawVariants.length < 2 || rawVariants.length > 10) {
-      errors.variants = "Add between 2 and 10 price options.";
+      errors.variants = "Add between 2 and 10 dish choices.";
     }
     const labels = new Set();
     rawVariants.slice(0, 10).forEach((variant, index) => {
       const label = typeof variant?.label === "string" ? variant.label.trim() : "";
       const parsedPrice = typeof variant?.price === "string" ? Number(variant.price.trim()) : Number(variant?.price);
       const normalizedLabel = label.toLowerCase();
-      if (!label || label.length > 60) errors[`variants.${index}.label`] = "Each price option needs a label of 60 characters or fewer.";
-      if (labels.has(normalizedLabel)) errors[`variants.${index}.label`] = "Price option labels must be unique.";
+      if (!label || label.length > 60) errors[`variants.${index}.label`] = "Each dish choice needs a label of 60 characters or fewer.";
+      if (labels.has(normalizedLabel)) errors[`variants.${index}.label`] = "Dish choice labels must be unique.";
       if (!Number.isFinite(parsedPrice) || parsedPrice <= 0 || parsedPrice > 10000) errors[`variants.${index}.price`] = "Each option price must be between 0.01 and 10,000.";
       if (label) labels.add(normalizedLabel);
       if (label && Number.isFinite(parsedPrice) && parsedPrice > 0 && parsedPrice <= 10000) {

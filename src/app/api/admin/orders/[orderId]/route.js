@@ -58,7 +58,7 @@ function validateOrderEdit(edit, allowFullEdit) {
     const note = text(item?.note, 300);
     const itemKey = orderItemId ? `order:${orderItemId}` : `menu:${menuItemId}:${variantId || "base"}`;
     if (Boolean(orderItemId) === Boolean(menuItemId) || seen.has(itemKey)) errors.push("Order items are invalid or duplicated.");
-    if (orderItemId && variantId) errors.push("Existing order items cannot change their price option directly.");
+    if (orderItemId && variantId) errors.push("Existing order items cannot change their dish choice directly.");
     if (!Number.isInteger(quantity) || quantity < 1 || quantity > DELIVERY_CONFIG.maxItemQuantity) errors.push(`Each quantity must be between 1 and ${DELIVERY_CONFIG.maxItemQuantity}.`);
     if (note.length > 300) errors.push("Item notes must be 300 characters or fewer.");
     seen.add(itemKey);
@@ -173,7 +173,7 @@ export async function PATCH(request, context) {
             const activeVariants = menuItem.variants.filter((variant) => variant.isActive);
             const variant = item.variantId ? activeVariants.find((entry) => entry.id === item.variantId) : null;
             if ((menuItem.variants.length && !variant) || (!menuItem.variants.length && item.variantId)) {
-              throw Object.assign(new Error("Select a valid price option for each replacement dish."), { code: "INVALID_EDIT" });
+              throw Object.assign(new Error("Select an available dish choice for each replacement dish."), { code: "INVALID_EDIT" });
             }
             const unitPrice = Number(variant?.price ?? menuItem.price);
             return {
@@ -191,7 +191,7 @@ export async function PATCH(request, context) {
             ...pricedNewItems.map((item) => `${item.menuItemId}:${item.variantId || "base"}`),
           ];
           if (new Set(finalProductKeys).size !== finalProductKeys.length) {
-            throw Object.assign(new Error("The same dish and price option cannot appear twice. Increase its quantity instead."), { code: "INVALID_EDIT" });
+            throw Object.assign(new Error("The same dish and choice cannot appear twice. Increase its quantity instead."), { code: "INVALID_EDIT" });
           }
           const quantityChanged = itemChanges.some((item) => currentById.get(item.orderItemId).quantity !== item.quantity);
           const customerConfirmationRequired = Boolean(removedIds.length || pricedNewItems.length || quantityChanged);

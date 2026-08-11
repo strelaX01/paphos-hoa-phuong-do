@@ -34,6 +34,7 @@ function itemSelect({ activeVariantsOnly = false } = {}) {
         id: true,
         title: true,
         slug: true,
+        isActive: true,
       },
     },
     createdAt: true,
@@ -68,6 +69,7 @@ function serializeItem(item) {
     categoryId: item.categoryId,
     categoryTitle: item.category?.title || null,
     categorySlug: item.category?.slug || null,
+    categoryIsActive: item.category?.isActive ?? false,
     orderCount: item._count.orderItems,
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,
@@ -87,22 +89,47 @@ export async function GET(request) {
   const pageSize = readPositiveInteger(searchParams.get("pageSize"), DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE);
 
   const where = orderable
-    ? { isActive: true, deliverable: true, category: { isActive: true } }
+    ? {
+        isActive: true,
+        deliverable: true,
+        category: { isActive: true },
+        AND: [
+          {
+            OR: [
+              { variants: { none: {} } },
+              { variants: { some: { isActive: true } } },
+            ],
+          },
+        ],
+      }
     : {};
   if (categoryId) {
     where.categoryId = categoryId;
   }
   if (query) {
-    where.OR = [
-      { name: { contains: query, mode: "insensitive" } },
-      { nameEn: { contains: query, mode: "insensitive" } },
-      { category: { title: { contains: query, mode: "insensitive" } } },
-    ];
+    const searchFilter = {
+      OR: [
+        { name: { contains: query, mode: "insensitive" } },
+        { nameEn: { contains: query, mode: "insensitive" } },
+        { category: { title: { contains: query, mode: "insensitive" } } },
+      ],
+    };
+    if (orderable) where.AND.push(searchFilter);
+    else where.OR = searchFilter.OR;
   }
 
   const [total, available, filteredTotal] = await prisma.$transaction([
     prisma.menuItem.count(),
-    prisma.menuItem.count({ where: { isActive: true } }),
+    prisma.menuItem.count({
+      where: {
+        isActive: true,
+        category: { isActive: true },
+        OR: [
+          { variants: { none: {} } },
+          { variants: { some: { isActive: true } } },
+        ],
+      },
+    }),
     prisma.menuItem.count({ where }),
   ]);
   const totalPages = Math.max(1, Math.ceil(filteredTotal / pageSize));

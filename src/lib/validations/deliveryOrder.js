@@ -57,7 +57,7 @@ export function validateDeliveryOrderInput(input) {
     const quantity = Number(item?.quantity);
     const note = typeof item?.note === "string" ? item.note.trim() : "";
     if (!slugPattern.test(slug) || slug.length > 120) errors[`items.${index}.slug`] = "One or more cart items are invalid.";
-    if (variantId && !idPattern.test(variantId)) errors[`items.${index}.variantId`] = "One or more price options are invalid.";
+    if (variantId && !idPattern.test(variantId)) errors[`items.${index}.variantId`] = "One or more dish choices are invalid.";
     const itemKey = `${slug}:${variantId || "base"}`;
     if (seen.has(itemKey)) errors.items = "Duplicate cart items are not allowed.";
     if (!Number.isInteger(quantity) || quantity < 1 || quantity > DELIVERY_CONFIG.maxItemQuantity) errors[`items.${index}.quantity`] = `Quantity must be between 1 and ${DELIVERY_CONFIG.maxItemQuantity}.`;

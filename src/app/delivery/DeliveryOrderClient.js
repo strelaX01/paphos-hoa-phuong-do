@@ -33,6 +33,25 @@ function formatMoney(value) {
   return new Intl.NumberFormat('en-IE', { style: 'currency', currency: DELIVERY_CONFIG.currency }).format(value)
 }
 
+const proteinChoiceWords = ['beef', 'chicken', 'duck', 'pork', 'prawn', 'shrimp', 'tofu']
+
+function getChoicePrompt(item) {
+  const labels = item.variants?.map((variant) => variant.label.toLowerCase()) || []
+  const choicesAreProteins = labels.length > 0 && labels.every((label) => (
+    proteinChoiceWords.some((protein) => label.includes(protein))
+  ))
+  return choicesAreProteins ? 'Choose protein' : 'Choose an option'
+}
+
+function formatItemPrice(item, selectedVariant) {
+  if (selectedVariant) return formatMoney(selectedVariant.price)
+  if (!item.variants?.length) return formatMoney(item.price)
+  const prices = item.variants.map((variant) => Number(variant.price))
+  const minimum = Math.min(...prices)
+  const maximum = Math.max(...prices)
+  return minimum === maximum ? formatMoney(minimum) : `${formatMoney(minimum)} - ${formatMoney(maximum)}`
+}
+
 export default function DeliveryOrderClient() {
   const searchParams = useSearchParams()
   const targetId = searchParams.get('item')
@@ -148,8 +167,9 @@ export default function DeliveryOrderClient() {
     const targetRect = cartButton?.getBoundingClientRect()
 
     const variant = item.variants?.length
-      ? item.variants.find((entry) => entry.id === selectedVariants[item.id]) || item.variants[0]
+      ? item.variants.find((entry) => entry.id === selectedVariants[item.id])
       : null
+    if (item.variants?.length && !variant) return
     cart.addItem(variant ? {
       ...item,
       variantId: variant.id,
@@ -231,8 +251,10 @@ export default function DeliveryOrderClient() {
             {pageItems.map((item) => {
               const isTargeted = item.id === targetId
               const isHighlighted = item.id === highlightedId
-              const selectedVariantId = selectedVariants[item.id] || item.variants?.[0]?.id || ''
-              const selectedVariant = item.variants?.find((variant) => variant.id === selectedVariantId) || item.variants?.[0]
+              const selectedVariantId = selectedVariants[item.id] || ''
+              const selectedVariant = item.variants?.find((variant) => variant.id === selectedVariantId) || null
+              const requiresChoice = Boolean(item.variants?.length)
+              const choicePrompt = requiresChoice ? getChoicePrompt(item) : ''
               return (
                 <article
                   key={item.id}
@@ -266,14 +288,20 @@ export default function DeliveryOrderClient() {
                     </div>
                   </div>
                   <p className="line-clamp-2 text-[12px] leading-relaxed text-[#6B6560] sm:text-[13px]">{item.description}</p>
-                  {item.variants?.length ? (
+                  {requiresChoice ? (
                     <label className="mt-3 block">
-                      <span className="sr-only">Choose a price option for {item.name}</span>
+                      <span className="mb-1.5 flex items-center justify-between gap-2 text-[9px] font-bold uppercase tracking-[0.13em] text-[#8B1E1E]">
+                        <span>{choicePrompt}</span>
+                        <span>Required</span>
+                      </span>
                       <select
                         value={selectedVariantId}
                         onChange={(event) => setSelectedVariants((current) => ({ ...current, [item.id]: event.target.value }))}
-                        className="h-9 w-full border border-[#E8DFC8] bg-white px-2 text-[12px] font-semibold text-[#2B2B2B] outline-none focus:border-[#D4A017]"
+                        required
+                        aria-label={`${choicePrompt} for ${item.name}`}
+                        className="h-10 w-full border border-[#D4A017]/65 bg-[#FFF9E9] px-2 text-[12px] font-semibold text-[#2B2B2B] outline-none focus:border-[#8B1E1E] focus:ring-2 focus:ring-[#8B1E1E]/10"
                       >
+                        <option value="" disabled>{choicePrompt}</option>
                         {item.variants.map((variant) => (
                           <option key={variant.id} value={variant.id}>{variant.label} - {formatMoney(variant.price)}</option>
                         ))}
@@ -281,11 +309,12 @@ export default function DeliveryOrderClient() {
                     </label>
                   ) : null}
                   <div className="mt-auto flex items-center justify-between gap-2 pt-3 sm:gap-3 sm:pt-4">
-                    <span className="inline-flex items-center font-sans font-bold tabular-nums text-[#8B1E1E] text-[14px] sm:text-[15px]" style={{ lineHeight: 1 }}>{formatMoney(selectedVariant?.price ?? item.price)}</span>
+                    <span className="inline-flex items-center font-sans font-bold tabular-nums text-[#8B1E1E] text-[14px] sm:text-[15px]" style={{ lineHeight: 1 }}>{formatItemPrice(item, selectedVariant)}</span>
                     <button
                       type="button"
                       onClick={(event) => addWithAnimation(event, item)}
-                      className="inline-flex items-center gap-1.5 bg-[#2B2B2B] px-2.5 py-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-white transition-colors hover:bg-[#8B1E1E] sm:gap-2 sm:px-3 sm:text-[11px]"
+                      disabled={requiresChoice && !selectedVariant}
+                      className="inline-flex items-center gap-1.5 bg-[#2B2B2B] px-2.5 py-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-white transition-colors hover:bg-[#8B1E1E] disabled:cursor-not-allowed disabled:bg-[#B9B1A6] disabled:text-white/80 sm:gap-2 sm:px-3 sm:text-[11px]"
                     >
                       <Plus className="size-3.5" aria-hidden="true" />
                       Add

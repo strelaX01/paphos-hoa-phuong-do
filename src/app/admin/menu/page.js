@@ -56,6 +56,15 @@ function isValidEuroPrice(value) {
   return Number.isFinite(price) && price >= 0.01 && price <= 10000;
 }
 
+function getItemAvailability(item) {
+  if (!item.isActive) return { available: false, reason: "Item unavailable" };
+  if (item.categoryIsActive === false) return { available: false, reason: "Category unavailable" };
+  if (item.variants?.length && !item.variants.some((variant) => variant.isActive)) {
+    return { available: false, reason: "All choices unavailable" };
+  }
+  return { available: true, reason: "" };
+}
+
 function sanitizeEuroInput(value) {
   const normalized = String(value || "").replace(",", ".").replace(/[^\d.]/g, "");
   const dotIndex = normalized.indexOf(".");
@@ -249,6 +258,7 @@ export default function AdminMenuPage() {
           ? prev.map((entry) => (entry.id === data.id ? data : entry))
           : [...prev, data].sort((a, b) => a.title.localeCompare(b.title))
       ));
+      setRefreshVersion((value) => value + 1);
       setModal(null);
       showToast(category ? "Category updated." : "Category created.");
     } catch (error) {
@@ -411,15 +421,17 @@ export default function AdminMenuPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-[#EFE7DA]">
-                      {items.map((item) => (
-                        <tr
-                          key={item.id}
-                          className={`align-top transition-colors ${
-                            item.isActive
-                              ? "bg-emerald-50/35 hover:bg-emerald-50/70"
-                              : "bg-red-50/70 hover:bg-red-50"
-                          }`}
-                        >
+                      {items.map((item) => {
+                        const availability = getItemAvailability(item);
+                        return (
+                          <tr
+                            key={item.id}
+                            className={`align-top transition-colors ${
+                              availability.available
+                                ? "bg-emerald-50/35 hover:bg-emerald-50/70"
+                                : "bg-red-50/70 hover:bg-red-50"
+                            }`}
+                          >
                           <td className="px-3 py-4">
                             <div className="flex items-center gap-3">
                               <div className="flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-[#E4DAC9] bg-[#FDFAF4]">
@@ -453,11 +465,12 @@ export default function AdminMenuPage() {
                           </td>
                           <td className="px-3 py-4">
                             <div className="flex flex-wrap gap-1.5">
-                              <Badge variant={item.isActive ? "success" : "secondary"}>
-                                {item.isActive ? "Available" : "Unavailable"}
+                              <Badge variant={availability.available ? "success" : "secondary"}>
+                                {availability.available ? "Available" : "Unavailable"}
                               </Badge>
                               {item.isSpicy ? <Badge variant="destructive">Spicy</Badge> : null}
                             </div>
+                            {!availability.available ? <p className="mt-1.5 text-xs font-medium text-red-700">{availability.reason}</p> : null}
                           </td>
                           <td className="px-3 py-4">
                             <div className="flex justify-end gap-2">
@@ -471,8 +484,9 @@ export default function AdminMenuPage() {
                               </Button>
                             </div>
                           </td>
-                        </tr>
-                      ))}
+                          </tr>
+                        );
+                      })}
                     </tbody>
                     </table>
                   </div>
@@ -703,6 +717,18 @@ function ItemForm({ item, categories, saving, onCancel, onSave }) {
     }));
   };
 
+  const applyFirstChoicePrice = () => {
+    setForm((prev) => {
+      const sharedPrice = prev.variants.find((variant) => isValidEuroPrice(variant.price))?.price;
+      if (!sharedPrice) return prev;
+      return {
+        ...prev,
+        variants: prev.variants.map((variant) => ({ ...variant, price: sharedPrice })),
+      };
+    });
+    setPriceError("");
+  };
+
   useEffect(() => () => {
     if (previewObjectUrlRef.current) URL.revokeObjectURL(previewObjectUrlRef.current);
   }, []);
@@ -750,7 +776,7 @@ function ItemForm({ item, categories, saving, onCancel, onSave }) {
         <Field label="Pricing" required>
           <div className="grid grid-cols-2 rounded-md border border-[#E4DAC9] bg-[#F6F1E8] p-1">
             <button type="button" onClick={() => setPricingMode("single")} className={`rounded px-3 py-1.5 text-sm font-semibold ${form.pricingMode === "single" ? "bg-white text-[#8B1E1E] shadow-sm" : "text-[#756D62]"}`}>Single price</button>
-            <button type="button" onClick={() => setPricingMode("variants")} className={`rounded px-3 py-1.5 text-sm font-semibold ${form.pricingMode === "variants" ? "bg-white text-[#8B1E1E] shadow-sm" : "text-[#756D62]"}`}>Price options</button>
+            <button type="button" onClick={() => setPricingMode("variants")} className={`rounded px-3 py-1.5 text-sm font-semibold ${form.pricingMode === "variants" ? "bg-white text-[#8B1E1E] shadow-sm" : "text-[#756D62]"}`}>Has choices</button>
           </div>
         </Field>
         {form.pricingMode === "single" ? (
@@ -761,22 +787,32 @@ function ItemForm({ item, categories, saving, onCancel, onSave }) {
         ) : (
           <div className="space-y-2 md:col-span-2">
             <div className="flex items-center justify-between gap-3">
-              <span className="text-sm font-medium text-[#2B2B2B]">Price options <RequiredMark /></span>
-              <button type="button" onClick={addVariant} disabled={form.variants.length >= 10} className="inline-flex items-center gap-1.5 text-sm font-semibold text-[#8B1E1E] disabled:opacity-40">
-                <Plus className="size-4" /> Add option
-              </button>
+              <div>
+                <span className="text-sm font-medium text-[#2B2B2B]">Dish choices <RequiredMark /></span>
+                <p className="mt-0.5 text-xs text-[#756D62]">Customers must choose one before adding the dish.</p>
+              </div>
+              <div className="flex flex-wrap justify-end gap-3">
+                <button type="button" onClick={applyFirstChoicePrice} className="text-xs font-semibold text-[#756D62] hover:text-[#8B1E1E]">Same price for all</button>
+                <button type="button" onClick={addVariant} disabled={form.variants.length >= 10} className="inline-flex items-center gap-1.5 text-sm font-semibold text-[#8B1E1E] disabled:opacity-40">
+                  <Plus className="size-4" /> Add choice
+                </button>
+              </div>
             </div>
             {form.variants.map((variant, index) => (
-              <div key={variant.clientId} className="grid grid-cols-[minmax(0,1fr)_36px] gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(110px,0.65fr)_36px]">
-                <input className={inputClass} value={variant.label} maxLength={60} onChange={(event) => updateVariant(variant.clientId, "label", event.target.value)} placeholder={`Option ${index + 1}, e.g. Small`} aria-label={`Price option ${index + 1} label`} required />
-                <EuroInput className="col-start-1 row-start-2 sm:col-start-2 sm:row-start-1" value={variant.price} onChange={(value) => { updateVariant(variant.clientId, "price", value); setPriceError(""); }} ariaLabel={`Price option ${index + 1} price in euro`} error={priceError} required />
-                <button type="button" onClick={() => removeVariant(variant.clientId)} disabled={form.variants.length <= 2} className="col-start-2 row-span-2 row-start-1 inline-flex size-9 items-center justify-center self-center rounded-md border border-[#E4DAC9] text-[#8B1E1E] disabled:cursor-not-allowed disabled:opacity-30 sm:col-start-3 sm:row-span-1" aria-label={`Remove price option ${index + 1}`}>
+              <div key={variant.clientId} className={`grid grid-cols-[minmax(0,1fr)_36px] gap-2 rounded-md border p-3 sm:grid-cols-[minmax(0,1fr)_minmax(110px,0.65fr)_auto_36px] sm:items-center ${variant.isActive === false ? "border-[#E4DAC9] bg-[#F4F0E9] opacity-70" : "border-[#E4DAC9] bg-[#FDFAF4]"}`}>
+                <input className={inputClass} value={variant.label} maxLength={60} onChange={(event) => updateVariant(variant.clientId, "label", event.target.value)} placeholder={`Choice ${index + 1}, e.g. Chicken`} aria-label={`Dish choice ${index + 1} label`} required />
+                <EuroInput className="col-start-1 row-start-2 sm:col-start-2 sm:row-start-1" value={variant.price} onChange={(value) => { updateVariant(variant.clientId, "price", value); setPriceError(""); }} ariaLabel={`Dish choice ${index + 1} price in euro`} error={priceError} required />
+                <label className="col-start-1 row-start-3 inline-flex min-h-9 cursor-pointer items-center gap-2 text-xs font-semibold text-[#4F493F] sm:col-start-3 sm:row-start-1">
+                  <input type="checkbox" checked={variant.isActive !== false} onChange={(event) => updateVariant(variant.clientId, "isActive", event.target.checked)} className="size-4 accent-[#8B1E1E]" />
+                  Available
+                </label>
+                <button type="button" onClick={() => removeVariant(variant.clientId)} disabled={form.variants.length <= 2} className="col-start-2 row-span-3 row-start-1 inline-flex size-9 items-center justify-center self-center rounded-md border border-[#E4DAC9] text-[#8B1E1E] disabled:cursor-not-allowed disabled:opacity-30 sm:col-start-4 sm:row-span-1" aria-label={`Remove dish choice ${index + 1}`}>
                   <Trash2 className="size-4" />
                 </button>
               </div>
             ))}
             {priceError ? <p className="text-xs font-medium text-red-700">{priceError}</p> : null}
-            <p className="text-xs text-[#756D62]">Use 2 to 10 options such as Small / Large or Half / Full.</p>
+            <p className="text-xs text-[#756D62]">Use 2 to 10 choices such as Chicken / Pork / Duck / Prawn or Small / Large.</p>
           </div>
         )}
         <div className="space-y-1.5 text-sm font-medium text-[#2B2B2B]">

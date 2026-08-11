@@ -8,6 +8,10 @@ export async function listPublicMenuSections({ categorySlug = '', deliverableOnl
   const itemWhere = {
     isActive: true,
     ...(deliverableOnly ? { deliverable: true } : {}),
+    OR: [
+      { variants: { none: {} } },
+      { variants: { some: { isActive: true } } },
+    ],
   }
 
   const categories = await prisma.menuCategory.findMany({
@@ -67,14 +71,21 @@ export async function listPublicMenuSections({ categorySlug = '', deliverableOnl
 }
 
 export async function listPublicMenuCategories() {
+  const availableItemWhere = {
+    isActive: true,
+    OR: [
+      { variants: { none: {} } },
+      { variants: { some: { isActive: true } } },
+    ],
+  }
   const categories = await prisma.menuCategory.findMany({
-    where: { isActive: true, items: { some: { isActive: true } } },
+    where: { isActive: true, items: { some: availableItemWhere } },
     orderBy: { title: 'asc' },
     select: {
       slug: true,
       title: true,
       items: {
-        where: { isActive: true },
+        where: availableItemWhere,
         select: { id: true },
       },
     },
@@ -105,6 +116,7 @@ export async function getPublicMenuPageSections() {
       image: item.image,
       deliverable: item.deliverable,
       isSpicy: item.isSpicy,
+      choices: item.variants.map((variant) => variant.label),
     })),
   }))
 }
