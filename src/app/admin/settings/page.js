@@ -437,24 +437,18 @@ export default function AdminSettingsPage() {
                     <option value="High">High</option>
                   </select>
                 </FormField>
-                <FormField label="Show from">
-                  <input
-                    value={settings.festivalEffectStartDate}
-                    onChange={(event) => updateSetting("festivalEffectStartDate", event.target.value)}
-                    className={fieldClassName}
-                    type="date"
-                    disabled={!settings.festivalEffectEnabled || settings.festivalEffect === "none"}
-                  />
-                </FormField>
-                <FormField label="Show until">
-                  <input
-                    value={settings.festivalEffectEndDate}
-                    onChange={(event) => updateSetting("festivalEffectEndDate", event.target.value)}
-                    className={fieldClassName}
-                    type="date"
-                    disabled={!settings.festivalEffectEnabled || settings.festivalEffect === "none"}
-                  />
-                </FormField>
+                <AdminDateField
+                  label="Show from"
+                  value={settings.festivalEffectStartDate}
+                  onChange={(value) => updateSetting("festivalEffectStartDate", value)}
+                  disabled={!settings.festivalEffectEnabled || settings.festivalEffect === "none"}
+                />
+                <AdminDateField
+                  label="Show until"
+                  value={settings.festivalEffectEndDate}
+                  onChange={(value) => updateSetting("festivalEffectEndDate", value)}
+                  disabled={!settings.festivalEffectEnabled || settings.festivalEffect === "none"}
+                />
               </div>
               <p className="text-xs leading-relaxed text-[#756D62]">
                 Leave both dates empty to keep the selected effect on until you disable it manually. Scheduled dates follow Cyprus time.
@@ -518,22 +512,8 @@ export default function AdminSettingsPage() {
                     <option value="Urgent">Urgent</option>
                   </select>
                 </FormField>
-                <FormField label="Show from">
-                  <input
-                    value={settings.announcementStartDate}
-                    onChange={(event) => updateSetting("announcementStartDate", event.target.value)}
-                    className={fieldClassName}
-                    type="date"
-                  />
-                </FormField>
-                <FormField label="Show until">
-                  <input
-                    value={settings.announcementEndDate}
-                    onChange={(event) => updateSetting("announcementEndDate", event.target.value)}
-                    className={fieldClassName}
-                    type="date"
-                  />
-                </FormField>
+                <AdminDateField label="Show from" value={settings.announcementStartDate} onChange={(value) => updateSetting("announcementStartDate", value)} />
+                <AdminDateField label="Show until" value={settings.announcementEndDate} onChange={(value) => updateSetting("announcementEndDate", value)} />
               </div>
 
               <FormField label="Notice title">
@@ -642,7 +622,7 @@ function StorefrontNoticePreview({ activeCtaDestination, activeNoticeType, activ
                 <p className="font-display text-xl font-bold sm:text-2xl">{settings.announcementTitle || activeNoticeType.title}</p>
                 <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-[#756D62]">{settings.announcementMessage || activeNoticeType.message}</p>
                 {settings.announcementStartDate || settings.announcementEndDate ? (
-                  <div className="mt-3 flex items-start gap-2 text-xs text-[#756D62]"><CalendarDays className="mt-0.5 size-3.5 shrink-0" /><span>{settings.announcementStartDate || "Now"} to {settings.announcementEndDate || "manually disabled"}</span></div>
+                  <div className="mt-3 flex items-start gap-2 text-xs text-[#756D62]"><CalendarDays className="mt-0.5 size-3.5 shrink-0" /><span>{settings.announcementStartDate ? formatDisplayDate(settings.announcementStartDate) : "Now"} to {settings.announcementEndDate ? formatDisplayDate(settings.announcementEndDate) : "manually disabled"}</span></div>
                 ) : null}
               </div>
               <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-[#F6F1E8] text-[#756D62]" aria-hidden="true"><X className="size-4" /></span>
@@ -711,6 +691,63 @@ function ToggleSwitch({ checked, disabled = false, label, onChange }) {
       />
     </button>
   )
+}
+
+function AdminDateField({ disabled = false, label, onChange, value }) {
+  const inputRef = useRef(null)
+
+  const openPicker = () => {
+    const input = inputRef.current
+    if (!input || disabled) return
+    if (typeof input.showPicker === "function") {
+      try {
+        input.showPicker()
+        return
+      } catch {
+        // Some browsers only allow their native date picker after a direct click.
+      }
+    }
+    input.focus()
+    input.click()
+  }
+
+  return (
+    <div className="block">
+      <span className="text-xs font-semibold uppercase tracking-[0.12em] text-[#756D62]">{label}</span>
+      <div className="relative mt-1">
+        <button
+          type="button"
+          onClick={openPicker}
+          disabled={disabled}
+          className="flex min-h-10 w-full items-center gap-2 rounded-lg border border-[#E4DAC9] bg-white px-3 pr-11 text-left text-sm tabular-nums text-[#2B2B2B] outline-none transition-colors hover:border-[#D4A017] focus-visible:border-[#8B1E1E] focus-visible:ring-2 focus-visible:ring-[#8B1E1E]/10 disabled:cursor-not-allowed disabled:bg-[#F6F1E8] disabled:text-[#9B9285]"
+          aria-label={`${label}. ${value ? formatDisplayDate(value) : "No date selected"}`}
+        >
+          <CalendarDays className="size-4 shrink-0 text-[#8B1E1E]" aria-hidden="true" />
+          <span className={value ? "" : "text-[#B4A99A]"}>{formatDisplayDate(value)}</span>
+        </button>
+        <input
+          ref={inputRef}
+          type="date"
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          disabled={disabled}
+          tabIndex={-1}
+          aria-hidden="true"
+          className="pointer-events-none absolute bottom-0 left-0 size-px opacity-0"
+        />
+        {value && !disabled ? (
+          <button type="button" onClick={() => onChange("")} className="absolute right-1 top-1/2 flex size-8 -translate-y-1/2 items-center justify-center rounded-md text-[#756D62] hover:bg-[#F2EAD8] hover:text-[#8B1E1E] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8B1E1E]" aria-label={`Clear ${label.toLowerCase()}`}>
+            <X className="size-4" />
+          </button>
+        ) : null}
+      </div>
+    </div>
+  )
+}
+
+function formatDisplayDate(value) {
+  const [year, month, day] = String(value || "").split("-")
+  return year && month && day ? `${day}/${month}/${year}` : "DD/MM/YYYY"
 }
 
 function FormField({ children, label }) {
