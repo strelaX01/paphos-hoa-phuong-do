@@ -39,6 +39,7 @@ const emptyItemForm = {
   variants: [],
   image: "",
   categoryId: "",
+  isSpicy: false,
   isActive: true,
 };
 
@@ -455,6 +456,7 @@ export default function AdminMenuPage() {
                               <Badge variant={item.isActive ? "success" : "secondary"}>
                                 {item.isActive ? "Available" : "Unavailable"}
                               </Badge>
+                              {item.isSpicy ? <Badge variant="destructive">Spicy</Badge> : null}
                             </div>
                           </td>
                           <td className="px-3 py-4">
@@ -827,8 +829,20 @@ function ItemForm({ item, categories, saving, onCancel, onSave }) {
       <Field label="Description">
         <textarea className={`${inputClass} min-h-24 resize-y`} value={form.description || ""} onChange={(event) => update("description", event.target.value)} />
       </Field>
-      <div className="max-w-xs">
+      <div className="grid gap-3 sm:grid-cols-2">
         <Toggle label="Available" checked={form.isActive} onChange={(value) => update("isActive", value)} />
+        <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-md border border-[#E4DAC9] bg-[#FDFAF4] px-3 py-2.5">
+          <input
+            type="checkbox"
+            checked={Boolean(form.isSpicy)}
+            onChange={(event) => update("isSpicy", event.target.checked)}
+            className="size-4 shrink-0 accent-[#9D2023]"
+          />
+          <span className="min-w-0">
+            <span className="block text-sm font-semibold text-[#2B2B2B]">Spicy dish</span>
+            <span className="block text-xs text-[#756D62]">Show a spicy marker to customers.</span>
+          </span>
+        </label>
       </div>
       <FormActions saving={saving} submitLabel={item ? "Save item" : "Create item"} onCancel={onCancel} />
     </form>

@@ -63,6 +63,7 @@ export async function getHomepageContentData() {
           description: true,
           price: true,
           image: true,
+          isSpicy: true,
           category: {
             select: { id: true, title: true, slug: true },
           },
@@ -92,6 +93,7 @@ export async function getHomepageContentData() {
           description: item.description || '',
           price: formatMenuItemPrice(item),
           image: item.image,
+          isSpicy: item.isSpicy,
         })),
       galleryImages,
     }

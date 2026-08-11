@@ -342,6 +342,195 @@
   }
 }
 
+.spicy-dish-mark {
+  position: relative;
+  z-index: 2;
+  display: inline-flex;
+  min-width: 112px;
+  height: 38px;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid rgb(255 239 210 / 80%);
+  border-radius: 999px;
+  background: rgb(151 24 28 / 96%);
+  padding: 4px 12px 4px 4px;
+  color: #fffaf1;
+  box-shadow: 0 0 0 3px rgb(151 24 28 / 18%), 0 8px 22px rgb(75 12 12 / 34%);
+  backdrop-filter: blur(6px);
+  animation: spicy-alert-pulse 2.6s ease-in-out infinite;
+}
+
+.spicy-dish-mark--corner {
+  position: absolute;
+  z-index: 2;
+  left: 0;
+  top: 0;
+  min-width: 156px;
+  height: 58px;
+  justify-content: flex-start;
+  border: 0;
+  border-radius: 0 0 18px 0;
+  gap: 8px;
+  padding: 7px 18px 7px 7px;
+  background: linear-gradient(110deg, #861417 0%, #b51f20 68%, #db4823 100%);
+  box-shadow: 0 0 0 1px rgb(255 205 112 / 55%), 0 8px 25px rgb(110 10 10 / 42%);
+  isolation: isolate;
+}
+
+.spicy-dish-mark--corner .spicy-dish-mark__image {
+  width: 42px;
+  height: 42px;
+}
+
+.spicy-dish-mark--corner .spicy-dish-mark__label {
+  font-size: 13px;
+}
+
+.spicy-dish-mark--compact {
+  min-width: 96px;
+  width: 96px;
+  height: 42px;
+  border-radius: 0 0 12px 0;
+  gap: 4px;
+  padding: 5px 8px 5px 5px;
+}
+
+.spicy-dish-mark--compact .spicy-dish-mark__image {
+  width: 30px;
+  height: 30px;
+}
+
+.spicy-dish-mark--compact .spicy-dish-mark__label {
+  font-size: 10px;
+}
+
+.spicy-dish-mark__flames {
+  position: absolute;
+  z-index: 0;
+  right: -14px;
+  bottom: -8px;
+  display: flex;
+  align-items: flex-end;
+  gap: 1px;
+  filter: drop-shadow(0 0 7px rgb(255 115 30 / 75%));
+}
+
+.spicy-dish-mark__flames span {
+  display: block;
+  width: 13px;
+  height: 25px;
+  border-radius: 80% 10% 70% 45%;
+  background: #ffb000;
+  transform: rotate(35deg);
+  transform-origin: 50% 100%;
+  animation: spicy-flame-flicker 780ms ease-in-out infinite alternate;
+}
+
+.spicy-dish-mark__flames span:nth-child(2) {
+  width: 16px;
+  height: 35px;
+  background: #ff6426;
+  animation-delay: -260ms;
+}
+
+.spicy-dish-mark__flames span:nth-child(3) {
+  width: 11px;
+  height: 22px;
+  background: #ffd24a;
+  animation-delay: -520ms;
+}
+
+.spicy-dish-mark--compact .spicy-dish-mark__flames {
+  right: -10px;
+  bottom: -6px;
+  transform: scale(0.72);
+  transform-origin: left bottom;
+}
+
+.spicy-dish-mark__image {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: 30px;
+  height: 30px;
+  flex: none;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #fff2d2;
+}
+
+.spicy-dish-mark__image img {
+  transform: scale(1.42) translate(2%, -1%);
+}
+
+.spicy-dish-mark__label {
+  position: relative;
+  z-index: 1;
+  font-family: var(--font-sans), sans-serif;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.spicy-menu-card {
+  border-color: rgb(151 24 28 / 62%) !important;
+  box-shadow: inset 0 0 0 1px rgb(151 24 28 / 12%), 0 8px 24px rgb(139 30 30 / 10%);
+}
+
+.spicy-dish-mark__heat,
+.spicy-dish-mark__heat::before {
+  position: absolute;
+  left: 10px;
+  top: -8px;
+  width: 5px;
+  height: 10px;
+  border-left: 1.5px solid rgb(255 226 154 / 92%);
+  border-radius: 50%;
+  content: '';
+  animation: spicy-heat-rise 1.8s ease-out infinite;
+}
+
+.spicy-dish-mark__heat::before {
+  left: 8px;
+  top: 2px;
+  animation-delay: 0.65s;
+}
+
+@keyframes spicy-heat-rise {
+  0% { opacity: 0; transform: translate3d(0, 3px, 0) scale(0.85); }
+  35% { opacity: 0.95; }
+  100% { opacity: 0; transform: translate3d(2px, -7px, 0) scale(1.08); }
+}
+
+@keyframes spicy-alert-pulse {
+  0%, 100% { box-shadow: 0 0 0 3px rgb(151 24 28 / 16%), 0 8px 22px rgb(75 12 12 / 30%); }
+  50% { box-shadow: 0 0 0 6px rgb(212 160 23 / 22%), 0 10px 26px rgb(75 12 12 / 38%); }
+}
+
+@keyframes spicy-flame-flicker {
+  0% { opacity: 0.72; transform: rotate(31deg) scale3d(0.86, 0.9, 1); }
+  100% { opacity: 1; transform: rotate(39deg) scale3d(1.05, 1.12, 1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spicy-dish-mark__heat,
+  .spicy-dish-mark__heat::before {
+    animation: none;
+    opacity: 0.8;
+  }
+
+  .spicy-dish-mark {
+    animation: none;
+  }
+
+
+  .spicy-dish-mark__flames span {
+    animation: none;
+  }
+}
+
 .checkout-step-enter {
   animation: checkout-step-forward 320ms cubic-bezier(0.22, 0.75, 0.24, 1) both;
 }

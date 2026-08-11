@@ -9,6 +9,7 @@ import { useSearchParams } from 'next/navigation'
 import CategoryScroller from '@/app/components/shared/CategoryScroller'
 import MenuSearchField from '@/app/components/shared/MenuSearchField'
 import PaginationControls from '@/app/components/shared/PaginationControls'
+import SpicyDishMark from '@/app/components/shared/SpicyDishMark'
 import { CardGridSkeleton } from '@/app/components/shared/SkeletonBlocks'
 import { useCart } from '@/hooks/useCart'
 import { dedupeClientRequest } from '@/lib/dedupeClientRequest'
@@ -238,12 +239,13 @@ export default function DeliveryOrderClient() {
                   id={`delivery-item-${item.id}`}
                   ref={isTargeted ? highlightRef : null}
                   aria-label={isTargeted ? `${item.name}, your selected dish` : item.name}
-                  className={`group grid grid-cols-[96px_1fr] overflow-hidden border bg-white/65 transition-all hover:border-[#D4A017]/60 sm:grid-cols-[118px_1fr] ${
+                  className={`group relative grid grid-cols-[96px_1fr] overflow-hidden border bg-white/65 transition-all hover:border-[#D4A017]/60 sm:grid-cols-[118px_1fr] ${
                     isTargeted
                       ? `border-[#8B1E1E] bg-[#FFF9E9] ring-4 ring-[#D4A017]/45 shadow-[0_12px_30px_rgba(139,30,30,0.18)] ${isHighlighted ? 'animate-pulse-once' : ''}`
                       : 'border-[#E8DFC8]'
-                  }`}
+                  } ${item.isSpicy ? 'spicy-menu-card' : ''}`}
                 >
+                {item.isSpicy ? <SpicyDishMark compact className="absolute left-0 top-0" /> : null}
                 <div className="relative min-h-[136px] overflow-hidden bg-[#E8DFC8] sm:min-h-[158px]">
                   {item.image ? <Image src={item.image} alt={item.name} fill className="object-cover transition-transform duration-500 group-hover:scale-[1.05]" sizes="118px" /> : <div className="flex h-full items-center justify-center text-[#8B1E1E]"><Utensils className="size-7" /></div>}
                 </div>

@@ -31,6 +31,7 @@ export async function listPublicMenuSections({ categorySlug = '', deliverableOnl
           price: true,
           image: true,
           deliverable: true,
+          isSpicy: true,
           variants: {
             where: { isActive: true },
             orderBy: [{ sortOrder: 'asc' }, { label: 'asc' }],
@@ -55,6 +56,7 @@ export async function listPublicMenuSections({ categorySlug = '', deliverableOnl
       price: Number(item.price),
       image: item.image || '',
       deliverable: item.deliverable,
+      isSpicy: item.isSpicy,
       variants: item.variants.map((variant) => ({
         id: variant.id,
         label: variant.label,
@@ -102,6 +104,7 @@ export async function getPublicMenuPageSections() {
       price: formatMenuItemPrice(item),
       image: item.image,
       deliverable: item.deliverable,
+      isSpicy: item.isSpicy,
     })),
   }))
 }

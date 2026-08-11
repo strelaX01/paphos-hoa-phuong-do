@@ -301,43 +301,23 @@ function Field({ inputMode, label, max, maxLength, min, minLength, name, icon, o
 }
 
 function DateField({ max, min, name, onChange, value }) {
-  const inputRef = useRef(null)
-
-  const openPicker = () => {
-    const input = inputRef.current
-    if (!input) return
-    if (typeof input.showPicker === 'function') {
-      try {
-        input.showPicker()
-        return
-      } catch {
-        // Fall back to the native click behavior on browsers that restrict showPicker().
-      }
+  const openNativePicker = (event) => {
+    if (typeof event.currentTarget.showPicker !== 'function') return
+    try {
+      event.currentTarget.showPicker()
+    } catch {
+      // The direct tap still opens the native control on browsers without showPicker support.
     }
-    input.focus()
-    input.click()
   }
 
   return (
-    <div className="block">
+    <label className="block">
       <span className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.2em] text-[#8B6F47]">
         Date
       </span>
-      <div className="relative">
-        <button
-          type="button"
-          onClick={openPicker}
-          className="flex h-12 w-full items-center border border-[#E8DFC8] bg-white/70 px-3 text-left text-[#2B2B2B] outline-none transition-all hover:border-[#D4A017] focus-visible:border-[#D4A017] focus-visible:ring-2 focus-visible:ring-[#D4A017]/20"
-          aria-label={`Choose reservation date. Current value: ${value ? formatDisplayDate(value) : 'not selected'}`}
-          aria-haspopup="dialog"
-        >
-          <Calendar className="size-4 shrink-0 text-[#8B1E1E]" aria-hidden="true" />
-          <span className={`min-w-0 flex-1 px-3 text-[14px] tabular-nums ${value ? "text-[#2B2B2B]" : "text-[#9C9489]"}`}>
-            {formatDisplayDate(value)}
-          </span>
-        </button>
+      <span className="flex h-12 items-center border border-[#E8DFC8] bg-white/70 px-3 text-[#2B2B2B] transition-all focus-within:border-[#D4A017] focus-within:ring-2 focus-within:ring-[#D4A017]/20">
+        <Calendar className="size-4 shrink-0 text-[#8B1E1E]" aria-hidden="true" />
         <input
-          ref={inputRef}
           name={name}
           type="date"
           required
@@ -345,16 +325,12 @@ function DateField({ max, min, name, onChange, value }) {
           max={max}
           value={value}
           onChange={onChange}
-          aria-label="Reservation date, day month year"
-          tabIndex={-1}
-          className="pointer-events-none absolute bottom-0 left-0 size-px opacity-0"
+          onInput={onChange}
+          onClick={openNativePicker}
+          aria-label="Reservation date"
+          className="h-full min-w-0 flex-1 cursor-pointer bg-transparent px-3 text-[16px] tabular-nums text-[#2B2B2B] outline-none"
         />
-      </div>
-    </div>
+      </span>
+    </label>
   )
-}
-
-function formatDisplayDate(value) {
-  const [year, month, day] = String(value || '').split('-')
-  return year && month && day ? `${day}/${month}/${year}` : 'DD/MM/YYYY'
 }

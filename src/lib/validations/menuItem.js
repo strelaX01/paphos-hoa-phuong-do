@@ -106,6 +106,7 @@ export function validateMenuItemInput(input, { partial = false } = {}) {
 
   const deliverable = parseBool("deliverable");
   const isFeatured = parseBool("isFeatured");
+  const isSpicy = parseBool("isSpicy");
   const isActive = parseBool("isActive");
 
   // --- sortOrder ---
@@ -134,6 +135,7 @@ export function validateMenuItemInput(input, { partial = false } = {}) {
       ...(categoryId ? { categoryId } : {}),
       ...(deliverable !== undefined ? { deliverable } : {}),
       ...(isFeatured !== undefined ? { isFeatured } : {}),
+      ...(isSpicy !== undefined ? { isSpicy } : {}),
       ...(isActive !== undefined ? { isActive } : {}),
       ...(sortOrder !== undefined ? { sortOrder } : {}),
       ...(pricingMode ? { pricingMode, variants } : {}),

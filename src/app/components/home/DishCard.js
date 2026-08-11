@@ -1,4 +1,5 @@
 import Image from 'next/image'
+import SpicyDishMark from '@/app/components/shared/SpicyDishMark'
 
 /**
  * DishCard — Premium menu preview card
@@ -6,7 +7,7 @@ import Image from 'next/image'
  */
 export default function DishCard({ dish, index }) {
   return (
-    <article data-home-reveal="rise" className="group flex flex-col" style={{ '--home-reveal-delay': `${Math.min(index, 3) * 75}ms` }}>
+    <article data-home-reveal="rise" className={`group flex flex-col ${dish.isSpicy ? 'spicy-menu-card' : ''}`} style={{ '--home-reveal-delay': `${Math.min(index, 3) * 75}ms` }}>
       {/* Image */}
       <div className="relative overflow-hidden aspect-[4/3] bg-[#E8DFC8] mb-4">
         <Image
@@ -18,6 +19,7 @@ export default function DishCard({ dish, index }) {
         />
         {/* Very subtle hover darken */}
         <div className="absolute inset-0 bg-black/0 group-hover:bg-black/8 transition-colors duration-400" />
+        {dish.isSpicy ? <SpicyDishMark className="absolute left-0 top-0" /> : null}
 
       </div>
 

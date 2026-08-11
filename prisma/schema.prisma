@@ -190,6 +190,7 @@ model MenuItem {
   image       String?
   deliverable Boolean           @default(true)
   isFeatured  Boolean           @default(false)
+  isSpicy     Boolean           @default(false)
   isActive    Boolean           @default(true)
   sortOrder   Int               @default(0)
   categoryId  String

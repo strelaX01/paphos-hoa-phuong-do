@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import Image from 'next/image'
 import PaginationControls from '@/app/components/shared/PaginationControls'
+import SpicyDishMark from '@/app/components/shared/SpicyDishMark'
 import MenuAddToCart from './MenuAddToCart'
 
 const ITEMS_PER_PAGE = 6
@@ -41,7 +42,7 @@ function MenuItemCard({ item, showCategory }) {
   const hasRemoteImage = Boolean(item.image) && !imageFailed
 
   return (
-    <article className="group overflow-hidden border border-[#E8DFC8] bg-[#FAF6EE] transition-all duration-300 hover:border-[#D4A017]/60">
+    <article className={`group overflow-hidden border border-[#E8DFC8] bg-[#FAF6EE] transition-all duration-300 hover:border-[#D4A017]/60 ${item.isSpicy ? 'spicy-menu-card' : ''}`}>
       <div className="relative aspect-[4/3] overflow-hidden bg-[#E8DFC8]">
         <Image
           src={hasRemoteImage ? item.image : '/images/hoa-phuong-do-logo.png'}
@@ -53,6 +54,7 @@ function MenuItemCard({ item, showCategory }) {
           sizes="(max-width: 1024px) 100vw, 33vw"
         />
         {hasRemoteImage ? <div className="absolute inset-0 bg-gradient-to-t from-black/45 via-transparent to-transparent" /> : null}
+        {item.isSpicy ? <SpicyDishMark className="absolute left-0 top-0" /> : null}
         <span
           className="absolute bottom-4 right-4 inline-flex items-center justify-center bg-[#D4A017] px-3.5 rounded-full font-sans font-bold tabular-nums text-[#1A1410] text-[13px]"
           style={{ height: '28px', lineHeight: 1 }}

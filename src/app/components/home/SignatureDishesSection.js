@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { ArrowRight } from 'lucide-react'
 
 import DishCard from './DishCard'
+import SpicyDishMark from '@/app/components/shared/SpicyDishMark'
 
 export default function SignatureDishesSection({ dishes = [], openingStatus }) {
   if (!dishes.length) return null
@@ -58,7 +59,7 @@ function EditorialDishCard({ className = '', dish, featured = false, index }) {
   return (
     <article
       data-home-reveal="rise"
-      className={`group relative isolate overflow-hidden border border-[#E1D5C1] bg-[#2B2B2B] ${className}`}
+      className={`group relative isolate overflow-hidden border border-[#E1D5C1] bg-[#2B2B2B] ${dish.isSpicy ? 'spicy-menu-card' : ''} ${className}`}
       style={{ '--home-reveal-delay': `${Math.min(index, 3) * 75}ms` }}
     >
       <Image
@@ -71,10 +72,9 @@ function EditorialDishCard({ className = '', dish, featured = false, index }) {
           : '(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 24vw'}
       />
       <div className="absolute inset-0 bg-gradient-to-t from-black/88 via-black/20 to-black/8" />
+      {dish.isSpicy ? <SpicyDishMark className="absolute left-0 top-0" /> : null}
       <div className="absolute inset-x-0 top-0 flex items-start justify-between gap-3 p-4 sm:p-5">
-        <span className="border border-white/30 bg-black/25 px-2.5 py-1 font-display text-sm font-bold text-white backdrop-blur-sm">
-          {String(index + 1).padStart(2, '0')}
-        </span>
+        <span />
         <span className="bg-[#F8F3EA] px-3 py-1.5 text-[13px] font-bold tabular-nums text-[#8B1E1E] shadow-sm">
           {dish.price}
         </span>
