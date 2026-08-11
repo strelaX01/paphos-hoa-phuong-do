@@ -5,7 +5,7 @@ import LoginForm from "@/app/admin/login/LoginForm"
 import { getCurrentAdminAccount } from "@/lib/adminAuth"
 
 export const metadata = {
-  title: "Admin sign in | Hoa Phuong Do",
+  title: "Admin sign in",
   robots: { index: false, follow: false },
 }
 

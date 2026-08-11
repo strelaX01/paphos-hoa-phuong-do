@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { useRef, useState, useSyncExternalStore } from 'react'
 import { createPortal } from 'react-dom'
 import Image from 'next/image'
 import Link from 'next/link'
@@ -9,6 +9,7 @@ import { ArrowRight, Minus, Plus, ShoppingBag, Trash2, X } from 'lucide-react'
 import { useCart } from '@/hooks/useCart'
 import { DELIVERY_CONFIG } from '@/lib/deliveryConfig'
 import { getCartItemKey } from '@/lib/stores/cartStore'
+import { useModalDialog } from '@/hooks/useModalDialog'
 
 const emptySubscribe = () => () => {}
 const formatMoney = (value) => new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR' }).format(Number(value || 0))
@@ -19,23 +20,11 @@ export default function CartButton({ isScrolled = false }) {
   const mounted = useSyncExternalStore(emptySubscribe, () => true, () => false)
   const cart = useCart()
 
-  useEffect(() => {
-    if (!isOpen) return undefined
-
-    const previousOverflow = document.body.style.overflow
-    const onKeyDown = (event) => {
-      if (event.key === 'Escape') setIsOpen(false)
-    }
-
-    document.body.style.overflow = 'hidden'
-    window.addEventListener('keydown', onKeyDown)
-    dialogRef.current?.focus({ preventScroll: true })
-
-    return () => {
-      document.body.style.overflow = previousOverflow
-      window.removeEventListener('keydown', onKeyDown)
-    }
-  }, [isOpen])
+  useModalDialog({
+    open: isOpen,
+    containerRef: dialogRef,
+    onEscape: () => setIsOpen(false),
+  })
 
   return (
     <>
@@ -43,7 +32,7 @@ export default function CartButton({ isScrolled = false }) {
         type="button"
         onClick={() => setIsOpen(true)}
         data-cart-button
-        className={`relative flex size-10 items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d4a017]/70 ${
+        className={`relative flex size-11 items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d4a017]/70 ${
           isScrolled ? 'text-[#1a1410] hover:text-[#8b1e1e]' : 'text-white/75 hover:text-white'
         }`}
         aria-label={`Open cart with ${cart.itemCount} ${cart.itemCount === 1 ? 'item' : 'items'}`}
@@ -89,7 +78,7 @@ export default function CartButton({ isScrolled = false }) {
               <button
                 type="button"
                 onClick={() => setIsOpen(false)}
-                className="flex size-10 items-center justify-center border border-[#d9cdbb] text-[#2b241e] transition-colors hover:border-[#9d2023] hover:text-[#9d2023] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d4a017]"
+                className="flex size-11 items-center justify-center border border-[#d9cdbb] text-[#2b241e] transition-colors hover:border-[#9d2023] hover:text-[#9d2023] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d4a017]"
                 aria-label="Close cart"
               >
                 <X className="size-5" strokeWidth={1.6} aria-hidden="true" />
@@ -127,7 +116,7 @@ export function CartPanel({ cart, onCheckout }) {
               const cartKey = item.cartKey || getCartItemKey(item)
               return (
                 <article key={cartKey} className="border-b border-[#e4dac9] py-5">
-                  <div className="grid grid-cols-[72px_minmax(0,1fr)_36px] gap-3.5">
+                  <div className="grid grid-cols-[72px_minmax(0,1fr)_44px] gap-3.5">
                     <div className="relative size-[72px] overflow-hidden border border-[#e4dac9] bg-[#f1eadf]">
                       {item.image ? (
                         <Image src={item.image} alt={item.name} fill className="object-cover" sizes="72px" />
@@ -149,7 +138,7 @@ export function CartPanel({ cart, onCheckout }) {
                     <button
                       type="button"
                       onClick={() => cart.removeItem(cartKey)}
-                      className="flex size-9 items-center justify-center border border-[#e4dac9] text-[#9d2023] transition-colors hover:border-[#9d2023] hover:bg-[#9d2023] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d4a017]"
+                      className="flex size-11 items-center justify-center border border-[#e4dac9] text-[#9d2023] transition-colors hover:border-[#9d2023] hover:bg-[#9d2023] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d4a017]"
                       aria-label={`Remove ${item.name}`}
                     >
                       <Trash2 className="size-4" strokeWidth={1.7} aria-hidden="true" />
@@ -157,7 +146,7 @@ export function CartPanel({ cart, onCheckout }) {
                   </div>
 
                   <div className="mt-4 flex items-center justify-between gap-3">
-                    <div className="grid h-9 w-[112px] shrink-0 grid-cols-[36px_1fr_36px] border border-[#d9cdbb] bg-white">
+                    <div className="grid h-11 w-[132px] shrink-0 grid-cols-[44px_1fr_44px] border border-[#d9cdbb] bg-white">
                       <QtyButton disabled={item.qty <= 1} onClick={() => cart.updateQty(cartKey, -1)} label={`Decrease ${item.name}`}>
                         <Minus className="size-3.5" aria-hidden="true" />
                       </QtyButton>
@@ -173,6 +162,7 @@ export function CartPanel({ cart, onCheckout }) {
                     value={item.note || ''}
                     onChange={(event) => cart.updateNote(cartKey, event.target.value)}
                     maxLength={300}
+                    aria-label={`Kitchen note for ${item.name}`}
                     placeholder="Add a kitchen note (optional)"
                     className="mt-3 h-11 w-full border border-[#d9cdbb] bg-white px-3 text-base text-[#2b241e] outline-none placeholder:text-[#9a9085] focus:border-[#9d2023] sm:h-10 sm:text-sm"
                   />

@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 
 import { Button } from "@/components/ui/button"
+import { useModalDialog } from "@/hooks/useModalDialog"
 
 const initialForm = { currentPassword: "", newPassword: "", confirmPassword: "" }
 const initialVisibility = { currentPassword: false, newPassword: false, confirmPassword: false }
@@ -13,6 +14,7 @@ const initialVisibility = { currentPassword: false, newPassword: false, confirmP
 export default function ChangePasswordDialog({ compact = false, className = "", required = false }) {
   const router = useRouter()
   const currentPasswordRef = useRef(null)
+  const dialogRef = useRef(null)
   const redirectTimer = useRef(null)
   const [open, setOpen] = useState(required)
   const [visibility, setVisibility] = useState(initialVisibility)
@@ -31,21 +33,12 @@ export default function ChangePasswordDialog({ compact = false, className = "", 
 
   useEffect(() => () => window.clearTimeout(redirectTimer.current), [])
 
-  useEffect(() => {
-    if (!open) return
-    const originalOverflow = document.body.style.overflow
-    document.body.style.overflow = "hidden"
-    const focusTimer = window.setTimeout(() => currentPasswordRef.current?.focus(), 50)
-    const handleEscape = (event) => {
-      if (event.key === "Escape" && !required && !submitting && !success) setOpen(false)
-    }
-    window.addEventListener("keydown", handleEscape)
-    return () => {
-      document.body.style.overflow = originalOverflow
-      window.clearTimeout(focusTimer)
-      window.removeEventListener("keydown", handleEscape)
-    }
-  }, [open, required, submitting, success])
+  useModalDialog({
+    open,
+    containerRef: dialogRef,
+    initialFocusRef: currentPasswordRef,
+    onEscape: closeDialog,
+  })
 
   const updateField = (field, value) => {
     setError("")
@@ -119,10 +112,12 @@ export default function ChangePasswordDialog({ compact = false, className = "", 
     </Button>
 
     {open ? createPortal(<div
+      ref={dialogRef}
       className="fixed inset-0 z-[90] flex items-center justify-center bg-[#202020]/65 p-3 sm:p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="change-password-title"
+      tabIndex={-1}
       onMouseDown={(event) => { if (event.target === event.currentTarget) closeDialog() }}
     >
       <div className="flex max-h-[calc(100svh-1.5rem)] w-full flex-col overflow-hidden rounded-lg border border-[#E4DAC9] bg-[#FDFBF7] text-[#202020] shadow-2xl sm:max-h-[calc(100svh-2rem)] sm:max-w-[28rem]">

@@ -6,6 +6,7 @@ import { ChevronLeft, ChevronRight, ImageOff, X } from 'lucide-react'
 import GalleryImage from '@/app/components/shared/GalleryImage'
 import PaginationControls from '@/app/components/shared/PaginationControls'
 import { CardGridSkeleton } from '@/app/components/shared/SkeletonBlocks'
+import { useModalDialog } from '@/hooks/useModalDialog'
 
 const ITEMS_PER_PAGE = 6
 const GALLERY_GAP = 12
@@ -72,6 +73,8 @@ export default function GalleryGridClient({ items, paginate = true, pagination =
   const [previewWidth, setPreviewWidth] = useState(0)
   const touchStartRef = useRef(null)
   const previewContainerRef = useRef(null)
+  const dialogRef = useRef(null)
+  const closeButtonRef = useRef(null)
   const pageItems = useMemo(
     () => paginate && !serverPaginated
       ? galleryItems.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE)
@@ -150,14 +153,17 @@ export default function GalleryGridClient({ items, paginate = true, pagination =
     setActiveIndex((current) => current === null ? null : (current + 1) % pageItems.length)
   }, [pageItems.length])
 
+  useModalDialog({
+    open: Boolean(activeItem),
+    containerRef: dialogRef,
+    initialFocusRef: closeButtonRef,
+    onEscape: () => setActiveIndex(null),
+  })
+
   useEffect(() => {
     if (!activeItem) return undefined
 
-    const previousOverflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-
     const handleKeyDown = (event) => {
-      if (event.key === 'Escape') setActiveIndex(null)
       if (event.key === 'ArrowLeft') showPrevious()
       if (event.key === 'ArrowRight') showNext()
     }
@@ -165,7 +171,6 @@ export default function GalleryGridClient({ items, paginate = true, pagination =
     window.addEventListener('keydown', handleKeyDown)
     return () => {
       window.removeEventListener('keydown', handleKeyDown)
-      document.body.style.overflow = previousOverflow
     }
   }, [activeItem, showNext, showPrevious])
 
@@ -264,15 +269,18 @@ export default function GalleryGridClient({ items, paginate = true, pagination =
 
       {activeItem ? (
         <div
+          ref={dialogRef}
           className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 p-3 backdrop-blur-sm sm:p-8"
           role="dialog"
           aria-modal="true"
           aria-label="Gallery photo viewer"
+          tabIndex={-1}
           onClick={() => setActiveIndex(null)}
           onTouchStart={handleTouchStart}
           onTouchEnd={handleTouchEnd}
         >
           <button
+            ref={closeButtonRef}
             type="button"
             onClick={() => setActiveIndex(null)}
             className="absolute right-3 top-3 z-20 flex size-11 items-center justify-center rounded-full border border-white/25 bg-black/55 text-white shadow-lg sm:right-6 sm:top-6"
@@ -331,6 +339,7 @@ function GalleryButton({ item, index, onOpen, className = '', fill = false, styl
     >
       <GalleryImage
         image={item}
+        loading={index === 0 ? 'eager' : 'lazy'}
         className={`${fill ? 'size-full object-contain' : 'h-auto w-full'} transition-transform duration-500 ease-out group-hover:scale-[1.02]`}
         sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
       />

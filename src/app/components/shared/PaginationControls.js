@@ -19,7 +19,7 @@ export default function PaginationControls({ page, totalPages, onPageChange, cla
         {visiblePages.map((item, index) => {
           if (item === '...') {
             return (
-              <span key={`ellipsis-${index}`} className="flex size-9 items-center justify-center text-[12px] font-semibold text-[#6B6560]">
+              <span key={`ellipsis-${index}`} className="flex size-11 items-center justify-center text-[12px] font-semibold text-[#6B6560]">
                 ...
               </span>
             )
@@ -30,7 +30,8 @@ export default function PaginationControls({ page, totalPages, onPageChange, cla
               type="button"
               onClick={() => onPageChange(item)}
               aria-current={item === page ? 'page' : undefined}
-              className={`flex size-9 items-center justify-center border text-[12px] font-semibold transition-colors ${
+              aria-label={`Page ${item}`}
+              className={`flex size-11 items-center justify-center border text-[12px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D4A017] ${
                 item === page
                   ? 'border-[#8B1E1E] bg-[#8B1E1E] text-white'
                   : 'border-[#E8DFC8] bg-white/70 text-[#6B6560] hover:border-[#D4A017]/70 hover:text-[#8B1E1E]'

@@ -15,6 +15,7 @@ import { CONTACT } from "@/lib/constants/index.js"
 import { dedupeClientRequest } from "@/lib/dedupeClientRequest"
 import { DELIVERY_CONFIG } from "@/lib/deliveryConfig"
 import { ADMIN_NEXT_STATUS, DRIVER_NEXT_STATUS, DRIVER_ORDER_STATUSES, formatOrderStatus, ORDER_ACTION_LABELS, ORDER_STATUSES } from "@/lib/orderStatus"
+import { useModalDialog } from "@/hooks/useModalDialog"
 
 const statusVariant = { PENDING: "warning", PREPARING: "preparing", PENDING_PICKUP: "info", EN_ROUTE: "default", DELIVERED: "success", CANCELLED: "destructive" }
 const statusRowAccent = { PENDING: "border-l-amber-400", PREPARING: "border-l-orange-500", PENDING_PICKUP: "border-l-cyan-500", EN_ROUTE: "border-l-indigo-500", DELIVERED: "border-l-emerald-500", CANCELLED: "border-l-red-500" }
@@ -342,7 +343,10 @@ function MenuItemPicker({ disabled, onAdd }) {
 function OrderField({ children, label }) { return <label className="block"><span className="mb-1.5 block text-xs font-semibold uppercase text-[#756D62]">{label}</span>{children}</label> }
 
 function InvoiceModal({ onClose, order }) {
-  return createPortal(<div className="invoice-overlay fixed inset-0 z-[70] overflow-y-auto bg-[#2B2B2B]/70 p-3 backdrop-blur-sm sm:p-6" role="dialog" aria-modal="true" aria-label={`Invoice ${order.orderNumber}`}>
+  const dialogRef = useRef(null)
+  useModalDialog({ open: true, containerRef: dialogRef, onEscape: onClose })
+
+  return createPortal(<div ref={dialogRef} tabIndex={-1} className="invoice-overlay fixed inset-0 z-[70] overflow-y-auto bg-[#2B2B2B]/70 p-3 backdrop-blur-sm sm:p-6" role="dialog" aria-modal="true" aria-label={`Invoice ${order.orderNumber}`}>
     <div className="invoice-shell mx-auto w-full max-w-sm">
       <div className="invoice-no-print mb-3 flex items-center justify-end gap-2 rounded-md bg-white p-2 shadow-lg">
         <Button variant="outline" size="sm" onClick={onClose}>Close</Button>
@@ -401,7 +405,12 @@ function ReceiptLine({ label, value }) { return <p className="break-words"><stro
 function ReceiptAmount({ label, strong, value }) { return <div className={`flex items-baseline justify-between gap-3 ${strong ? "mt-2 border-t border-black pt-2 text-[15px] font-black" : ""}`}><span>{label}</span><span className="shrink-0 tabular-nums">{formatMoney(value)}</span></div> }
 
 function CancelModal({ busy, onClose, onConfirm, order }) { return <Modal title="Cancel order?" onClose={onClose} locked={busy} layer="z-[60]"><div className="space-y-5 p-5"><p className="text-sm text-[#756D62]">This keeps the order for audit but stops fulfillment. This action cannot be reversed from the admin queue.</p><p className="font-mono font-bold text-[#8B1E1E]">{order.orderNumber}</p><div className="flex justify-end gap-2"><Button variant="outline" onClick={onClose} disabled={busy}>Keep order</Button><Button variant="destructive" onClick={onConfirm} disabled={busy}>{busy ? <LoaderCircle className="size-4 animate-spin" /> : null}{busy ? "Cancelling..." : "Cancel order"}</Button></div></div></Modal> }
-function Modal({ children, layer = "z-50", locked, onClose, title }) { return <div className={`fixed inset-0 ${layer} flex items-center justify-center bg-[#2B2B2B]/55 p-4 backdrop-blur-sm`} role="dialog" aria-modal="true" aria-label={title}><div className="max-h-[calc(100svh-2rem)] w-full max-w-4xl overflow-y-auto rounded-lg border border-[#E4DAC9] bg-white shadow-2xl"><div className="sticky top-0 z-10 flex items-center justify-between border-b border-[#E4DAC9] bg-white px-5 py-4"><h2 className="font-display text-xl font-semibold">{title}</h2><Button variant="ghost" size="icon" onClick={onClose} disabled={locked} aria-label={`Close ${title}`}><X className="size-4" /></Button></div>{children}</div></div> }
+function Modal({ children, layer = "z-50", locked, onClose, title }) {
+  const dialogRef = useRef(null)
+  useModalDialog({ open: true, containerRef: dialogRef, onEscape: locked ? undefined : onClose })
+
+  return <div ref={dialogRef} tabIndex={-1} className={`fixed inset-0 ${layer} flex items-center justify-center bg-[#2B2B2B]/55 p-4 backdrop-blur-sm`} role="dialog" aria-modal="true" aria-label={title}><div className="max-h-[calc(100svh-2rem)] w-full max-w-4xl overflow-y-auto rounded-lg border border-[#E4DAC9] bg-white shadow-2xl"><div className="sticky top-0 z-10 flex items-center justify-between border-b border-[#E4DAC9] bg-white px-5 py-4"><h2 className="font-display text-xl font-semibold">{title}</h2><Button variant="ghost" size="icon" onClick={onClose} disabled={locked} aria-label={`Close ${title}`}><X className="size-4" /></Button></div>{children}</div></div>
+}
 function MetricCard({ detail, icon: Icon, label, value }) { return <Card className="border-[#E4DAC9] bg-white"><CardHeader className="flex-row items-start justify-between pb-2"><div><CardDescription>{label}</CardDescription><CardTitle className="mt-2 font-sans text-3xl font-semibold leading-none tabular-nums">{value}</CardTitle></div><div className="flex size-10 items-center justify-center rounded-md bg-[#F6F1E8] text-[#8B1E1E]"><Icon className="size-5" /></div></CardHeader><CardContent><p className="text-sm text-[#756D62]">{detail}</p></CardContent></Card> }
 function Info({ label, value }) { return <div><p className="text-xs font-semibold uppercase text-[#756D62]">{label}</p><p className="mt-1 break-words font-medium">{value}</p></div> }
 function Price({ label, strong, value }) { return <div className={`flex justify-between ${strong ? "border-t border-[#E4DAC9] pt-2 font-bold" : "text-[#756D62]"}`}><span>{label}</span><span>{formatMoney(value)}</span></div> }

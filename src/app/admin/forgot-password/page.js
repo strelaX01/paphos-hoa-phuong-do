@@ -5,7 +5,7 @@ import AdminAuthCard from "@/app/admin/login/AdminAuthCard"
 import { getCurrentAdminAccount } from "@/lib/adminAuth"
 
 export const metadata = {
-  title: "Recover admin password | Hoa Phuong Do",
+  title: "Recover admin password",
   robots: { index: false, follow: false },
   referrer: "no-referrer",
 }

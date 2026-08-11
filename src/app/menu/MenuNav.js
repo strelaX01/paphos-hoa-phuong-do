@@ -1,12 +1,11 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 
 import CategoryScroller from '@/app/components/shared/CategoryScroller'
 import MenuSearchField from '@/app/components/shared/MenuSearchField'
 
-export default function MenuNav({ categoryLinks, onQueryChange, query, resultCount }) {
-  const [activeId, setActiveId] = useState(() => categoryLinks[0]?.href.replace('#', '') || '')
+export default function MenuNav({ activeId, categoryLinks, onActiveIdChange, onQueryChange, query, resultCount }) {
   const sectionRef = useRef(null)
   const navigationTargetRef = useRef(null)
   const scrollEndTimerRef = useRef(null)
@@ -26,31 +25,34 @@ export default function MenuNav({ categoryLinks, onQueryChange, query, resultCou
 
   const handleSelect = (id, event) => {
     event?.preventDefault()
-    const targetSection = document.getElementById(id)
-    if (!targetSection) return
-
     navigationTargetRef.current = id
-    setActiveId(id)
-    const top = Math.max(0, window.scrollY + targetSection.getBoundingClientRect().top - getNavOffset())
-    const behavior = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'
+    onActiveIdChange(id)
     window.history.pushState(null, '', `#${id}`)
-    window.scrollTo({ top, behavior })
+
+    window.requestAnimationFrame(() => {
+      const targetSection = document.getElementById(id)
+      if (!targetSection) return
+      const top = Math.max(0, window.scrollY + targetSection.getBoundingClientRect().top - getNavOffset())
+      const behavior = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'
+      window.scrollTo({ top, behavior })
+    })
   }
 
   useEffect(() => {
     if (query) return undefined
 
     const onScroll = () => {
+      if (!window.matchMedia('(min-width: 1024px)').matches) return
       if (navigationTargetRef.current) {
-        setActiveId(navigationTargetRef.current)
+        onActiveIdChange(navigationTargetRef.current)
         if (scrollEndTimerRef.current) window.clearTimeout(scrollEndTimerRef.current)
         scrollEndTimerRef.current = window.setTimeout(() => {
           navigationTargetRef.current = null
-          setActiveId(getActiveId())
+          onActiveIdChange(getActiveId())
         }, 140)
         return
       }
-      setActiveId(getActiveId())
+      onActiveIdChange(getActiveId())
     }
 
     window.addEventListener('scroll', onScroll, { passive: true })
@@ -58,7 +60,7 @@ export default function MenuNav({ categoryLinks, onQueryChange, query, resultCou
       window.removeEventListener('scroll', onScroll)
       if (scrollEndTimerRef.current) window.clearTimeout(scrollEndTimerRef.current)
     }
-  }, [getActiveId, query])
+  }, [getActiveId, onActiveIdChange, query])
 
   return (
     <section ref={sectionRef} className="sticky top-[68px] z-30 border-y border-[#EDE5D0] bg-[#FAF6EE]/97 backdrop-blur-md">

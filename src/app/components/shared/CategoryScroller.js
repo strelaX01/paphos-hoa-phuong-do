@@ -43,7 +43,7 @@ export default function CategoryScroller({ activeKey, ariaLabel, items, onSelect
       >
         {items.map((item) => {
           const isActive = activeKey === item.key
-          const className = `min-w-max max-w-[calc(100vw-3rem)] shrink-0 snap-start truncate border px-4 py-2 text-center text-[10px] font-semibold uppercase tracking-[0.16em] transition-all lg:text-[11px] lg:tracking-[0.18em] ${
+          const className = `flex min-h-11 min-w-max max-w-[calc(100vw-3rem)] shrink-0 snap-start items-center justify-center truncate border px-4 py-2 text-center text-[10px] font-semibold uppercase tracking-[0.16em] transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D4A017] lg:text-[11px] lg:tracking-[0.18em] ${
             isActive
               ? 'border-[#8B1E1E] bg-[#8B1E1E] text-white'
               : 'border-[#E8DFC8] bg-[#FAF6EE] text-[#6B6560] hover:border-[#D4A017]/70 hover:text-[#8B1E1E]'

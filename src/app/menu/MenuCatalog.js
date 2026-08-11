@@ -1,7 +1,7 @@
 'use client'
 
-import { SearchX } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { ChevronLeft, ChevronRight, SearchX } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import MenuNav from './MenuNav'
 import MenuSectionItems from './MenuSectionItems'
@@ -9,6 +9,7 @@ import { menuItemMatchesQuery, normalizeMenuSearch } from '@/lib/menuSearch'
 
 export default function MenuCatalog({ menuSections }) {
   const [query, setQuery] = useState('')
+  const [activeCategoryId, setActiveCategoryId] = useState(menuSections[0]?.id || '')
   const emptyStateRef = useRef(null)
   const normalizedQuery = normalizeMenuSearch(query)
   const categoryLinks = menuSections.map((section) => ({
@@ -22,6 +23,38 @@ export default function MenuCatalog({ menuSections }) {
       .filter((item) => menuItemMatchesQuery(item, section.title, normalizedQuery))
       .map((item) => ({ ...item, searchCategory: section.title })))
   }, [menuSections, normalizedQuery])
+  const activeCategoryIndex = Math.max(0, menuSections.findIndex((section) => section.id === activeCategoryId))
+
+  const selectCategory = useCallback((id, { updateHistory = true } = {}) => {
+    if (!menuSections.some((section) => section.id === id)) return
+    setActiveCategoryId(id)
+    if (updateHistory) window.history.pushState(null, '', `#${id}`)
+
+    window.requestAnimationFrame(() => {
+      const target = document.getElementById(id)
+      if (!target) return
+      const navigation = document.querySelector('[data-menu-navigation]')
+      const offset = 68 + (navigation?.getBoundingClientRect().height || 60) + 8
+      const top = Math.max(0, window.scrollY + target.getBoundingClientRect().top - offset)
+      const behavior = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'
+      window.scrollTo({ top, behavior })
+    })
+  }, [menuSections])
+
+  useEffect(() => {
+    const syncCategoryFromUrl = () => {
+      const id = decodeURIComponent(window.location.hash.slice(1))
+      if (id && menuSections.some((section) => section.id === id)) setActiveCategoryId(id)
+    }
+
+    syncCategoryFromUrl()
+    window.addEventListener('hashchange', syncCategoryFromUrl)
+    window.addEventListener('popstate', syncCategoryFromUrl)
+    return () => {
+      window.removeEventListener('hashchange', syncCategoryFromUrl)
+      window.removeEventListener('popstate', syncCategoryFromUrl)
+    }
+  }, [menuSections])
 
   useEffect(() => {
     if (!normalizedQuery || searchResults.length) return undefined
@@ -35,7 +68,9 @@ export default function MenuCatalog({ menuSections }) {
   return (
     <>
       <MenuNav
+        activeId={activeCategoryId}
         categoryLinks={categoryLinks}
+        onActiveIdChange={setActiveCategoryId}
         query={query}
         resultCount={searchResults.length}
         onQueryChange={setQuery}
@@ -67,17 +102,25 @@ export default function MenuCatalog({ menuSections }) {
               )}
             </div>
           </section>
-        ) : menuSections.map((section) => (
-          <MenuSection key={section.id} section={section} />
+        ) : menuSections.map((section, index) => (
+          <MenuSection
+            key={section.id}
+            section={section}
+            active={section.id === activeCategoryId}
+            categoryIndex={index}
+            categoryCount={menuSections.length}
+            onPrevious={index > 0 ? () => selectCategory(menuSections[index - 1].id) : null}
+            onNext={index < menuSections.length - 1 ? () => selectCategory(menuSections[index + 1].id) : null}
+          />
         ))}
       </div>
     </>
   )
 }
 
-function MenuSection({ section }) {
+function MenuSection({ active, categoryCount, categoryIndex, onNext, onPrevious, section }) {
   return (
-    <section id={section.id} className="scroll-mt-48 bg-[#F8F3EA] py-12 lg:py-16">
+    <section id={section.id} className={`${active ? 'block' : 'hidden'} scroll-mt-48 bg-[#F8F3EA] py-10 lg:block lg:py-16`}>
       <div className="site-container">
         <div className="mb-10 grid gap-6 lg:grid-cols-[0.8fr_1.2fr] lg:items-end">
           <div>
@@ -87,6 +130,19 @@ function MenuSection({ section }) {
           <p className="max-w-2xl text-[14px] leading-relaxed text-[#6B6560]">{section.description}</p>
         </div>
         <MenuSectionItems items={section.items} />
+        {categoryCount > 1 ? (
+          <nav className="mt-10 grid grid-cols-[1fr_auto_1fr] items-center border-y border-[#E4DAC9] py-3 lg:hidden" aria-label="Browse menu categories">
+            <button type="button" disabled={!onPrevious} onClick={onPrevious || undefined} className="flex min-h-11 items-center gap-1.5 justify-self-start px-2 text-[10px] font-bold uppercase tracking-[0.12em] text-[#8B1E1E] transition-colors disabled:invisible">
+              <ChevronLeft className="size-4" aria-hidden="true" /> Previous
+            </button>
+            <span className="px-2 text-center text-[10px] font-semibold uppercase tracking-[0.14em] text-[#81766B]">
+              {categoryIndex + 1} / {categoryCount}
+            </span>
+            <button type="button" disabled={!onNext} onClick={onNext || undefined} className="flex min-h-11 items-center gap-1.5 justify-self-end px-2 text-[10px] font-bold uppercase tracking-[0.12em] text-[#8B1E1E] transition-colors disabled:invisible">
+              Next <ChevronRight className="size-4" aria-hidden="true" />
+            </button>
+          </nav>
+        ) : null}
       </div>
     </section>
   )

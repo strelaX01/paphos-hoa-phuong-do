@@ -52,7 +52,7 @@ export default async function Footer({ restaurantData }) {
           <section className="col-span-2 border-b border-white/10 pb-8 lg:col-span-4 lg:border-b-0 lg:pb-0" aria-labelledby="footer-restaurant">
             <div className="flex items-center gap-4">
               <div className="flex size-16 shrink-0 items-center justify-center bg-[#F8F3E9] p-2">
-                <Image src="/images/hoa-phuong-do-logo.png" alt="" width={92} height={64} className="h-full w-full object-contain" />
+                <Image src="/images/hoa-phuong-do-logo.png" alt="" width={96} height={64} className="h-auto w-full object-contain" />
               </div>
               <div>
                 <h2 id="footer-restaurant" className="font-display text-2xl leading-none text-white">{profile.name}</h2>

@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { dedupeClientRequest } from "@/lib/dedupeClientRequest"
 import { RESERVATION_STATUSES } from "@/lib/reservationStatus"
+import { useModalDialog } from "@/hooks/useModalDialog"
 
 const statusVariant = { PENDING: "warning", CONFIRMED: "info", COMPLETED: "success", CANCELLED: "destructive" }
 const statusRowAccent = { PENDING: "border-l-amber-400", CONFIRMED: "border-l-sky-500", COMPLETED: "border-l-emerald-500", CANCELLED: "border-l-red-500" }
@@ -219,7 +220,12 @@ function DeleteReservationModal({ busy, onCancel, onConfirm, reservation }) {
   return <Modal title="Delete reservation?" onClose={onCancel} locked={busy} layer="z-[60]"><div className="space-y-5 p-5"><p className="text-sm text-[#756D62]">This permanently deletes the reservation and cannot be undone.</p><div><p className="font-semibold">{reservation.name}</p><p className="mt-1 text-sm text-[#756D62]">{formatDateOnly(reservation.date)} at {reservation.time} | {reservation.guests} guests</p></div><div className="flex justify-end gap-2"><Button variant="outline" onClick={onCancel} disabled={busy}>Cancel</Button><Button variant="destructive" onClick={onConfirm} disabled={busy}>{busy ? <LoaderCircle className="size-4 animate-spin" /> : <Trash2 className="size-4" />}{busy ? "Deleting..." : "Delete reservation"}</Button></div></div></Modal>
 }
 
-function Modal({ children, layer = "z-50", locked, onClose, title }) { return <div className={`fixed inset-0 ${layer} flex items-center justify-center bg-[#2B2B2B]/55 p-4 backdrop-blur-sm`} role="dialog" aria-modal="true" aria-label={title}><div className="max-h-[calc(100svh-2rem)] w-full max-w-2xl overflow-y-auto rounded-lg border border-[#E4DAC9] bg-white shadow-2xl"><div className="flex items-center justify-between border-b border-[#E4DAC9] px-5 py-4"><h2 className="font-display text-xl font-semibold">{title}</h2><Button variant="ghost" size="icon" onClick={onClose} disabled={locked} aria-label={`Close ${title}`}><X className="size-4" /></Button></div>{children}</div></div> }
+function Modal({ children, layer = "z-50", locked, onClose, title }) {
+  const dialogRef = useRef(null)
+  useModalDialog({ open: true, containerRef: dialogRef, onEscape: locked ? undefined : onClose })
+
+  return <div ref={dialogRef} tabIndex={-1} className={`fixed inset-0 ${layer} flex items-center justify-center bg-[#2B2B2B]/55 p-4 backdrop-blur-sm`} role="dialog" aria-modal="true" aria-label={title}><div className="max-h-[calc(100svh-2rem)] w-full max-w-2xl overflow-y-auto rounded-lg border border-[#E4DAC9] bg-white shadow-2xl"><div className="flex items-center justify-between border-b border-[#E4DAC9] px-5 py-4"><h2 className="font-display text-xl font-semibold">{title}</h2><Button variant="ghost" size="icon" onClick={onClose} disabled={locked} aria-label={`Close ${title}`}><X className="size-4" /></Button></div>{children}</div></div>
+}
 function EditField({ children, label }) { return <label className="block"><span className="text-xs font-semibold uppercase text-[#756D62]">{label}</span><span className="mt-1 block">{children}</span></label> }
 function MetricCard({ detail, icon: Icon, label, value }) { return <Card className="border-[#E4DAC9] bg-white"><CardHeader className="flex-row items-start justify-between pb-2"><div><CardDescription>{label}</CardDescription><CardTitle className="mt-2 font-sans text-3xl font-semibold leading-none tabular-nums">{value}</CardTitle></div><div className="flex size-10 items-center justify-center rounded-md bg-[#F6F1E8] text-[#8B1E1E]"><Icon className="size-5" /></div></CardHeader><CardContent><p className="text-sm text-[#756D62]">{detail}</p></CardContent></Card> }
 function PageButton({ disabled, icon: Icon, label, onClick }) { return <Button variant="outline" size="icon" onClick={onClick} disabled={disabled} aria-label={label}><Icon className="size-4" /></Button> }

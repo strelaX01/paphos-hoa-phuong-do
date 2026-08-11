@@ -2,7 +2,7 @@ import AdminAuthCard from "@/app/admin/login/AdminAuthCard"
 import ResetPasswordForm from "@/app/admin/reset-password/ResetPasswordForm"
 
 export const metadata = {
-  title: "Reset admin password | Hoa Phuong Do",
+  title: "Reset admin password",
   robots: { index: false, follow: false },
   referrer: "no-referrer",
 }

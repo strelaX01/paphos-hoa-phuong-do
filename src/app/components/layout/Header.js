@@ -7,6 +7,7 @@ import { usePathname } from 'next/navigation'
 import { ArrowUpRight, CalendarDays, Menu, X } from 'lucide-react'
 import CartButton from '@/app/components/shared/CartButton'
 import { NAV_LINKS as navLinks } from '@/lib/constants/index.js'
+import { useModalDialog } from '@/hooks/useModalDialog'
 
 const NO_HERO_ROUTES = ['/checkout']
 
@@ -30,23 +31,11 @@ export default function Header() {
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
 
-  useEffect(() => {
-    if (!isMobileMenuOpen) return undefined
-
-    const previousOverflow = document.body.style.overflow
-    const onKeyDown = (event) => {
-      if (event.key === 'Escape') setIsMobileMenuOpen(false)
-    }
-
-    document.body.style.overflow = 'hidden'
-    window.addEventListener('keydown', onKeyDown)
-    mobileDialogRef.current?.focus({ preventScroll: true })
-
-    return () => {
-      document.body.style.overflow = previousOverflow
-      window.removeEventListener('keydown', onKeyDown)
-    }
-  }, [isMobileMenuOpen])
+  useModalDialog({
+    open: isMobileMenuOpen,
+    containerRef: mobileDialogRef,
+    onEscape: () => setIsMobileMenuOpen(false),
+  })
 
   return (
     <>
@@ -68,9 +57,9 @@ export default function Header() {
                 src="/images/hoa-phuong-do-logo.png"
                 alt="Hoa Phuong Do"
                 width={102}
-                height={66}
+                height={68}
                 priority
-                className={`h-[68px] w-auto object-contain transition-[transform,filter] duration-500 group-hover:scale-[1.03] ${solidStyle ? '' : 'drop-shadow-[0_2px_8px_rgba(0,0,0,0.45)]'}`}
+                className={`object-contain transition-[transform,filter] duration-500 group-hover:scale-[1.03] ${solidStyle ? '' : 'drop-shadow-[0_2px_8px_rgba(0,0,0,0.45)]'}`}
               />
             </Link>
 
@@ -114,7 +103,7 @@ export default function Header() {
               <button
                 type="button"
                 onClick={() => setIsMobileMenuOpen(true)}
-                className={`grid h-10 w-10 place-items-center border transition-colors duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d4a017] lg:hidden ${
+                className={`grid size-11 place-items-center border transition-colors duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d4a017] lg:hidden ${
                   solidStyle ? 'border-[#dfd3bd] text-[#211a15]' : 'border-white/35 text-white'
                 }`}
                 aria-expanded={isMobileMenuOpen}
@@ -151,12 +140,12 @@ export default function Header() {
       >
         <div className="flex h-[78px] shrink-0 items-center justify-between border-b border-[#e4dac9] px-6">
           <Link href="/" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center" aria-label="Hoa Phuong Do home">
-            <Image src="/images/hoa-phuong-do-logo.png" alt="Hoa Phuong Do" width={100} height={64} className="h-[62px] w-auto object-contain" />
+            <Image src="/images/hoa-phuong-do-logo.png" alt="Hoa Phuong Do" width={96} height={64} className="object-contain" />
           </Link>
           <button
             type="button"
             onClick={() => setIsMobileMenuOpen(false)}
-            className="grid h-10 w-10 place-items-center border border-[#d9cdbb] text-[#2b241e] transition-colors hover:border-[#9d2023] hover:text-[#9d2023] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d4a017]"
+            className="grid size-11 place-items-center border border-[#d9cdbb] text-[#2b241e] transition-colors hover:border-[#9d2023] hover:text-[#9d2023] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d4a017]"
             aria-label="Close menu"
           >
             <X className="h-5 w-5" strokeWidth={1.6} aria-hidden="true" />

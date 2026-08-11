@@ -24,7 +24,7 @@ export default function MenuSearchField({ onChange, placeholder = 'Search dishes
         <button
           type="button"
           onClick={() => onChange('')}
-          className="absolute right-1.5 top-1/2 flex size-8 -translate-y-1/2 items-center justify-center text-[#81766b] transition-colors hover:bg-[#f2eadf] hover:text-[#9d2023] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d4a017]"
+          className="absolute right-0 top-1/2 flex size-11 -translate-y-1/2 items-center justify-center text-[#81766b] transition-colors hover:bg-[#f2eadf] hover:text-[#9d2023] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d4a017]"
           aria-label="Clear search"
         >
           <X className="size-4" aria-hidden="true" />

@@ -1,12 +1,13 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { Calendar, CheckCircle2, Mail, Phone, UserRound, UsersRound, X } from 'lucide-react'
 
 import CopyReferenceButton from '@/app/components/shared/CopyReferenceButton'
 import FormErrorNotice from '@/app/components/shared/FormErrorNotice'
 import TimeSelect from './TimeSelect'
 import { getCyprusDateString, getOpeningHoursForDate, getReservationTimeSlots } from '@/lib/openingHours'
+import { useModalDialog } from '@/hooks/useModalDialog'
 
 const initialState = {
   success: false,
@@ -50,23 +51,6 @@ export default function ReservationForm({ openingHours }) {
         : !selectedTime
           ? 'Select a Time'
           : 'Reserve a Table'
-
-  useEffect(() => {
-    if (!state.success) return undefined
-
-    const previousOverflow = document.body.style.overflow
-    const closeOnEscape = (event) => {
-      if (event.key === 'Escape') setState(initialState)
-    }
-
-    document.body.style.overflow = 'hidden'
-    window.addEventListener('keydown', closeOnEscape)
-
-    return () => {
-      document.body.style.overflow = previousOverflow
-      window.removeEventListener('keydown', closeOnEscape)
-    }
-  }, [state.success])
 
   const handleSubmit = async (event) => {
     event.preventDefault()
@@ -206,17 +190,23 @@ export default function ReservationForm({ openingHours }) {
 
 function ReservationSuccessModal({ onClose, reference }) {
   const closeButtonRef = useRef(null)
+  const dialogRef = useRef(null)
 
-  useEffect(() => {
-    closeButtonRef.current?.focus()
-  }, [])
+  useModalDialog({
+    open: true,
+    containerRef: dialogRef,
+    initialFocusRef: closeButtonRef,
+    onEscape: onClose,
+  })
 
   return (
     <div
+      ref={dialogRef}
       className="fixed inset-0 z-[80] flex items-end justify-center bg-[#1E1A18]/65 p-0 backdrop-blur-sm sm:items-center sm:p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="reservation-success-title"
+      tabIndex={-1}
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose()
       }}

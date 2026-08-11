@@ -102,7 +102,7 @@ export default function AdminShell({
               <div key={item.href}>
                 <Link
                   href={item.href}
-                  className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+                  className={`flex min-h-11 items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
                     isActive
                       ? "bg-white text-[#202020]"
                       : "text-white/68 hover:bg-white/10 hover:text-white"
@@ -128,7 +128,7 @@ export default function AdminShell({
                           href={child.href}
                           scroll={false}
                           onClick={() => onMenuSectionChange?.(child.key)}
-                          className={`flex items-center gap-2 rounded-md px-3 py-2 text-xs font-medium transition-colors ${
+                          className={`flex min-h-11 items-center gap-2 rounded-md px-3 py-2 text-xs font-medium transition-colors ${
                             childActive
                               ? "bg-white/12 text-white"
                               : "text-white/50 hover:bg-white/10 hover:text-white"
@@ -175,7 +175,7 @@ export default function AdminShell({
               </Link>
               <div className="min-w-0">
                 <p className="text-xs font-medium uppercase tracking-[0.16em] text-[#8B1E1E]">{eyebrow}</p>
-                <h1 className="mt-1 truncate font-display text-2xl font-bold">{title}</h1>
+                <h1 className="mt-1 break-words font-display text-xl font-bold sm:text-2xl">{title}</h1>
                 {description ? <p className="max-w-3xl text-sm text-[#756D62]">{description}</p> : null}
               </div>
             </div>
@@ -187,7 +187,7 @@ export default function AdminShell({
           </div>
 
           <details className="group mt-3 lg:hidden">
-            <summary className="flex cursor-pointer list-none items-center justify-between rounded-lg border border-[#E4DAC9] bg-white px-3 py-2 text-sm font-semibold text-[#2B2B2B] shadow-xs">
+            <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between rounded-lg border border-[#E4DAC9] bg-white px-3 py-2 text-sm font-semibold text-[#2B2B2B] shadow-xs">
               <span className="flex min-w-0 items-center gap-2">
                 <ActiveNavIcon className="size-4 text-[#8B1E1E]" />
                 <span className="truncate">{activeNavItem.label}</span>
@@ -209,7 +209,7 @@ export default function AdminShell({
                   <Link
                     key={item.href}
                     href={item.href}
-                    className={`flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium ${
+                    className={`flex min-h-11 items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium ${
                       isActive
                         ? "bg-[#8B1E1E] text-white"
                         : "text-[#756D62] hover:bg-[#F6F1E8] hover:text-[#2B2B2B]"
@@ -232,7 +232,7 @@ export default function AdminShell({
 
           {active === "menu" ? (
             <details className="group mt-2 lg:hidden">
-              <summary className="flex cursor-pointer list-none items-center justify-between rounded-lg border border-[#E4DAC9] bg-[#FAF7F0] px-3 py-2 text-sm font-semibold text-[#2B2B2B]">
+              <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between rounded-lg border border-[#E4DAC9] bg-[#FAF7F0] px-3 py-2 text-sm font-semibold text-[#2B2B2B]">
                 <span className="flex min-w-0 items-center gap-2">
                   {ActiveMenuIcon ? <ActiveMenuIcon className="size-4 text-[#8B1E1E]" /> : null}
                   <span className="truncate">{activeMenuItem?.label || "Menu section"}</span>
@@ -251,7 +251,7 @@ export default function AdminShell({
                       href={child.href}
                       scroll={false}
                       onClick={() => onMenuSectionChange?.(child.key)}
-                      className={`flex items-center gap-2 rounded-md px-3 py-2 text-xs font-medium ${
+                      className={`flex min-h-11 items-center gap-2 rounded-md px-3 py-2 text-xs font-medium ${
                         childActive
                           ? "bg-[#8B1E1E] text-white"
                           : "text-[#756D62] hover:bg-[#F6F1E8] hover:text-[#2B2B2B]"

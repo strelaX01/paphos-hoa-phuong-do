@@ -19,7 +19,7 @@ export default function MenuAddToCart({ item }) {
       type="button"
       onClick={handleClick}
       aria-label={`Order ${item.name} via delivery`}
-      className="mt-4 w-full inline-flex items-center justify-center gap-2 py-2.5 text-[11px] font-semibold uppercase tracking-[0.14em] transition-all duration-200 bg-[#2B2B2B] text-white hover:bg-[#8B1E1E] group"
+      className="group mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 bg-[#2B2B2B] px-4 py-2.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-white transition-all duration-200 hover:bg-[#8B1E1E] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D4A017] focus-visible:ring-offset-2"
     >
       Order This Dish
       <ArrowRight className="size-3.5 transition-transform duration-200 group-hover:translate-x-0.5" aria-hidden="true" />

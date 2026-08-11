@@ -13,6 +13,7 @@ export default function AdminAuthCard({ children, eyebrow, title, description })
               src="/images/hoa-phuong-do-logo.png"
               alt="Hoa Phuong Do"
               fill
+              priority
               sizes="64px"
               className="object-contain p-1"
             />
