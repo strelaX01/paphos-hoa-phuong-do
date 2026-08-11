@@ -230,7 +230,6 @@ export default function CheckoutClient({ initialAvailability, openingHours }) {
                   <Input name="phone" label="Phone number" type="tel" minLength={6} maxLength={30} autoComplete="tel" inputMode="tel" pattern="\+?[0-9 ()\-.]{6,30}" placeholder="e.g. +357 99 123456" value={contact.phone} onChange={(event) => updateContact("phone", sanitizePhone(event.target.value))} />
                 </div>
                 <Input name="email" label="Email (optional)" type="email" maxLength={254} autoComplete="email" placeholder="e.g. name@example.com" required={false} value={contact.email} onChange={(event) => updateContact("email", event.target.value)} />
-                <div className="border border-[#E8DFC8] bg-white/55 px-4 py-3"><p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#8B6F47]">Payment</p><p className="mt-1 text-sm font-semibold text-[#2B2B2B]">Cash on delivery</p></div>
                 <button type="button" onClick={goToDeliveryStep} className="flex w-full items-center justify-center gap-2 bg-[#8B1E1E] px-7 py-4 text-[13px] font-semibold uppercase tracking-[0.14em] text-white transition-colors hover:bg-[#A02424]">Continue to delivery <ArrowRight className="size-4" /></button>
               </div>
             ) : (
