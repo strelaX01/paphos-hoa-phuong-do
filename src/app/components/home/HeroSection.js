@@ -1,6 +1,27 @@
 import Link from 'next/link'
+import localFont from 'next/font/local'
 import { ArrowRight, Clock3, MapPin } from 'lucide-react'
 import HeroImage from '@/app/components/shared/HeroImage'
+
+const heroDisplayFont = localFont({
+  src: '../../fonts/cormorant-latin.woff2',
+  variable: '--font-hero-display',
+  weight: '300 700',
+  display: 'swap',
+  fallback: ['Georgia'],
+  adjustFontFallback: 'Times New Roman',
+  preload: true,
+})
+
+const heroSansFont = localFont({
+  src: '../../fonts/inter-latin.woff2',
+  variable: '--font-hero-sans',
+  weight: '100 900',
+  display: 'swap',
+  fallback: ['Arial'],
+  adjustFontFallback: 'Arial',
+  preload: true,
+})
 
 export default function HeroSection({ openingStatus, restaurantProfile, menuItemCount = 0 }) {
   const dishCountLabel = menuItemCount > 0
@@ -8,7 +29,7 @@ export default function HeroSection({ openingStatus, restaurantProfile, menuItem
     : 'Explore our menu'
 
   return (
-    <section id="hero" aria-label={`Welcome to ${restaurantProfile?.name || 'the restaurant'}`} className="relative isolate flex min-h-[100svh] min-w-0 flex-col overflow-hidden bg-[#1E1A18]">
+    <section id="hero" aria-label={`Welcome to ${restaurantProfile?.name || 'the restaurant'}`} className={`${heroDisplayFont.variable} ${heroSansFont.variable} relative isolate flex min-h-[100svh] min-w-0 flex-col overflow-hidden bg-[#1E1A18] font-[family-name:var(--font-hero-sans)]`}>
       <div className="home-hero-media absolute inset-0">
         <HeroImage
           src="/images/hpd-hero.png"
@@ -21,14 +42,14 @@ export default function HeroSection({ openingStatus, restaurantProfile, menuItem
 
       <div className="relative z-10 flex min-w-0 flex-1 items-center">
         <div className="site-container pb-16 pt-28 sm:py-32 lg:py-40">
-          <div className="max-w-[21rem] min-w-0 sm:max-w-xl">
+          <div className="home-hero-content max-w-[21rem] min-w-0 sm:max-w-xl">
             <div className="home-hero-intro mb-5 flex items-center gap-3" style={{ '--home-intro-delay': '120ms' }}>
               <span className="h-px w-7 shrink-0 bg-[#D4A017] sm:w-8" />
               <span className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[#D4A017] sm:text-[11px] sm:tracking-[0.3em]">Authentic Vietnamese Cuisine · Cyprus</span>
             </div>
 
-            <p className="home-hero-intro mb-2 font-display text-lg tracking-wide text-white/68 sm:text-2xl" style={{ '--home-intro-delay': '210ms' }}>{restaurantProfile?.name}</p>
-            <h1 className="home-hero-intro mb-5 font-display font-bold leading-[1.08] text-white sm:mb-6" style={{ '--home-intro-delay': '280ms' }}>
+            <p className="home-hero-intro mb-2 font-[family-name:var(--font-hero-display)] text-lg tracking-wide text-white/68 sm:text-2xl" style={{ '--home-intro-delay': '210ms' }}>{restaurantProfile?.name}</p>
+            <h1 className="home-hero-intro mb-5 font-[family-name:var(--font-hero-display)] font-bold leading-[1.08] text-white sm:mb-6" style={{ '--home-intro-delay': '280ms' }}>
               <span className="block text-[33px] sm:text-5xl lg:text-[58px]">Traditional Vietnamese</span>
               <span className="block text-[33px] text-[#D4A017] sm:text-5xl lg:text-[58px]">Flavors in Cyprus</span>
             </h1>

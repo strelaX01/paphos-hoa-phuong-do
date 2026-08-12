@@ -67,10 +67,13 @@ function notifyListeners(message) {
   const data = message?.payload?.data || message?.payload || {}
   const table = data.table
   if (!table || !["Order", "Reservation"].includes(table)) return
+  const record = data.record || {}
 
   const change = {
     table,
     eventType: String(data.type || data.eventType || "UPDATE").toUpperCase(),
+    recordId: record.id || null,
+    createdAt: record.createdAt || data.commit_timestamp || null,
   }
   for (const listener of state.listeners) listener(change)
 }
@@ -101,7 +104,7 @@ function connect() {
           broadcast: { ack: false, self: false },
           presence: { enabled: false },
           postgres_changes: [
-            { event: "*", schema: "public", table: "Order", select: ["id", "status", "updatedAt"] },
+            { event: "*", schema: "public", table: "Order", select: ["id", "status", "createdAt", "updatedAt"] },
             { event: "*", schema: "public", table: "Reservation", select: ["id", "status", "createdAt"] },
           ],
           private: false,

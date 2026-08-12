@@ -560,8 +560,12 @@
   animation: home-hero-image-enter 1400ms cubic-bezier(0.2, 0.72, 0.2, 1) both;
 }
 
+.home-hero-content {
+  animation: home-hero-content-slide 760ms cubic-bezier(0.22, 0.72, 0.2, 1) backwards;
+}
+
 .home-hero-intro {
-  animation: home-hero-content-enter 720ms cubic-bezier(0.2, 0.78, 0.2, 1) var(--home-intro-delay, 0ms) both;
+  animation: home-hero-content-fade 560ms ease-out var(--home-intro-delay, 0ms) backwards;
 }
 
 html.home-motion-active [data-home-reveal] {
@@ -597,9 +601,12 @@ html.home-motion-active [data-home-reveal].is-home-visible {
   to { opacity: 1; transform: scale(1); }
 }
 
-@keyframes home-hero-content-enter {
-  from { opacity: 0; transform: translate3d(0, 18px, 0); }
-  to { opacity: 1; transform: translate3d(0, 0, 0); }
+@keyframes home-hero-content-slide {
+  from { transform: translate3d(0, 14px, 0); }
+}
+
+@keyframes home-hero-content-fade {
+  from { opacity: 0; }
 }
 
 @media (max-width: 640px) {
@@ -617,6 +624,7 @@ html.home-motion-active [data-home-reveal].is-home-visible {
 
 @media (prefers-reduced-motion: reduce) {
   .home-hero-media,
+  .home-hero-content,
   .home-hero-intro {
     animation: none;
   }

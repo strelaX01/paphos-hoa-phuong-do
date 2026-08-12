@@ -30,7 +30,11 @@ export async function GET(request) {
       const unsubscribe = subscribeAdminRealtime((change) => {
         if (isDriver && change.table !== "Order") return
         const eventName = change.table === "Order" ? "order-changed" : "reservation-changed"
-        send(`event: ${eventName}\ndata: ${JSON.stringify({ eventType: change.eventType })}\n\n`)
+        send(`event: ${eventName}\ndata: ${JSON.stringify({
+          eventType: change.eventType,
+          recordId: change.recordId,
+          createdAt: change.createdAt,
+        })}\n\n`)
       })
       const heartbeatId = setInterval(() => send(": heartbeat\n\n"), 20_000)
       cleanup = () => {
