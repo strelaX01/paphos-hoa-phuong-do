@@ -4,18 +4,26 @@ import { useEffect, useRef, useState } from 'react'
 import { Clock } from 'lucide-react'
 
 export default function TimeSelect({ disabled = false, name, onChange, options, placeholder = 'Select', required, value }) {
-  const [open, setOpen] = useState(false)
+  const [menuState, setMenuState] = useState({ isOpen: false, valueAtOpen: '' })
   const wrapRef = useRef(null)
+  const open = menuState.isOpen && menuState.valueAtOpen === value
 
   useEffect(() => {
-    function onClickOutside(e) {
-      if (wrapRef.current && !wrapRef.current.contains(e.target)) {
-        setOpen(false)
+    function onPointerDownOutside(event) {
+      if (wrapRef.current && !wrapRef.current.contains(event.target)) {
+        setMenuState({ isOpen: false, valueAtOpen: value })
       }
     }
-    document.addEventListener('mousedown', onClickOutside)
-    return () => document.removeEventListener('mousedown', onClickOutside)
-  }, [])
+    document.addEventListener('pointerdown', onPointerDownOutside)
+    return () => document.removeEventListener('pointerdown', onPointerDownOutside)
+  }, [value])
+
+  const selectTime = (event, time) => {
+    event.preventDefault()
+    event.stopPropagation()
+    setMenuState({ isOpen: false, valueAtOpen: time })
+    onChange(time)
+  }
 
   return (
     <div ref={wrapRef} className="relative">
@@ -23,7 +31,7 @@ export default function TimeSelect({ disabled = false, name, onChange, options, 
 
       <button
         type="button"
-        onClick={() => setOpen((current) => !current)}
+        onClick={() => setMenuState({ isOpen: !open, valueAtOpen: value })}
         disabled={disabled}
         className="flex h-12 w-full items-center border border-[#E8DFC8] bg-white/70 px-3 text-[14px] text-[#2B2B2B] outline-none transition-all focus:border-[#D4A017] focus:ring-2 focus:ring-[#D4A017]/20 disabled:cursor-not-allowed disabled:opacity-60"
       >
@@ -42,7 +50,7 @@ export default function TimeSelect({ disabled = false, name, onChange, options, 
             <button
               key={time}
               type="button"
-              onClick={() => { onChange(time); setOpen(false) }}
+              onClick={(event) => selectTime(event, time)}
               className={`block w-full px-4 py-2.5 text-left text-[14px] transition-colors hover:bg-[#FAF6EE] ${
                 value === time ? 'bg-[#FAF6EE] font-semibold text-[#8B1E1E]' : 'text-[#2B2B2B]'
               }`}

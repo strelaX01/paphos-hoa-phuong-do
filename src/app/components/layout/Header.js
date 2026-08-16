@@ -103,8 +103,8 @@ export default function Header() {
               <button
                 type="button"
                 onClick={() => setIsMobileMenuOpen(true)}
-                className={`grid size-11 place-items-center border transition-colors duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d4a017] lg:hidden ${
-                  solidStyle ? 'border-[#dfd3bd] text-[#211a15]' : 'border-white/35 text-white'
+                className={`grid size-11 place-items-center transition-colors duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d4a017] lg:hidden ${
+                  solidStyle ? 'text-[#211a15] hover:bg-black/5' : 'text-white hover:bg-white/10'
                 }`}
                 aria-expanded={isMobileMenuOpen}
                 aria-controls="mobile-navigation"
