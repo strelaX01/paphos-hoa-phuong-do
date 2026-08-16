@@ -18,12 +18,12 @@ export default function PhoneCallPopup({ phoneNumbers = [], restaurantName = 'th
   }
 
   return (
-    <div className="fixed bottom-[max(4.5rem,env(safe-area-inset-bottom))] right-4 z-[60] flex flex-col items-end gap-3 sm:bottom-6 sm:right-6">
+    <div className="pointer-events-none fixed bottom-[max(4.5rem,env(safe-area-inset-bottom))] right-4 z-[60] sm:bottom-6 sm:right-6">
       <div
         id="phone-call-options"
-        className={`flex origin-bottom-right flex-col gap-2 transition-all duration-200 ${
+        className={`absolute bottom-[calc(100%+0.75rem)] right-0 flex origin-bottom-right flex-col items-end gap-2 transition-all duration-200 ${
           isOpen
-            ? 'translate-y-0 scale-100 opacity-100'
+            ? 'pointer-events-auto translate-y-0 scale-100 opacity-100'
             : 'pointer-events-none translate-y-2 scale-95 opacity-0'
         }`}
       >
@@ -44,7 +44,7 @@ export default function PhoneCallPopup({ phoneNumbers = [], restaurantName = 'th
       <button
         type="button"
         onClick={() => setIsOpen((open) => !open)}
-        className="phone-call-float group relative flex size-14 items-center justify-center rounded-full bg-[#8B1E1E] text-white shadow-2xl shadow-black/25 transition-transform duration-200 hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D4A017]/80 sm:size-16"
+        className="phone-call-float pointer-events-auto group relative flex size-14 items-center justify-center rounded-full bg-[#8B1E1E] text-white shadow-2xl shadow-black/25 transition-transform duration-200 hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D4A017]/80 sm:size-16"
         aria-expanded={isOpen}
         aria-controls="phone-call-options"
         aria-label={`Choose a phone number to call ${restaurantName}`}
