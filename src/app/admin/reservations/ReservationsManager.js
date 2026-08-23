@@ -289,23 +289,29 @@ function ReservationStatusSelect({ busy, onStatus, reservation }) {
 }
 
 function DateFilterInput({ active, onChange, value }) {
-  const inputRef = useRef(null)
-  const openPicker = () => {
-    const input = inputRef.current
-    if (!input) return
-    if (typeof input.showPicker === "function") {
-      try {
-        input.showPicker()
-        return
-      } catch {
-        // Browsers may require the fallback click even during a direct interaction.
-      }
+  const rootRef = useRef(null)
+  const [open, setOpen] = useState(false)
+  const [month, setMonth] = useState(() => (value || getCyprusDateString()).slice(0, 7))
+  const calendarDays = useMemo(() => buildCalendarDays(month), [month])
+
+  useEffect(() => {
+    if (!open) return undefined
+    const closeOnOutsidePress = (event) => { if (!rootRef.current?.contains(event.target)) setOpen(false) }
+    const closeOnEscape = (event) => { if (event.key === "Escape") setOpen(false) }
+    document.addEventListener("pointerdown", closeOnOutsidePress)
+    document.addEventListener("keydown", closeOnEscape)
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutsidePress)
+      document.removeEventListener("keydown", closeOnEscape)
     }
-    input.focus()
-    input.click()
+  }, [open])
+
+  const toggleCalendar = () => {
+    if (!open) setMonth((value || getCyprusDateString()).slice(0, 7))
+    setOpen((current) => !current)
   }
 
-  return <div className="relative"><button type="button" onClick={openPicker} className={`flex h-9 w-full items-center gap-2 rounded-md border bg-white px-3 pr-10 text-left text-sm tabular-nums outline-none transition-colors hover:border-[#D4A017] focus-visible:border-[#8B1E1E] focus-visible:ring-2 focus-visible:ring-[#8B1E1E]/10 ${active ? "border-[#8B1E1E] ring-2 ring-[#8B1E1E]/10" : "border-[#E4DAC9]"}`} aria-label={`Choose a specific reservation date. ${value ? formatFilterDate(value) : "No date selected"}`}><CalendarDays className="size-4 shrink-0 text-[#8B1E1E]" aria-hidden="true" /><span className={value ? "text-[#2B2B2B]" : "text-[#9B9285]"}>{formatFilterDate(value)}</span></button><input ref={inputRef} type="date" value={value} onChange={(event) => onChange(event.target.value)} tabIndex={-1} aria-hidden="true" className="pointer-events-none absolute bottom-0 left-0 size-px opacity-0" />{value ? <button type="button" onClick={() => onChange("")} className="absolute right-1 top-1/2 flex size-7 -translate-y-1/2 items-center justify-center rounded text-[#756D62] hover:bg-[#F2EAD8] hover:text-[#8B1E1E] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8B1E1E]" aria-label="Clear reservation date filter"><X className="size-4" /></button> : null}</div>
+  return <div ref={rootRef} className="relative"><button type="button" onClick={toggleCalendar} aria-haspopup="dialog" aria-expanded={open} className={`flex h-9 w-full items-center gap-2 rounded-md border bg-white px-3 pr-10 text-left text-sm tabular-nums outline-none transition-colors hover:border-[#D4A017] focus-visible:border-[#8B1E1E] focus-visible:ring-2 focus-visible:ring-[#8B1E1E]/10 ${active ? "border-[#8B1E1E] ring-2 ring-[#8B1E1E]/10" : "border-[#E4DAC9]"}`} aria-label={`Choose a specific reservation date. ${value ? formatFilterDate(value) : "No date selected"}`}><CalendarDays className="size-4 shrink-0 text-[#8B1E1E]" aria-hidden="true" /><span className={value ? "text-[#2B2B2B]" : "text-[#9B9285]"}>{formatFilterDate(value)}</span></button>{value ? <button type="button" onClick={() => { onChange(""); setOpen(false) }} className="absolute right-1 top-1/2 z-20 flex size-7 -translate-y-1/2 items-center justify-center rounded bg-white text-[#756D62] hover:bg-[#F2EAD8] hover:text-[#8B1E1E] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8B1E1E]" aria-label="Clear reservation date filter"><X className="size-4" /></button> : null}{open ? <div className="absolute left-0 right-0 top-full z-50 mt-1 rounded-md border border-[#D8CEBD] bg-white p-3 shadow-xl sm:left-auto sm:w-72" role="dialog" aria-label="Choose reservation date"><div className="flex items-center justify-between"><button type="button" onClick={() => setMonth((current) => shiftCalendarMonth(current, -1))} className="flex size-9 items-center justify-center rounded-md text-[#756D62] hover:bg-[#F6F1E8] hover:text-[#8B1E1E] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8B1E1E]" aria-label="Previous month"><ChevronLeft className="size-4" /></button><p className="font-semibold">{formatCalendarMonth(month)}</p><button type="button" onClick={() => setMonth((current) => shiftCalendarMonth(current, 1))} className="flex size-9 items-center justify-center rounded-md text-[#756D62] hover:bg-[#F6F1E8] hover:text-[#8B1E1E] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8B1E1E]" aria-label="Next month"><ChevronRight className="size-4" /></button></div><div className="mt-2 grid grid-cols-7 text-center text-[10px] font-semibold uppercase text-[#9B9285]" aria-hidden="true">{["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"].map((day) => <span key={day} className="py-1">{day}</span>)}</div><div className="grid grid-cols-7 gap-1">{calendarDays.map((day, index) => day ? <button key={day.iso} type="button" onClick={() => { onChange(day.iso); setOpen(false) }} aria-label={formatDateOnly(day.iso)} aria-pressed={day.iso === value} className={`flex aspect-square min-h-9 items-center justify-center rounded text-sm tabular-nums transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8B1E1E] ${day.iso === value ? "bg-[#8B1E1E] font-semibold text-white" : day.iso === getCyprusDateString() ? "bg-[#F6F1E8] font-semibold text-[#8B1E1E] ring-1 ring-[#D4A017]" : "text-[#2B2B2B] hover:bg-[#F6F1E8]"}`}>{day.day}</button> : <span key={`empty-${index}`} aria-hidden="true" />)}</div></div> : null}</div>
 }
 
 function ReservationStatusFilter({ onChange, value }) {
@@ -361,6 +367,28 @@ function formatFilterDate(value) { const [year, month, day] = String(value || ""
 function formatDateOnly(value) { return new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeZone: "UTC" }).format(new Date(`${value}T12:00:00.000Z`)) }
 function formatDateTime(value) { return new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value)) }
 function formatShortDate(value) { return new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short" }).format(new Date(value)) }
+
+function buildCalendarDays(monthValue) {
+  const [year, month] = monthValue.split("-").map(Number)
+  const firstDay = new Date(Date.UTC(year, month - 1, 1)).getUTCDay()
+  const leadingDays = (firstDay + 6) % 7
+  const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate()
+  const result = Array.from({ length: leadingDays }, () => null)
+  for (let day = 1; day <= daysInMonth; day += 1) {
+    result.push({ day, iso: `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}` })
+  }
+  return result
+}
+
+function shiftCalendarMonth(value, amount) {
+  const [year, month] = value.split("-").map(Number)
+  const next = new Date(Date.UTC(year, month - 1 + amount, 1))
+  return `${next.getUTCFullYear()}-${String(next.getUTCMonth() + 1).padStart(2, "0")}`
+}
+
+function formatCalendarMonth(value) {
+  return new Intl.DateTimeFormat("en-GB", { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(`${value}-01T12:00:00.000Z`))
+}
 
 function getCyprusDateString() {
   const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Nicosia", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date())
