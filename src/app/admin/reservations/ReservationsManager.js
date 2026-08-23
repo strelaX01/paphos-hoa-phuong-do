@@ -1,7 +1,7 @@
 "use client"
 
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react"
-import { CalendarCheck, ChevronLeft, ChevronRight, Clock3, LoaderCircle, Pencil, RefreshCw, Search, Trash2, UsersRound, Utensils, X } from "lucide-react"
+import { CalendarCheck, CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, Clock3, LoaderCircle, Pencil, RefreshCw, Search, Trash2, UsersRound, Utensils, X, XCircle } from "lucide-react"
 
 import AdminShell from "@/app/admin/_components/AdminShell"
 import AdminToast from "@/app/admin/_components/AdminToast"
@@ -15,7 +15,19 @@ import { useModalDialog } from "@/hooks/useModalDialog"
 
 const statusVariant = { PENDING: "warning", CONFIRMED: "info", COMPLETED: "success", CANCELLED: "destructive" }
 const statusRowAccent = { PENDING: "border-l-amber-400", CONFIRMED: "border-l-sky-500", COMPLETED: "border-l-emerald-500", CANCELLED: "border-l-red-500" }
+const statusDotTone = { PENDING: "bg-amber-500", CONFIRMED: "bg-sky-500", COMPLETED: "bg-emerald-500", CANCELLED: "bg-red-500" }
 const fieldClassName = "w-full rounded-md border border-[#E4DAC9] bg-white px-3 py-2 text-sm outline-none focus:border-[#8B1E1E] focus:ring-2 focus:ring-[#8B1E1E]/10"
+const DATE_PRESETS = [
+  { value: "today", label: "Today" },
+  { value: "tomorrow", label: "Tomorrow" },
+  { value: "next7", label: "Next 7 days" },
+  { value: "all", label: "All dates" },
+]
+const ACTIVE_RESERVATION_STATUSES = RESERVATION_STATUSES.filter((status) => status !== "CANCELLED")
+const STATUS_FILTER_OPTIONS = [
+  { value: "", label: "All statuses" },
+  ...RESERVATION_STATUSES.map((status) => ({ value: status, label: formatStatus(status) })),
+]
 
 async function readApi(response) {
   const payload = await response.json().catch(() => ({}))
@@ -33,14 +45,18 @@ export default function ReservationsManager() {
   const [query, setQuery] = useState("")
   const deferredQuery = useDeferredValue(query.trim())
   const [status, setStatus] = useState("")
+  const [datePreset, setDatePreset] = useState("today")
+  const [customDate, setCustomDate] = useState("")
   const [page, setPage] = useState(1)
   const [refreshKey, setRefreshKey] = useState(0)
   const [loading, setLoading] = useState(true)
   const [busyId, setBusyId] = useState(null)
   const [selected, setSelected] = useState(null)
+  const [cancelling, setCancelling] = useState(null)
   const [deleting, setDeleting] = useState(null)
   const [toast, setToast] = useState(null)
   const toastIdRef = useRef(0)
+  const dateFilter = useMemo(() => getDateFilter(datePreset, customDate), [customDate, datePreset])
 
   const showToast = (message, tone = "success") => {
     toastIdRef.current += 1
@@ -68,9 +84,11 @@ export default function ReservationsManager() {
 
   useEffect(() => {
     let active = true
-    const params = new URLSearchParams({ page: String(page), limit: "12" })
+    const params = new URLSearchParams({ page: String(page), limit: "24" })
     if (deferredQuery) params.set("q", deferredQuery)
     if (status) params.set("status", status)
+    if (dateFilter.from) params.set("from", dateFilter.from)
+    if (dateFilter.to) params.set("to", dateFilter.to)
     const url = `/api/admin/reservations?${params}`
     dedupeClientRequest(url, () => {
       return fetch(url).then(readApi)
@@ -79,7 +97,7 @@ export default function ReservationsManager() {
       .catch((error) => { if (active) showToast(error.message || "Could not load reservations.", "error") })
       .finally(() => { if (active) setLoading(false) })
     return () => { active = false }
-  }, [deferredQuery, page, refreshKey, status])
+  }, [dateFilter.from, dateFilter.to, deferredQuery, page, refreshKey, status])
 
   const patchStatus = async (reservation, nextStatus) => {
     setBusyId(reservation.id)
@@ -90,6 +108,7 @@ export default function ReservationsManager() {
         body: JSON.stringify({ status: nextStatus }),
       }).then(readApi)
       setReservations((current) => current.map((entry) => entry.id === reservation.id ? payload.data : entry))
+      if (nextStatus === "CANCELLED") setCancelling(null)
       setRefreshKey((key) => key + 1)
       window.dispatchEvent(new Event("reservation-count-changed"))
       showToast("Reservation status updated.")
@@ -143,8 +162,8 @@ export default function ReservationsManager() {
     { label: "Bookings today", value: summary.todayBookings, detail: `${summary.todaySeats} seats reserved`, icon: CalendarCheck },
     { label: "Confirmed", value: summary.confirmed, detail: "Ready for service", icon: UsersRound },
     { label: "Pending review", value: summary.pending, detail: "Need confirmation", icon: Clock3 },
-    { label: "Matching bookings", value: pagination.total, detail: status || deferredQuery ? "Current filters" : "All reservations", icon: Utensils },
-  ], [deferredQuery, pagination.total, status, summary])
+    { label: "Matching bookings", value: pagination.total, detail: status || deferredQuery || datePreset !== "all" ? "Current filters" : "All reservations", icon: Utensils },
+  ], [datePreset, deferredQuery, pagination.total, status, summary])
 
   return (
     <AdminShell active="reservations" eyebrow="Dining room" title="Reservations" description="Review, edit, and manage table bookings." action={<Button variant="outline" onClick={() => { setLoading(true); setRefreshKey((key) => key + 1) }} disabled={loading}><RefreshCw className={`size-4 ${loading ? "animate-spin" : ""}`} />Refresh</Button>}>
@@ -152,38 +171,62 @@ export default function ReservationsManager() {
       <div className="space-y-5">
         {loading ? <MetricGridSkeleton /> : <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-label="Reservation metrics">{metrics.map((metric) => <MetricCard key={metric.label} {...metric} />)}</section>}
         <section className="space-y-4">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-            <div><h2 className="font-display text-xl font-semibold">Reservation list</h2><p className="text-sm text-[#756D62]">{pagination.total} matching bookings</p></div>
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <label className="relative"><span className="sr-only">Search reservations</span><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[#756D62]" /><input value={query} onChange={(event) => { const nextQuery = event.target.value; if (nextQuery.trim() !== deferredQuery) setLoading(true); setQuery(nextQuery); setPage(1) }} className="h-9 w-full rounded-md border border-[#E4DAC9] bg-white pl-9 pr-3 text-sm outline-none focus:border-[#8B1E1E] sm:w-64" placeholder="Name, email, or phone" /></label>
-              <label><span className="sr-only">Filter by status</span><select value={status} onChange={(event) => { setLoading(true); setStatus(event.target.value); setPage(1) }} className="h-9 w-full rounded-md border border-[#E4DAC9] bg-white px-3 text-sm outline-none focus:border-[#8B1E1E] sm:w-44"><option value="">All statuses</option>{RESERVATION_STATUSES.map((option) => <option key={option} value={option}>{formatStatus(option)}</option>)}</select></label>
+          <div className="space-y-3">
+            <div className="flex flex-col gap-1 lg:flex-row lg:items-end lg:justify-between">
+              <div><h2 className="font-display text-xl font-semibold">Reservation schedule</h2><p className="text-sm text-[#756D62]">{pagination.total} matching bookings</p></div>
+              <p className="text-xs font-medium text-[#756D62]">Bookings are ordered by reservation time</p>
+            </div>
+            <div className="border border-[#E4DAC9] bg-[#FDFAF4] p-3">
+              <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+                <div className="flex min-w-0 items-center gap-2">
+                  <CalendarDays className="hidden size-4 shrink-0 text-[#8B1E1E] sm:block" aria-hidden="true" />
+                  <div className="flex min-w-0 flex-1 gap-1 overflow-x-auto rounded-md bg-[#F1EADF] p-1" role="group" aria-label="Reservation date range">
+                    {DATE_PRESETS.map((preset) => <button key={preset.value} type="button" aria-pressed={datePreset === preset.value} onClick={() => { setLoading(true); setDatePreset(preset.value); setPage(1) }} className={`h-8 shrink-0 rounded px-3 text-xs font-semibold transition-colors sm:text-sm ${datePreset === preset.value ? "bg-white text-[#8B1E1E] shadow-sm" : "text-[#756D62] hover:bg-white/65 hover:text-[#2B2B2B]"}`}>{preset.label}</button>)}
+                  </div>
+                </div>
+                <div className="grid gap-2 sm:grid-cols-[minmax(220px,1fr)_180px_170px]">
+                  <label className="relative"><span className="sr-only">Search reservations</span><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[#756D62]" /><input value={query} onChange={(event) => { const nextQuery = event.target.value; if (nextQuery.trim() !== deferredQuery) setLoading(true); setQuery(nextQuery); setPage(1) }} className="h-9 w-full rounded-md border border-[#E4DAC9] bg-white pl-9 pr-3 text-sm outline-none focus:border-[#8B1E1E]" placeholder="Name, email, or phone" /></label>
+                  <ReservationStatusFilter value={status} onChange={(value) => { setLoading(true); setStatus(value); setPage(1) }} />
+                  <DateFilterInput value={customDate} active={datePreset === "custom"} onChange={(value) => { setLoading(true); setCustomDate(value); setDatePreset(value ? "custom" : "today"); setPage(1) }} />
+                </div>
+              </div>
             </div>
           </div>
           {loading ? <ResponsiveListSkeleton rows={6} columns={7} /> : reservations.length ? (
-            <ReservationsList reservations={reservations} busyId={busyId} onDelete={setDeleting} onEdit={setSelected} onStatus={patchStatus} />
-          ) : <EmptyState />}
+            <ReservationsList reservations={reservations} busyId={busyId} onCancel={setCancelling} onDelete={setDeleting} onEdit={setSelected} onStatus={patchStatus} />
+          ) : <EmptyState datePreset={datePreset} />}
           {pagination.totalPages > 1 ? <div className="flex items-center justify-between border-t border-[#E4DAC9] pt-4"><p className="text-sm text-[#756D62]">Page {pagination.page} of {pagination.totalPages}</p><div className="flex gap-2"><PageButton label="Previous page" disabled={loading || page <= 1} icon={ChevronLeft} onClick={() => { setLoading(true); setPage((value) => value - 1) }} /><PageButton label="Next page" disabled={loading || page >= pagination.totalPages} icon={ChevronRight} onClick={() => { setLoading(true); setPage((value) => value + 1) }} /></div></div> : null}
         </section>
       </div>
       {selected ? <ReservationModal reservation={selected} busy={busyId === selected.id} onClose={() => setSelected(null)} onSave={(changes) => saveReservation(selected, changes)} /> : null}
+      {cancelling ? <CancelReservationModal reservation={cancelling} busy={busyId === cancelling.id} onCancel={() => setCancelling(null)} onConfirm={() => patchStatus(cancelling, "CANCELLED")} /> : null}
       {deleting ? <DeleteReservationModal reservation={deleting} busy={busyId === deleting.id} onCancel={() => setDeleting(null)} onConfirm={() => deleteReservation(deleting)} /> : null}
     </AdminShell>
   )
 }
 
-function ReservationsList({ busyId, onDelete, onEdit, onStatus, reservations }) {
-  return <>
-    <div className="hidden overflow-x-auto border border-[#E4DAC9] bg-white lg:block">
-      <table className="w-full min-w-[1120px] text-left text-sm">
-        <thead className="border-b border-[#D8CEBD] bg-[#F6F1E8] text-[11px] font-semibold uppercase text-[#756D62]"><tr><th className="px-4 py-3">Reservation</th><th className="px-4 py-3">Guest</th><th className="px-4 py-3 text-center">Guests</th><th className="px-4 py-3">Requests</th><th className="px-4 py-3">Received</th><th className="px-4 py-3">Status</th><th className="px-4 py-3 text-right">Actions</th></tr></thead>
-        <tbody className="divide-y divide-[#D8CEBD]">{reservations.map((reservation, index) => <ReservationRow key={reservation.id} reservation={reservation} index={index} busy={busyId === reservation.id} onDelete={() => onDelete(reservation)} onEdit={() => onEdit(reservation)} onStatus={(nextStatus) => onStatus(reservation, nextStatus)} />)}</tbody>
-      </table>
-    </div>
-    <div className="grid gap-3 lg:hidden">{reservations.map((reservation) => <ReservationMobileRow key={reservation.id} reservation={reservation} busy={busyId === reservation.id} onDelete={() => onDelete(reservation)} onEdit={() => onEdit(reservation)} onStatus={(nextStatus) => onStatus(reservation, nextStatus)} />)}</div>
-  </>
+function ReservationsList({ busyId, onCancel, onDelete, onEdit, onStatus, reservations }) {
+  const groups = useMemo(() => groupReservationsByDate(reservations), [reservations])
+
+  return <div className="space-y-5">{groups.map((group) => (
+    <section key={group.date} aria-labelledby={`reservation-day-${group.date}`}>
+      <div className="flex items-center justify-between border border-b-0 border-[#E4DAC9] bg-[#F6F1E8] px-4 py-3">
+        <div className="flex min-w-0 items-baseline gap-2"><h3 id={`reservation-day-${group.date}`} className="truncate font-display text-lg font-semibold">{formatReservationDay(group.date)}</h3><span className="shrink-0 text-xs text-[#756D62]">{formatDateOnly(group.date)}</span></div>
+        <span className="shrink-0 rounded-md bg-white px-2 py-1 text-xs font-semibold tabular-nums text-[#756D62] ring-1 ring-black/8">{group.reservations.length} {group.reservations.length === 1 ? "booking" : "bookings"}</span>
+      </div>
+      <div className="hidden border border-[#E4DAC9] bg-white xl:block">
+        <table className="w-full table-fixed text-left text-sm">
+          <colgroup><col className="w-[8%]" /><col className="w-[20%]" /><col className="w-[7%]" /><col className="w-[20%]" /><col className="w-[14%]" /><col className="w-[13%]" /><col className="w-[18%]" /></colgroup>
+          <thead className="border-b border-[#D8CEBD] bg-[#FDFAF4] text-[11px] font-semibold uppercase text-[#756D62]"><tr><th className="px-4 py-3">Time</th><th className="px-4 py-3">Guest</th><th className="px-4 py-3 text-center">Guests</th><th className="px-4 py-3">Requests</th><th className="px-4 py-3">Received</th><th className="px-4 py-3">Status</th><th className="px-4 py-3 text-right">Actions</th></tr></thead>
+          <tbody className="divide-y divide-[#D8CEBD]">{group.reservations.map((reservation, index) => <ReservationRow key={reservation.id} reservation={reservation} index={index} busy={busyId === reservation.id} onCancel={() => onCancel(reservation)} onDelete={() => onDelete(reservation)} onEdit={() => onEdit(reservation)} onStatus={(nextStatus) => onStatus(reservation, nextStatus)} />)}</tbody>
+        </table>
+      </div>
+      <div className="grid gap-3 border-x border-b border-[#E4DAC9] bg-white p-3 xl:hidden">{group.reservations.map((reservation) => <ReservationMobileRow key={reservation.id} reservation={reservation} busy={busyId === reservation.id} onCancel={() => onCancel(reservation)} onDelete={() => onDelete(reservation)} onEdit={() => onEdit(reservation)} onStatus={(nextStatus) => onStatus(reservation, nextStatus)} />)}</div>
+    </section>
+  ))}</div>
 }
 
-function ReservationRow({ busy, index, onDelete, onEdit, onStatus, reservation }) {
+function ReservationRow({ busy, index, onCancel, onDelete, onEdit, onStatus, reservation }) {
   const rowTone = reservation.status === "PENDING"
     ? "[&>td]:bg-[#FFF0C2] hover:[&>td]:bg-[#FFE4A3]"
     : reservation.status === "CANCELLED"
@@ -192,17 +235,17 @@ function ReservationRow({ busy, index, onDelete, onEdit, onStatus, reservation }
         ? "[&>td]:bg-sky-50/65 hover:[&>td]:bg-sky-100/70"
         : "[&>td]:bg-emerald-50/45 hover:[&>td]:bg-emerald-100/55"
   return <tr className={`${rowTone} align-middle [&>td]:transition-colors`}>
-    <td className={`whitespace-nowrap border-l-4 px-4 py-4 ${statusRowAccent[reservation.status] || "border-l-[#D8CEBD]"}`}><p className="font-semibold">{formatDateOnly(reservation.date)}</p><p className="mt-1 text-sm font-bold text-[#8B1E1E]">{reservation.time}</p></td>
-    <td className="px-4 py-4"><button type="button" onClick={onEdit} className="max-w-48 truncate font-semibold hover:text-[#8B1E1E] hover:underline">{reservation.name}</button><p className="mt-1 whitespace-nowrap text-xs text-[#756D62]">{reservation.phone}</p><p className="mt-0.5 max-w-48 truncate text-xs text-[#756D62]">{reservation.email}</p></td>
+    <td className={`whitespace-nowrap border-l-4 px-4 py-4 ${statusRowAccent[reservation.status] || "border-l-[#D8CEBD]"}`}><p className="font-mono text-base font-bold tabular-nums text-[#8B1E1E]">{reservation.time}</p></td>
+    <td className="min-w-0 px-4 py-4"><button type="button" onClick={onEdit} className="block max-w-full truncate font-semibold hover:text-[#8B1E1E] hover:underline">{reservation.name}</button><p className="mt-1 truncate text-xs text-[#756D62]">{reservation.phone}</p><p className="mt-0.5 truncate text-xs text-[#756D62]">{reservation.email}</p></td>
     <td className="px-4 py-4 text-center"><span className="inline-flex min-w-8 items-center justify-center rounded-md bg-white px-2 py-1 font-bold tabular-nums ring-1 ring-black/8">{reservation.guests}</span></td>
-    <td className="px-4 py-4"><p className="max-w-56 truncate text-[#756D62]" title={reservation.requests || undefined}>{reservation.requests || "-"}</p></td>
+    <td className="min-w-0 px-4 py-4"><p className="truncate text-[#756D62]" title={reservation.requests || undefined}>{reservation.requests || "-"}</p></td>
     <td className="whitespace-nowrap px-4 py-4 text-xs text-[#756D62]">{formatDateTime(reservation.createdAt)}</td>
-    <td className="whitespace-nowrap px-4 py-4"><Badge variant={statusVariant[reservation.status]}>{formatStatus(reservation.status)}</Badge></td>
-    <td className="px-4 py-4"><ReservationActions reservation={reservation} busy={busy} onDelete={onDelete} onEdit={onEdit} onStatus={onStatus} compact /></td>
+    <td className="px-4 py-4"><ReservationStatusSelect reservation={reservation} busy={busy} onStatus={onStatus} /></td>
+    <td className="px-4 py-4"><ReservationActions reservation={reservation} busy={busy} onCancel={onCancel} onDelete={onDelete} onEdit={onEdit} onStatus={onStatus} compact /></td>
   </tr>
 }
 
-function ReservationMobileRow({ busy, onDelete, onEdit, onStatus, reservation }) {
+function ReservationMobileRow({ busy, onCancel, onDelete, onEdit, onStatus, reservation }) {
   const background = reservation.status === "PENDING"
     ? "border-[#D4A017] bg-[#FFF0C2] shadow-[inset_4px_0_0_#B7791F]"
     : reservation.status === "CANCELLED"
@@ -210,11 +253,79 @@ function ReservationMobileRow({ busy, onDelete, onEdit, onStatus, reservation })
       : reservation.status === "CONFIRMED"
         ? "border-sky-200 bg-sky-50/65 shadow-[inset_4px_0_0_#0EA5E9]"
         : "border-emerald-200 bg-emerald-50/45 shadow-[inset_4px_0_0_#10B981]"
-  return <article className={`border p-4 ${background}`}><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate font-semibold">{reservation.name}</p><p className="mt-1 truncate text-xs text-[#756D62]">{reservation.email} | {reservation.phone}</p></div><Badge variant={statusVariant[reservation.status]}>{formatStatus(reservation.status)}</Badge></div><div className="mt-4 grid grid-cols-3 gap-3 border-y border-black/8 py-3 text-sm"><Info label="Date" value={formatDateOnly(reservation.date)} /><Info label="Time" value={reservation.time} /><Info label="Guests" value={reservation.guests} /></div>{reservation.requests ? <p className="mt-3 line-clamp-2 text-sm text-[#756D62]">{reservation.requests}</p> : null}<div className="mt-4"><ReservationActions reservation={reservation} busy={busy} onDelete={onDelete} onEdit={onEdit} onStatus={onStatus} /></div></article>
+  return <article className={`border p-4 ${background}`}><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate font-semibold">{reservation.name}</p><p className="mt-1 truncate text-xs text-[#756D62]">{reservation.email} | {reservation.phone}</p></div><Badge variant={statusVariant[reservation.status]}>{formatStatus(reservation.status)}</Badge></div><div className="mt-4 grid grid-cols-3 gap-3 border-y border-black/8 py-3 text-sm"><Info label="Time" value={reservation.time} /><Info label="Guests" value={reservation.guests} /><Info label="Received" value={formatShortDate(reservation.createdAt)} /></div>{reservation.requests ? <p className="mt-3 line-clamp-2 text-sm text-[#756D62]">{reservation.requests}</p> : null}<div className="mt-4"><ReservationActions reservation={reservation} busy={busy} onCancel={onCancel} onDelete={onDelete} onEdit={onEdit} onStatus={onStatus} /></div></article>
 }
 
-function ReservationActions({ busy, compact = false, onDelete, onEdit, onStatus, reservation }) {
-  return <div className="flex flex-wrap items-center justify-end gap-2"><select value={reservation.status} onChange={(event) => onStatus(event.target.value)} disabled={busy} aria-label={`Status for ${reservation.name}`} className="h-9 rounded-md border border-[#E4DAC9] bg-white px-2 text-sm outline-none">{RESERVATION_STATUSES.map((option) => <option key={option} value={option}>{formatStatus(option)}</option>)}</select><Button variant="outline" size={compact ? "icon-sm" : "sm"} onClick={onEdit} aria-label={`Edit reservation for ${reservation.name}`} title="Edit reservation"><Pencil className="size-4" />{compact ? null : "Edit"}</Button><Button variant="destructive" size="icon-sm" onClick={onDelete} disabled={busy} aria-label={`Delete reservation for ${reservation.name}`} title="Delete reservation"><Trash2 className="size-4" /></Button></div>
+function ReservationActions({ busy, compact = false, onCancel, onDelete, onEdit, onStatus, reservation }) {
+  const canCancel = ["PENDING", "CONFIRMED"].includes(reservation.status)
+  return <div className={`flex items-center gap-2 ${compact ? "flex-nowrap justify-end" : "flex-wrap justify-start"}`}>{compact ? null : <ReservationStatusMenu reservation={reservation} busy={busy} onStatus={onStatus} />}{canCancel ? <Button variant="destructive" size="sm" onClick={onCancel} disabled={busy}><XCircle className="size-4" />Cancel</Button> : null}<Button variant="outline" size={compact ? "icon-sm" : "sm"} onClick={onEdit} aria-label={`Edit reservation for ${reservation.name}`} title="Edit reservation"><Pencil className="size-4" />{compact ? null : "Edit"}</Button><Button variant="destructive" size="icon-sm" onClick={onDelete} disabled={busy} aria-label={`Delete reservation for ${reservation.name}`} title="Delete reservation"><Trash2 className="size-4" /></Button></div>
+}
+
+function ReservationStatusMenu({ busy, onStatus, reservation }) {
+  const rootRef = useRef(null)
+  const [open, setOpen] = useState(false)
+
+  useEffect(() => {
+    if (!open) return undefined
+    const closeOnOutsidePress = (event) => { if (!rootRef.current?.contains(event.target)) setOpen(false) }
+    const closeOnEscape = (event) => { if (event.key === "Escape") setOpen(false) }
+    document.addEventListener("pointerdown", closeOnOutsidePress)
+    document.addEventListener("keydown", closeOnEscape)
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutsidePress)
+      document.removeEventListener("keydown", closeOnEscape)
+    }
+  }, [open])
+
+  if (reservation.status === "CANCELLED") return null
+
+  return <div ref={rootRef} className="relative w-full"><button type="button" onClick={() => setOpen((current) => !current)} disabled={busy} aria-haspopup="listbox" aria-expanded={open} className="flex h-10 w-full items-center justify-between gap-3 rounded-md border border-[#D8CEBD] bg-white px-3 text-left text-sm font-medium outline-none focus-visible:border-[#8B1E1E] focus-visible:ring-2 focus-visible:ring-[#8B1E1E]/10 disabled:opacity-60"><span className="flex min-w-0 items-center gap-2"><span className={`size-2 shrink-0 rounded-full ${statusDotTone[reservation.status]}`} aria-hidden="true" /><span className="truncate">{formatStatus(reservation.status)}</span></span><ChevronDown className={`size-4 shrink-0 text-[#756D62] transition-transform ${open ? "rotate-180" : ""}`} aria-hidden="true" /></button>{open ? <div className="absolute bottom-full left-0 right-0 z-30 mb-1 overflow-hidden rounded-md border border-[#D8CEBD] bg-white p-1 shadow-xl" role="listbox" aria-label={`Status for ${reservation.name}`}>{ACTIVE_RESERVATION_STATUSES.map((status) => { const active = reservation.status === status; return <button key={status} type="button" role="option" aria-selected={active} onClick={() => { if (!active) onStatus(status); setOpen(false) }} className={`flex min-h-11 w-full items-center justify-between gap-3 rounded px-3 py-2 text-left text-sm ${active ? "bg-[#F6F1E8] font-semibold text-[#8B1E1E]" : "text-[#2B2B2B] active:bg-[#F6F1E8]"}`}><span className="flex items-center gap-2"><span className={`size-2 rounded-full ${statusDotTone[status]}`} aria-hidden="true" />{formatStatus(status)}</span>{active ? <Check className="size-4 shrink-0" aria-hidden="true" /> : null}</button> })}</div> : null}</div>
+}
+
+function ReservationStatusSelect({ busy, onStatus, reservation }) {
+  if (reservation.status === "CANCELLED") return <Badge variant="destructive">Cancelled</Badge>
+
+  return <select value={reservation.status} onChange={(event) => onStatus(event.target.value)} disabled={busy} aria-label={`Status for ${reservation.name}`} className="h-9 w-full min-w-0 rounded-md border border-[#E4DAC9] bg-white px-2 text-sm outline-none focus:border-[#8B1E1E]">{ACTIVE_RESERVATION_STATUSES.map((option) => <option key={option} value={option}>{formatStatus(option)}</option>)}</select>
+}
+
+function DateFilterInput({ active, onChange, value }) {
+  const inputRef = useRef(null)
+  const openPicker = () => {
+    const input = inputRef.current
+    if (!input) return
+    if (typeof input.showPicker === "function") {
+      try {
+        input.showPicker()
+        return
+      } catch {
+        // Browsers may require the fallback click even during a direct interaction.
+      }
+    }
+    input.focus()
+    input.click()
+  }
+
+  return <div className="relative"><button type="button" onClick={openPicker} className={`flex h-9 w-full items-center gap-2 rounded-md border bg-white px-3 pr-10 text-left text-sm tabular-nums outline-none transition-colors hover:border-[#D4A017] focus-visible:border-[#8B1E1E] focus-visible:ring-2 focus-visible:ring-[#8B1E1E]/10 ${active ? "border-[#8B1E1E] ring-2 ring-[#8B1E1E]/10" : "border-[#E4DAC9]"}`} aria-label={`Choose a specific reservation date. ${value ? formatFilterDate(value) : "No date selected"}`}><CalendarDays className="size-4 shrink-0 text-[#8B1E1E]" aria-hidden="true" /><span className={value ? "text-[#2B2B2B]" : "text-[#9B9285]"}>{formatFilterDate(value)}</span></button><input ref={inputRef} type="date" value={value} onChange={(event) => onChange(event.target.value)} tabIndex={-1} aria-hidden="true" className="pointer-events-none absolute bottom-0 left-0 size-px opacity-0" />{value ? <button type="button" onClick={() => onChange("")} className="absolute right-1 top-1/2 flex size-7 -translate-y-1/2 items-center justify-center rounded text-[#756D62] hover:bg-[#F2EAD8] hover:text-[#8B1E1E] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8B1E1E]" aria-label="Clear reservation date filter"><X className="size-4" /></button> : null}</div>
+}
+
+function ReservationStatusFilter({ onChange, value }) {
+  const rootRef = useRef(null)
+  const [open, setOpen] = useState(false)
+  const selected = STATUS_FILTER_OPTIONS.find((option) => option.value === value) || STATUS_FILTER_OPTIONS[0]
+
+  useEffect(() => {
+    if (!open) return undefined
+    const closeOnOutsidePress = (event) => { if (!rootRef.current?.contains(event.target)) setOpen(false) }
+    const closeOnEscape = (event) => { if (event.key === "Escape") setOpen(false) }
+    document.addEventListener("pointerdown", closeOnOutsidePress)
+    document.addEventListener("keydown", closeOnEscape)
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutsidePress)
+      document.removeEventListener("keydown", closeOnEscape)
+    }
+  }, [open])
+
+  return <div ref={rootRef} className="relative"><button type="button" onClick={() => setOpen((current) => !current)} aria-haspopup="listbox" aria-expanded={open} className="flex h-9 w-full items-center justify-between gap-3 rounded-md border border-[#E4DAC9] bg-white px-3 text-left text-sm outline-none transition-colors hover:border-[#D4A017] focus-visible:border-[#8B1E1E] focus-visible:ring-2 focus-visible:ring-[#8B1E1E]/10"><span className="flex min-w-0 items-center gap-2"><span className={`size-2 shrink-0 rounded-full ${statusDotTone[selected.value] || "bg-[#9B9285]"}`} aria-hidden="true" /><span className="truncate">{selected.label}</span></span><ChevronDown className={`size-4 shrink-0 text-[#756D62] transition-transform ${open ? "rotate-180" : ""}`} aria-hidden="true" /></button>{open ? <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-64 overflow-y-auto rounded-md border border-[#D8CEBD] bg-white p-1 shadow-xl" role="listbox" aria-label="Filter reservations by status">{STATUS_FILTER_OPTIONS.map((option) => { const active = option.value === value; return <button key={option.value || "all"} type="button" role="option" aria-selected={active} onClick={() => { if (!active) onChange(option.value); setOpen(false) }} className={`flex min-h-11 w-full items-center justify-between gap-3 rounded px-3 py-2 text-left text-sm ${active ? "bg-[#F6F1E8] font-semibold text-[#8B1E1E]" : "text-[#2B2B2B] active:bg-[#F6F1E8]"}`}><span className="flex min-w-0 items-center gap-2"><span className={`size-2 shrink-0 rounded-full ${statusDotTone[option.value] || "bg-[#9B9285]"}`} aria-hidden="true" /><span className="truncate">{option.label}</span></span>{active ? <Check className="size-4 shrink-0" aria-hidden="true" /> : null}</button> })}</div> : null}</div>
 }
 
 function ReservationModal({ busy, onClose, onSave, reservation }) {
@@ -222,7 +333,11 @@ function ReservationModal({ busy, onClose, onSave, reservation }) {
   const [error, setError] = useState("")
   const update = (field, value) => { setForm((current) => ({ ...current, [field]: value })); setError("") }
   const save = async (event) => { event.preventDefault(); setError(""); try { await onSave(form) } catch (saveError) { setError(saveError.message || "Could not save reservation.") } }
-  return <Modal title="Edit reservation" onClose={onClose} locked={busy}><form className="space-y-5 p-5" onSubmit={save}><p className="text-sm font-semibold">{reservation.name} <span className="font-normal text-[#756D62]">| Received {formatDateTime(reservation.createdAt)}</span></p><div className="grid gap-4 sm:grid-cols-2"><EditField label="Guest name"><input required minLength={2} maxLength={100} value={form.name} onChange={(event) => update("name", event.target.value)} className={fieldClassName} /></EditField><EditField label="Email"><input required type="email" maxLength={254} value={form.email} onChange={(event) => update("email", event.target.value)} className={fieldClassName} /></EditField><EditField label="Phone"><input required type="tel" maxLength={30} value={form.phone} onChange={(event) => update("phone", sanitizePhone(event.target.value))} className={fieldClassName} /></EditField><EditField label="Guests"><input required type="number" min="1" max="20" value={form.guests} onChange={(event) => update("guests", event.target.value)} className={fieldClassName} /></EditField><EditField label="Date"><input required type="date" value={form.date} onChange={(event) => update("date", event.target.value)} className={fieldClassName} /></EditField><EditField label="Time"><input required type="time" value={form.time} onChange={(event) => update("time", event.target.value)} className={fieldClassName} /></EditField></div><EditField label="Status"><select value={form.status} onChange={(event) => update("status", event.target.value)} className={fieldClassName}>{RESERVATION_STATUSES.map((option) => <option key={option} value={option}>{formatStatus(option)}</option>)}</select></EditField><EditField label="Special requests"><textarea value={form.requests} onChange={(event) => update("requests", event.target.value)} maxLength={1000} rows={3} className={fieldClassName} /></EditField><EditField label="Internal note"><textarea value={form.internalNote} onChange={(event) => update("internalNote", event.target.value)} maxLength={2000} rows={4} className={fieldClassName} placeholder="Visible to admin only" /></EditField>{error ? <p className="bg-red-50 px-3 py-2 text-sm font-medium text-red-700">{error}</p> : null}<div className="flex justify-end gap-2 border-t border-[#E4DAC9] pt-4"><Button type="button" variant="outline" onClick={onClose} disabled={busy}>Cancel</Button><Button type="submit" disabled={busy}>{busy ? <LoaderCircle className="size-4 animate-spin" /> : <Pencil className="size-4" />}{busy ? "Saving..." : "Save changes"}</Button></div></form></Modal>
+  return <Modal title="Edit reservation" onClose={onClose} locked={busy}><form className="space-y-5 p-5" onSubmit={save}><p className="text-sm font-semibold">{reservation.name} <span className="font-normal text-[#756D62]">| Received {formatDateTime(reservation.createdAt)}</span></p><div className="grid gap-4 sm:grid-cols-2"><EditField label="Guest name"><input required minLength={2} maxLength={100} value={form.name} onChange={(event) => update("name", event.target.value)} className={fieldClassName} /></EditField><EditField label="Email"><input required type="email" maxLength={254} value={form.email} onChange={(event) => update("email", event.target.value)} className={fieldClassName} /></EditField><EditField label="Phone"><input required type="tel" maxLength={30} value={form.phone} onChange={(event) => update("phone", sanitizePhone(event.target.value))} className={fieldClassName} /></EditField><EditField label="Guests"><input required type="number" min="1" max="20" value={form.guests} onChange={(event) => update("guests", event.target.value)} className={fieldClassName} /></EditField><EditField label="Date"><input required type="date" value={form.date} onChange={(event) => update("date", event.target.value)} className={fieldClassName} /></EditField><EditField label="Time"><input required type="time" value={form.time} onChange={(event) => update("time", event.target.value)} className={fieldClassName} /></EditField></div><EditField label="Status">{form.status === "CANCELLED" ? <div className={`${fieldClassName} flex items-center`}><Badge variant="destructive">Cancelled</Badge></div> : <select value={form.status} onChange={(event) => update("status", event.target.value)} className={fieldClassName}>{ACTIVE_RESERVATION_STATUSES.map((option) => <option key={option} value={option}>{formatStatus(option)}</option>)}</select>}</EditField><EditField label="Special requests"><textarea value={form.requests} onChange={(event) => update("requests", event.target.value)} maxLength={1000} rows={3} className={fieldClassName} /></EditField><EditField label="Internal note"><textarea value={form.internalNote} onChange={(event) => update("internalNote", event.target.value)} maxLength={2000} rows={4} className={fieldClassName} placeholder="Visible to admin only" /></EditField>{error ? <p className="bg-red-50 px-3 py-2 text-sm font-medium text-red-700">{error}</p> : null}<div className="flex justify-end gap-2 border-t border-[#E4DAC9] pt-4"><Button type="button" variant="outline" onClick={onClose} disabled={busy}>Cancel</Button><Button type="submit" disabled={busy}>{busy ? <LoaderCircle className="size-4 animate-spin" /> : <Pencil className="size-4" />}{busy ? "Saving..." : "Save changes"}</Button></div></form></Modal>
+}
+
+function CancelReservationModal({ busy, onCancel, onConfirm, reservation }) {
+  return <Modal title="Cancel reservation?" onClose={onCancel} locked={busy} layer="z-[60]"><div className="space-y-5 p-5"><p className="text-sm text-[#756D62]">The booking will remain in the reservation history, but it will no longer be included in active service.</p><div className="border border-[#E4DAC9] bg-[#FDFAF4] p-4"><p className="font-semibold">{reservation.name}</p><p className="mt-1 text-sm text-[#756D62]">{formatDateOnly(reservation.date)} at {reservation.time} | {reservation.guests} guests</p></div><div className="flex flex-col-reverse gap-2 border-t border-[#E4DAC9] pt-4 sm:flex-row sm:justify-end"><Button variant="outline" onClick={onCancel} disabled={busy}>Keep reservation</Button><Button variant="destructive" onClick={onConfirm} disabled={busy}>{busy ? <LoaderCircle className="size-4 animate-spin" /> : <XCircle className="size-4" />}{busy ? "Cancelling..." : "Cancel reservation"}</Button></div></div></Modal>
 }
 
 function DeleteReservationModal({ busy, onCancel, onConfirm, reservation }) {
@@ -239,8 +354,51 @@ function EditField({ children, label }) { return <label className="block"><span 
 function MetricCard({ detail, icon: Icon, label, value }) { return <Card className="border-[#E4DAC9] bg-white"><CardHeader className="flex-row items-start justify-between pb-2"><div><CardDescription>{label}</CardDescription><CardTitle className="mt-2 font-sans text-3xl font-semibold leading-none tabular-nums">{value}</CardTitle></div><div className="flex size-10 items-center justify-center rounded-md bg-[#F6F1E8] text-[#8B1E1E]"><Icon className="size-5" /></div></CardHeader><CardContent><p className="text-sm text-[#756D62]">{detail}</p></CardContent></Card> }
 function PageButton({ disabled, icon: Icon, label, onClick }) { return <Button variant="outline" size="icon" onClick={onClick} disabled={disabled} aria-label={label}><Icon className="size-4" /></Button> }
 function Info({ label, value }) { return <div><p className="text-xs font-semibold uppercase text-[#756D62]">{label}</p><p className="mt-1 break-words font-medium">{value}</p></div> }
-function EmptyState() { return <div className="flex min-h-52 flex-col items-center justify-center border border-dashed border-[#E4DAC9] bg-[#FDFAF4] p-6 text-center"><CalendarCheck className="size-8 text-[#8B1E1E]" /><p className="mt-3 font-semibold">No reservations found.</p></div> }
+function EmptyState({ datePreset }) { return <div className="flex min-h-52 flex-col items-center justify-center border border-dashed border-[#E4DAC9] bg-[#FDFAF4] p-6 text-center"><CalendarCheck className="size-8 text-[#8B1E1E]" /><p className="mt-3 font-semibold">No reservations found.</p><p className="mt-1 text-sm text-[#756D62]">{datePreset === "today" ? "There are no matching bookings for today." : "Try another date or adjust the current filters."}</p></div> }
 function sanitizePhone(value) { return value.replace(/[^\d+\s().-]/g, "").replace(/(?!^)\+/g, "") }
 function formatStatus(value) { return value.split("_").map((part) => part.charAt(0) + part.slice(1).toLowerCase()).join(" ") }
+function formatFilterDate(value) { const [year, month, day] = String(value || "").split("-"); return year && month && day ? `${day}/${month}/${year}` : "DD/MM/YYYY" }
 function formatDateOnly(value) { return new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeZone: "UTC" }).format(new Date(`${value}T12:00:00.000Z`)) }
 function formatDateTime(value) { return new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value)) }
+function formatShortDate(value) { return new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short" }).format(new Date(value)) }
+
+function getCyprusDateString() {
+  const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Nicosia", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date())
+  const read = (type) => parts.find((part) => part.type === type)?.value
+  return `${read("year")}-${read("month")}-${read("day")}`
+}
+
+function addIsoDays(value, days) {
+  const date = new Date(`${value}T00:00:00.000Z`)
+  date.setUTCDate(date.getUTCDate() + days)
+  return date.toISOString().slice(0, 10)
+}
+
+function getDateFilter(preset, customDate) {
+  const today = getCyprusDateString()
+  if (preset === "all") return { from: "", to: "" }
+  if (preset === "tomorrow") {
+    const tomorrow = addIsoDays(today, 1)
+    return { from: tomorrow, to: tomorrow }
+  }
+  if (preset === "next7") return { from: today, to: addIsoDays(today, 6) }
+  if (preset === "custom" && customDate) return { from: customDate, to: customDate }
+  return { from: today, to: today }
+}
+
+function groupReservationsByDate(reservations) {
+  const groups = []
+  for (const reservation of reservations) {
+    const current = groups.at(-1)
+    if (current?.date === reservation.date) current.reservations.push(reservation)
+    else groups.push({ date: reservation.date, reservations: [reservation] })
+  }
+  return groups
+}
+
+function formatReservationDay(value) {
+  const today = getCyprusDateString()
+  if (value === today) return "Today"
+  if (value === addIsoDays(today, 1)) return "Tomorrow"
+  return new Intl.DateTimeFormat("en-GB", { weekday: "long", timeZone: "UTC" }).format(new Date(`${value}T12:00:00.000Z`))
+}

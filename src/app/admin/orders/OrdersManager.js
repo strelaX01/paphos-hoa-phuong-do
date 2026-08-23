@@ -2,7 +2,7 @@
 
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react"
 import { createPortal, flushSync } from "react-dom"
-import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, ClipboardList, LoaderCircle, MapPinned, Minus, PackageCheck, Pencil, Plus, Printer, RefreshCw, Search, Timer, Trash2, Truck, WalletCards, X } from "lucide-react"
+import { Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, ClipboardList, LoaderCircle, MapPinned, Minus, PackageCheck, Pencil, Plus, Printer, RefreshCw, Search, Timer, Trash2, Truck, WalletCards, X } from "lucide-react"
 
 import AdminShell from "@/app/admin/_components/AdminShell"
 import { useAdminSession } from "@/app/admin/_components/AdminSession"
@@ -19,6 +19,7 @@ import { useModalDialog } from "@/hooks/useModalDialog"
 
 const statusVariant = { PENDING: "warning", PREPARING: "preparing", PENDING_PICKUP: "info", EN_ROUTE: "default", DELIVERED: "success", CANCELLED: "destructive" }
 const statusRowAccent = { PENDING: "border-l-amber-400", PREPARING: "border-l-orange-500", PENDING_PICKUP: "border-l-cyan-500", EN_ROUTE: "border-l-indigo-500", DELIVERED: "border-l-emerald-500", CANCELLED: "border-l-red-500" }
+const statusDotTone = { PENDING: "bg-amber-500", PREPARING: "bg-orange-500", PENDING_PICKUP: "bg-cyan-500", EN_ROUTE: "bg-indigo-500", DELIVERED: "bg-emerald-500", CANCELLED: "bg-red-500" }
 const orderFieldClass = "h-10 w-full rounded-md border border-[#E4DAC9] bg-white px-3 text-sm outline-none focus:border-[#8B1E1E] disabled:bg-[#F6F1E8]"
 
 async function readApi(response) {
@@ -128,7 +129,7 @@ export default function OrdersManager() {
     <div className="space-y-5">
       {loading ? <MetricGridSkeleton count={isDriver ? 2 : 4} /> : <section className={`grid gap-4 sm:grid-cols-2 ${isDriver ? "max-w-2xl" : "xl:grid-cols-4"}`} aria-label="Order metrics">{metrics.map((metric) => <MetricCard key={metric.label} {...metric} />)}</section>}
       <section className="space-y-4">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between"><div><h2 className="font-display text-xl font-semibold">Live order queue</h2><p className="text-sm text-[#756D62]">{pagination.total} matching orders</p></div><div className="flex flex-col gap-2 sm:flex-row"><label className="relative"><span className="sr-only">Search orders</span><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[#756D62]" /><input value={query} onChange={(event) => { const next = event.target.value; if (next.trim() !== deferredQuery) setLoading(true); setQuery(next); setPage(1) }} placeholder="Order, customer, phone" className="h-9 w-full rounded-md border border-[#E4DAC9] bg-white pl-9 pr-3 text-sm outline-none sm:w-64" /></label><select value={status} onChange={(event) => { setLoading(true); setStatus(event.target.value); setPage(1) }} aria-label="Filter order status" className="h-9 rounded-md border border-[#E4DAC9] bg-white px-3 text-sm"><option value="">All statuses</option>{filterStatuses.map((option) => <option key={option} value={option}>{formatOrderStatus(option)}</option>)}</select></div></div>
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between"><div><h2 className="font-display text-xl font-semibold">Live order queue</h2><p className="text-sm text-[#756D62]">{pagination.total} matching orders</p></div><div className="flex flex-col gap-2 sm:flex-row"><label className="relative"><span className="sr-only">Search orders</span><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[#756D62]" /><input value={query} onChange={(event) => { const next = event.target.value; if (next.trim() !== deferredQuery) setLoading(true); setQuery(next); setPage(1) }} placeholder="Order, customer, phone" className="h-9 w-full rounded-md border border-[#E4DAC9] bg-white pl-9 pr-3 text-sm outline-none sm:w-64" /></label><OrderStatusFilter statuses={filterStatuses} value={status} onChange={(value) => { setLoading(true); setStatus(value); setPage(1) }} /></div></div>
         {loading ? <ResponsiveListSkeleton rows={6} columns={isDriver ? 6 : 7} /> : orders.length ? <OrdersList orders={orders} busyId={busyId} isDriver={isDriver} onDetails={setSelected} onPrint={printInvoice} onAdvance={(order) => updateOrder(order, { status: (isDriver ? DRIVER_NEXT_STATUS : ADMIN_NEXT_STATUS)[order.status] }, "Order status updated.")} onCancel={setConfirmCancel} /> : <EmptyState />}
         {pagination.totalPages > 1 ? <div className="flex items-center justify-between border-t border-[#E4DAC9] pt-4"><p className="text-sm text-[#756D62]">Page {pagination.page} of {pagination.totalPages}</p><div className="flex gap-2"><PageButton icon={ChevronLeft} label="Previous page" disabled={loading || page <= 1} onClick={() => { setLoading(true); setPage((value) => value - 1) }} /><PageButton icon={ChevronRight} label="Next page" disabled={loading || page >= pagination.totalPages} onClick={() => { setLoading(true); setPage((value) => value + 1) }} /></div></div> : null}
       </section>
@@ -137,6 +138,30 @@ export default function OrdersManager() {
     {confirmCancel ? <CancelModal order={confirmCancel} busy={busyId === confirmCancel.id} onClose={() => setConfirmCancel(null)} onConfirm={() => updateOrder(confirmCancel, { status: "CANCELLED" }, "Order cancelled.")} /> : null}
     {invoice ? <InvoiceModal order={invoice.order} onClose={() => setInvoice(null)} /> : null}
   </AdminShell>
+}
+
+function OrderStatusFilter({ onChange, statuses, value }) {
+  const rootRef = useRef(null)
+  const [open, setOpen] = useState(false)
+  const options = useMemo(() => [
+    { value: "", label: "All statuses" },
+    ...statuses.map((status) => ({ value: status, label: formatOrderStatus(status) })),
+  ], [statuses])
+  const selected = options.find((option) => option.value === value) || options[0]
+
+  useEffect(() => {
+    if (!open) return undefined
+    const closeOnOutsidePress = (event) => { if (!rootRef.current?.contains(event.target)) setOpen(false) }
+    const closeOnEscape = (event) => { if (event.key === "Escape") setOpen(false) }
+    document.addEventListener("pointerdown", closeOnOutsidePress)
+    document.addEventListener("keydown", closeOnEscape)
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutsidePress)
+      document.removeEventListener("keydown", closeOnEscape)
+    }
+  }, [open])
+
+  return <div ref={rootRef} className="relative w-full sm:w-44"><button type="button" onClick={() => setOpen((current) => !current)} aria-haspopup="listbox" aria-expanded={open} className="flex h-9 w-full items-center justify-between gap-3 rounded-md border border-[#E4DAC9] bg-white px-3 text-left text-sm outline-none transition-colors hover:border-[#D4A017] focus-visible:border-[#8B1E1E] focus-visible:ring-2 focus-visible:ring-[#8B1E1E]/10"><span className="flex min-w-0 items-center gap-2"><span className={`size-2 shrink-0 rounded-full ${statusDotTone[selected.value] || "bg-[#9B9285]"}`} aria-hidden="true" /><span className="truncate">{selected.label}</span></span><ChevronDown className={`size-4 shrink-0 text-[#756D62] transition-transform ${open ? "rotate-180" : ""}`} aria-hidden="true" /></button>{open ? <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-72 overflow-y-auto rounded-md border border-[#D8CEBD] bg-white p-1 shadow-xl" role="listbox" aria-label="Filter orders by status">{options.map((option) => { const active = option.value === value; return <button key={option.value || "all"} type="button" role="option" aria-selected={active} onClick={() => { if (!active) onChange(option.value); setOpen(false) }} className={`flex min-h-11 w-full items-center justify-between gap-3 rounded px-3 py-2 text-left text-sm ${active ? "bg-[#F6F1E8] font-semibold text-[#8B1E1E]" : "text-[#2B2B2B] active:bg-[#F6F1E8]"}`}><span className="flex min-w-0 items-center gap-2"><span className={`size-2 shrink-0 rounded-full ${statusDotTone[option.value] || "bg-[#9B9285]"}`} aria-hidden="true" /><span className="truncate">{option.label}</span></span>{active ? <Check className="size-4 shrink-0" aria-hidden="true" /> : null}</button> })}</div> : null}</div>
 }
 
 function OrdersList({ busyId, isDriver, onAdvance, onCancel, onDetails, onPrint, orders }) {

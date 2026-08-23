@@ -29,6 +29,23 @@ function dateRange(date) {
   return { gte: start, lt: end };
 }
 
+function isValidIsoDate(value) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+}
+
+function reservationDateRange(from, to) {
+  const range = {};
+  if (from) range.gte = new Date(`${from}T00:00:00.000Z`);
+  if (to) {
+    const exclusiveEnd = new Date(`${to}T00:00:00.000Z`);
+    exclusiveEnd.setUTCDate(exclusiveEnd.getUTCDate() + 1);
+    range.lt = exclusiveEnd;
+  }
+  return range;
+}
+
 export async function GET(request) {
   const auth = await authorizeAdminRequest(request);
   if (auth.response) return auth.response;
@@ -39,17 +56,32 @@ export async function GET(request) {
   const query = (searchParams.get("q") || "").trim().slice(0, 100);
   const status = (searchParams.get("status") || "").trim().toUpperCase();
   const date = (searchParams.get("date") || "").trim();
+  const from = (searchParams.get("from") || "").trim();
+  const to = (searchParams.get("to") || "").trim();
 
   if (status && !RESERVATION_STATUSES.includes(status)) {
     return Response.json({ error: "Invalid reservation status." }, { status: 422 });
   }
-  if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+  if (date && !isValidIsoDate(date)) {
     return Response.json({ error: "Date must use YYYY-MM-DD format." }, { status: 422 });
   }
+  if (from && !isValidIsoDate(from)) {
+    return Response.json({ error: "From date must use YYYY-MM-DD format." }, { status: 422 });
+  }
+  if (to && !isValidIsoDate(to)) {
+    return Response.json({ error: "To date must use YYYY-MM-DD format." }, { status: 422 });
+  }
+  if (from && to && from > to) {
+    return Response.json({ error: "From date cannot be after the to date." }, { status: 422 });
+  }
+
+  const selectedFrom = date || from;
+  const selectedTo = date || to;
+  const hasDateFilter = Boolean(selectedFrom || selectedTo);
 
   const where = {
     ...(status ? { status: reservationStatusFilter(status) } : {}),
-    ...(date ? { date: dateRange(date) } : {}),
+    ...(hasDateFilter ? { date: reservationDateRange(selectedFrom, selectedTo) } : {}),
     ...(query ? {
       OR: [
         { customerName: { contains: query, mode: "insensitive" } },
@@ -64,7 +96,9 @@ export async function GET(request) {
     const [reservations, total, metrics] = await prisma.$transaction([
       prisma.reservation.findMany({
         where,
-        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        orderBy: hasDateFilter
+          ? [{ date: "asc" }, { time: "asc" }, { createdAt: "asc" }, { id: "asc" }]
+          : [{ date: "desc" }, { time: "desc" }, { createdAt: "desc" }, { id: "desc" }],
         skip: (page - 1) * limit,
         take: limit,
         select: reservationAdminSelect,
