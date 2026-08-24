@@ -1,5 +1,5 @@
 import { authorizeAdminRequest } from "@/lib/adminApiAuth";
-import { getCyprusDayRange } from "@/lib/cyprusTime";
+import { cyprusMidnightUtc, getCyprusDayRange, shiftDateKey } from "@/lib/cyprusTime";
 import { orderAdminSelect, orderDriverSelect, serializeAdminOrder, serializeDriverOrder } from "@/lib/orderAdminData";
 import { DRIVER_ORDER_STATUSES, ORDER_STATUSES } from "@/lib/orderStatus";
 import { prisma } from "@/lib/prisma";
@@ -12,6 +12,17 @@ function positiveInteger(value, fallback, maximum) {
   return Number.isInteger(parsed) && parsed > 0 ? Math.min(parsed, maximum) : fallback;
 }
 
+const LIVE_STATUSES = ["PENDING", "PREPARING", "PENDING_PICKUP", "EN_ROUTE"];
+const HISTORY_STATUSES = ["DELIVERED", "CANCELLED"];
+const DATE_KEY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+function validDateKey(value) {
+  if (!DATE_KEY_PATTERN.test(value || "")) return false;
+  const [year, month, day] = value.split("-").map(Number);
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+  return parsed.getUTCFullYear() === year && parsed.getUTCMonth() === month - 1 && parsed.getUTCDate() === day;
+}
+
 export async function GET(request) {
   const auth = await authorizeAdminRequest(request, { roles: ["ADMIN", "DRIVER"] });
   if (auth.response) return auth.response;
@@ -21,13 +32,20 @@ export async function GET(request) {
   const page = positiveInteger(searchParams.get("page"), 1, 100000);
   const limit = positiveInteger(searchParams.get("limit"), 12, 100);
   const query = (searchParams.get("q") || "").trim().slice(0, 100);
+  const requestedScope = (searchParams.get("scope") || "live").trim().toLowerCase();
+  if (!isDriver && !["live", "history"].includes(requestedScope)) return Response.json({ error: "Invalid order scope." }, { status: 422 });
+  const scope = isDriver ? "live" : requestedScope;
+  const scopeStatuses = isDriver ? ["PENDING_PICKUP", "EN_ROUTE"] : scope === "history" ? HISTORY_STATUSES : LIVE_STATUSES;
   const status = (searchParams.get("status") || "").trim().toUpperCase();
   const allowedFilterStatuses = isDriver ? DRIVER_ORDER_STATUSES : ORDER_STATUSES;
-  if (status && !allowedFilterStatuses.includes(status)) return Response.json({ error: "Invalid order status." }, { status: 422 });
+  if (status && (!allowedFilterStatuses.includes(status) || !scopeStatuses.includes(status))) return Response.json({ error: "Invalid order status for this view." }, { status: 422 });
+  const from = (searchParams.get("from") || "").trim();
+  const to = (searchParams.get("to") || "").trim();
+  if ((from && !validDateKey(from)) || (to && !validDateKey(to)) || (from && to && from > to)) return Response.json({ error: "Invalid order date range." }, { status: 422 });
 
   const where = {
-    ...(isDriver ? { status: { in: DRIVER_ORDER_STATUSES } } : {}),
-    ...(status ? { status } : {}),
+    status: status || { in: scopeStatuses },
+    ...(scope === "history" && (from || to) ? { createdAt: { ...(from ? { gte: cyprusMidnightUtc(from) } : {}), ...(to ? { lt: cyprusMidnightUtc(shiftDateKey(to, 1)) } : {}) } } : {}),
     ...(query ? {
       OR: [
         { orderNumber: { contains: query, mode: "insensitive" } },
@@ -43,7 +61,7 @@ export async function GET(request) {
     const [orders, total, metrics] = await prisma.$transaction([
       prisma.order.findMany({
         where,
-        orderBy: { createdAt: "desc" },
+        orderBy: scope === "live" ? [{ status: "asc" }, { createdAt: "asc" }] : { createdAt: "desc" },
         skip: (page - 1) * limit,
         take: limit,
         select: isDriver ? orderDriverSelect : orderAdminSelect,

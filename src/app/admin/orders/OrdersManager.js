@@ -7,19 +7,23 @@ import { Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, ClipboardList
 import AdminShell from "@/app/admin/_components/AdminShell"
 import { useAdminSession } from "@/app/admin/_components/AdminSession"
 import AdminToast from "@/app/admin/_components/AdminToast"
+import AdminDateFilter from "@/app/admin/_components/AdminDateFilter"
 import { MetricGridSkeleton, ResponsiveListSkeleton } from "@/app/components/shared/SkeletonBlocks"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { CONTACT } from "@/lib/constants/index.js"
+import { getCyprusDateKey, shiftDateKey } from "@/lib/cyprusTime"
 import { dedupeClientRequest } from "@/lib/dedupeClientRequest"
 import { DELIVERY_CONFIG } from "@/lib/deliveryConfig"
-import { ADMIN_NEXT_STATUS, DRIVER_NEXT_STATUS, DRIVER_ORDER_STATUSES, formatOrderStatus, ORDER_ACTION_LABELS, ORDER_STATUSES } from "@/lib/orderStatus"
+import { ADMIN_NEXT_STATUS, DRIVER_NEXT_STATUS, DRIVER_ORDER_STATUSES, formatOrderStatus, ORDER_ACTION_LABELS } from "@/lib/orderStatus"
 import { useModalDialog } from "@/hooks/useModalDialog"
 
 const statusVariant = { PENDING: "warning", PREPARING: "preparing", PENDING_PICKUP: "info", EN_ROUTE: "default", DELIVERED: "success", CANCELLED: "destructive" }
 const statusRowAccent = { PENDING: "border-l-amber-400", PREPARING: "border-l-orange-500", PENDING_PICKUP: "border-l-cyan-500", EN_ROUTE: "border-l-indigo-500", DELIVERED: "border-l-emerald-500", CANCELLED: "border-l-red-500" }
 const statusDotTone = { PENDING: "bg-amber-500", PREPARING: "bg-orange-500", PENDING_PICKUP: "bg-cyan-500", EN_ROUTE: "bg-indigo-500", DELIVERED: "bg-emerald-500", CANCELLED: "bg-red-500" }
+const LIVE_STATUSES = ["PENDING", "PREPARING", "PENDING_PICKUP", "EN_ROUTE"]
+const HISTORY_STATUSES = ["DELIVERED", "CANCELLED"]
 const orderFieldClass = "h-10 w-full rounded-md border border-[#E4DAC9] bg-white px-3 text-sm outline-none focus:border-[#8B1E1E] disabled:bg-[#F6F1E8]"
 
 async function readApi(response) {
@@ -37,6 +41,9 @@ export default function OrdersManager() {
   const [query, setQuery] = useState("")
   const deferredQuery = useDeferredValue(query.trim())
   const [status, setStatus] = useState("")
+  const [scope, setScope] = useState("live")
+  const [datePreset, setDatePreset] = useState("today")
+  const [customDate, setCustomDate] = useState("")
   const [page, setPage] = useState(1)
   const [refreshKey, setRefreshKey] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -81,8 +88,16 @@ export default function OrdersManager() {
   useEffect(() => {
     let active = true
     const params = new URLSearchParams({ page: String(page), limit: "12" })
+    params.set("scope", isDriver ? "live" : scope)
     if (deferredQuery) params.set("q", deferredQuery)
     if (status) params.set("status", status)
+    if (!isDriver && scope === "history") {
+      const today = getCyprusDateKey()
+      if (datePreset === "today") { params.set("from", today); params.set("to", today) }
+      if (datePreset === "yesterday") { const yesterday = shiftDateKey(today, -1); params.set("from", yesterday); params.set("to", yesterday) }
+      if (datePreset === "week") { params.set("from", shiftDateKey(today, -6)); params.set("to", today) }
+      if (datePreset === "custom" && customDate) { params.set("from", customDate); params.set("to", customDate) }
+    }
     const url = `/api/admin/orders?${params}`
     dedupeClientRequest(url, () => {
       return fetch(url).then(readApi)
@@ -91,7 +106,7 @@ export default function OrdersManager() {
       .catch((error) => { if (active) showToast(error.message || "Could not load orders.", "error") })
       .finally(() => { if (active) setLoading(false) })
     return () => { active = false }
-  }, [deferredQuery, page, refreshKey, status])
+  }, [customDate, datePreset, deferredQuery, isDriver, page, refreshKey, scope, status])
 
   const updateOrder = async (order, changes, message) => {
     setBusyId(order.id)
@@ -122,15 +137,18 @@ export default function OrdersManager() {
     { label: "Today value", value: formatMoney(summary.todayRevenue), detail: "Excludes cancelled orders", icon: WalletCards },
   ], [isDriver, summary])
 
-  const filterStatuses = isDriver ? DRIVER_ORDER_STATUSES : ORDER_STATUSES
+  const filterStatuses = isDriver ? ["PENDING_PICKUP", "EN_ROUTE"] : scope === "history" ? HISTORY_STATUSES : LIVE_STATUSES
+  const groupedHistory = useMemo(() => scope === "history" ? groupOrdersByDay(orders) : [], [orders, scope])
 
   return <AdminShell active="orders" eyebrow={isDriver ? "Driver workspace" : "Order operations"} title="Orders" description={isDriver ? "Start and complete deliveries." : "Manage each order from receipt through completion."} action={<Button variant="outline" onClick={() => { setLoading(true); setRefreshKey((key) => key + 1) }} disabled={loading}><RefreshCw className={`size-4 ${loading ? "animate-spin" : ""}`} />Refresh</Button>}>
     <AdminToast key={toast?.id} message={toast?.message} tone={toast?.tone} onDismiss={() => setToast(null)} />
     <div className="space-y-5">
       {loading ? <MetricGridSkeleton count={isDriver ? 2 : 4} /> : <section className={`grid gap-4 sm:grid-cols-2 ${isDriver ? "max-w-2xl" : "xl:grid-cols-4"}`} aria-label="Order metrics">{metrics.map((metric) => <MetricCard key={metric.label} {...metric} />)}</section>}
       <section className="space-y-4">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between"><div><h2 className="font-display text-xl font-semibold">Live order queue</h2><p className="text-sm text-[#756D62]">{pagination.total} matching orders</p></div><div className="flex flex-col gap-2 sm:flex-row"><label className="relative"><span className="sr-only">Search orders</span><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[#756D62]" /><input value={query} onChange={(event) => { const next = event.target.value; if (next.trim() !== deferredQuery) setLoading(true); setQuery(next); setPage(1) }} placeholder="Order, customer, phone" className="h-9 w-full rounded-md border border-[#E4DAC9] bg-white pl-9 pr-3 text-sm outline-none sm:w-64" /></label><OrderStatusFilter statuses={filterStatuses} value={status} onChange={(value) => { setLoading(true); setStatus(value); setPage(1) }} /></div></div>
-        {loading ? <ResponsiveListSkeleton rows={6} columns={isDriver ? 6 : 7} /> : orders.length ? <OrdersList orders={orders} busyId={busyId} isDriver={isDriver} onDetails={setSelected} onPrint={printInvoice} onAdvance={(order) => updateOrder(order, { status: (isDriver ? DRIVER_NEXT_STATUS : ADMIN_NEXT_STATUS)[order.status] }, "Order status updated.")} onCancel={setConfirmCancel} /> : <EmptyState />}
+        {!isDriver ? <div className="flex w-full border border-[#E4DAC9] bg-[#F6F1E8] p-1 sm:w-fit" aria-label="Order view"><button type="button" onClick={() => { if (scope !== "live") { setLoading(true); setScope("live"); setStatus(""); setPage(1) } }} className={`min-h-10 flex-1 px-5 text-sm font-semibold transition-colors sm:flex-none ${scope === "live" ? "bg-white text-[#8B1E1E] shadow-sm" : "text-[#756D62] hover:text-[#2B2B2B]"}`}>In progress</button><button type="button" onClick={() => { if (scope !== "history") { setLoading(true); setScope("history"); setStatus(""); setPage(1) } }} className={`min-h-10 flex-1 px-5 text-sm font-semibold transition-colors sm:flex-none ${scope === "history" ? "bg-white text-[#8B1E1E] shadow-sm" : "text-[#756D62] hover:text-[#2B2B2B]"}`}>History</button></div> : null}
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between"><div><h2 className="font-display text-xl font-semibold">{scope === "history" && !isDriver ? "Order history" : "Live order queue"}</h2><p className="text-sm text-[#756D62]">{pagination.total} matching orders{scope === "live" ? " | oldest waiting orders are shown first" : ""}</p></div><div className="flex flex-col gap-2 sm:flex-row"><label className="relative"><span className="sr-only">Search orders</span><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[#756D62]" /><input value={query} onChange={(event) => { const next = event.target.value; if (next.trim() !== deferredQuery) setLoading(true); setQuery(next); setPage(1) }} placeholder="Order, customer, phone" className="h-9 w-full rounded-md border border-[#E4DAC9] bg-white pl-9 pr-3 text-sm outline-none sm:w-64" /></label><OrderStatusFilter statuses={filterStatuses} value={status} onChange={(value) => { setLoading(true); setStatus(value); setPage(1) }} /></div></div>
+        {!isDriver && scope === "history" ? <div className="flex flex-col gap-2 border border-[#E4DAC9] bg-white p-3 sm:flex-row sm:items-center sm:justify-between"><div className="grid grid-cols-4 gap-1 rounded-md bg-[#F6F1E8] p-1 sm:flex sm:w-fit">{[{ value: "today", label: "Today" }, { value: "yesterday", label: "Yesterday" }, { value: "week", label: "Last 7 days" }, { value: "all", label: "All dates" }].map((option) => <button key={option.value} type="button" onClick={() => { setLoading(true); setDatePreset(option.value); setCustomDate(""); setPage(1) }} className={`min-h-9 px-2 text-xs font-semibold transition-colors sm:px-4 sm:text-sm ${datePreset === option.value ? "rounded bg-white text-[#8B1E1E] shadow-sm" : "text-[#756D62] hover:text-[#2B2B2B]"}`}>{option.label}</button>)}</div><AdminDateFilter active={datePreset === "custom"} value={customDate} label="Choose an order date" onChange={(value) => { setLoading(true); setCustomDate(value); setDatePreset(value ? "custom" : "today"); setPage(1) }} /></div> : null}
+        {loading ? <ResponsiveListSkeleton rows={6} columns={isDriver ? 6 : 7} /> : orders.length ? scope === "history" && !isDriver ? <GroupedOrdersList groups={groupedHistory} busyId={busyId} isDriver={isDriver} onDetails={setSelected} onPrint={printInvoice} onAdvance={(order) => updateOrder(order, { status: ADMIN_NEXT_STATUS[order.status] }, "Order status updated.")} onCancel={setConfirmCancel} /> : <OrdersList orders={orders} busyId={busyId} isDriver={isDriver} onDetails={setSelected} onPrint={printInvoice} onAdvance={(order) => updateOrder(order, { status: (isDriver ? DRIVER_NEXT_STATUS : ADMIN_NEXT_STATUS)[order.status] }, "Order status updated.")} onCancel={setConfirmCancel} /> : <EmptyState scope={scope} />}
         {pagination.totalPages > 1 ? <div className="flex items-center justify-between border-t border-[#E4DAC9] pt-4"><p className="text-sm text-[#756D62]">Page {pagination.page} of {pagination.totalPages}</p><div className="flex gap-2"><PageButton icon={ChevronLeft} label="Previous page" disabled={loading || page <= 1} onClick={() => { setLoading(true); setPage((value) => value - 1) }} /><PageButton icon={ChevronRight} label="Next page" disabled={loading || page >= pagination.totalPages} onClick={() => { setLoading(true); setPage((value) => value + 1) }} /></div></div> : null}
       </section>
     </div>
@@ -138,6 +156,10 @@ export default function OrdersManager() {
     {confirmCancel ? <CancelModal order={confirmCancel} busy={busyId === confirmCancel.id} onClose={() => setConfirmCancel(null)} onConfirm={() => updateOrder(confirmCancel, { status: "CANCELLED" }, "Order cancelled.")} /> : null}
     {invoice ? <InvoiceModal order={invoice.order} onClose={() => setInvoice(null)} /> : null}
   </AdminShell>
+}
+
+function GroupedOrdersList({ groups, ...props }) {
+  return <div className="space-y-4">{groups.map((group) => <section key={group.date} className="border border-[#E4DAC9] bg-[#FAF7F0]"><header className="flex items-center justify-between gap-3 border-b border-[#E4DAC9] px-4 py-3"><div className="flex items-baseline gap-2"><h3 className="font-display text-lg font-semibold">{formatOrderDayLabel(group.date)}</h3><span className="text-sm text-[#756D62]">{formatDateKey(group.date)}</span></div><span className="rounded-md border border-[#E4DAC9] bg-white px-2.5 py-1 text-xs font-semibold text-[#756D62]">{group.orders.length} {group.orders.length === 1 ? "order" : "orders"}</span></header><div className="p-3"><OrdersList orders={group.orders} {...props} /></div></section>)}</div>
 }
 
 function OrderStatusFilter({ onChange, statuses, value }) {
@@ -184,6 +206,7 @@ function OrdersList({ busyId, isDriver, onAdvance, onCancel, onDetails, onPrint,
 
 function OrderRow({ busy, index, isDriver, onAdvance, onCancel, onDetails, onPrint, order }) {
   const itemCount = order.items.reduce((sum, item) => sum + item.quantity, 0)
+  const itemSummary = summarizeItems(order.items)
   const rowTone = order.status === "PENDING"
     ? "bg-[#FFF0C2] hover:bg-[#FFE4A3]"
     : order.status === "CANCELLED"
@@ -191,10 +214,10 @@ function OrderRow({ busy, index, isDriver, onAdvance, onCancel, onDetails, onPri
       : `${index % 2 ? "bg-[#FBF8F2]" : "bg-white"} hover:bg-[#F3ECDD]`
 
   return <tr className={`${rowTone} align-middle transition-colors`}>
-    <td className={`whitespace-nowrap border-l-4 px-4 py-4 ${statusRowAccent[order.status] || "border-l-[#D8CEBD]"}`}>{isDriver ? <span className="inline-flex rounded-sm bg-white/75 px-2 py-1 font-mono text-xs font-bold text-[#8B1E1E] shadow-xs ring-1 ring-black/5">{order.orderNumber}</span> : <button type="button" onClick={onDetails} className="inline-flex rounded-sm bg-white/75 px-2 py-1 font-mono text-xs font-bold text-[#8B1E1E] shadow-xs ring-1 ring-black/5 hover:underline">{order.orderNumber}</button>}<p className="mt-1.5 text-xs text-[#756D62]">{formatDateTime(order.createdAt)}</p></td>
+    <td className={`whitespace-nowrap border-l-4 px-4 py-4 ${statusRowAccent[order.status] || "border-l-[#D8CEBD]"}`}>{isDriver ? <span className="inline-flex rounded-sm bg-white/75 px-2 py-1 font-mono text-xs font-bold text-[#8B1E1E] shadow-xs ring-1 ring-black/5">{order.orderNumber}</span> : <button type="button" onClick={onDetails} className="inline-flex rounded-sm bg-white/75 px-2 py-1 font-mono text-xs font-bold text-[#8B1E1E] shadow-xs ring-1 ring-black/5 hover:underline">{order.orderNumber}</button>}<p className="mt-1.5 text-xs text-[#756D62]">{formatDateTime(order.createdAt)}</p>{!["DELIVERED", "CANCELLED"].includes(order.status) ? <p className="mt-1 text-xs font-semibold text-[#8B1E1E]">Waiting {formatElapsed(order.createdAt)}</p> : null}</td>
     <td className="px-4 py-4"><p className="max-w-44 truncate font-semibold">{order.customerName}</p><p className="mt-1 whitespace-nowrap text-xs text-[#756D62]">{order.customerPhone}</p></td>
-    <td className="px-4 py-4"><p className="max-w-52 truncate font-medium">{order.deliveryZone || "-"}</p><p className="mt-1 max-w-52 truncate text-xs text-[#756D62]">{order.deliveryStreet}</p></td>
-    <td className="px-4 py-4 text-center font-semibold">{itemCount}</td>
+    <td className="px-4 py-4"><p className="max-w-52 truncate font-medium">{order.deliveryZone || "-"}</p><p className="mt-1 max-w-52 truncate text-xs text-[#756D62]">{order.deliveryStreet}</p>{order.distanceKm !== null ? <p className="mt-1 text-xs font-medium text-[#8B1E1E]">{order.distanceKm.toFixed(1)} km{order.etaMinutes ? ` | ~${order.etaMinutes} min` : ""}</p> : null}</td>
+    <td className="px-4 py-4 text-center"><p className="font-semibold">{itemCount}</p><p className="mt-1 max-w-48 truncate text-left text-xs text-[#756D62]" title={itemSummary}>{itemSummary}</p>{hasOrderNotes(order) ? <p className="mt-1 text-left text-xs font-semibold text-amber-700">Notes included</p> : null}</td>
     {!isDriver ? <td className="whitespace-nowrap px-4 py-4 text-right font-bold">{order.deliveryFeeConfirmed ? formatMoney(order.total) : <span className="text-xs font-semibold text-amber-700">Fee pending</span>}</td> : null}
     <td className="whitespace-nowrap px-4 py-4"><Badge variant={statusVariant[order.status]}>{formatOrderStatus(order.status)}</Badge></td>
     <td className="px-4 py-4"><OrderActions order={order} busy={busy} isDriver={isDriver} onAdvance={onAdvance} onCancel={onCancel} onDetails={onDetails} onPrint={onPrint} compact /></td>
@@ -204,12 +227,13 @@ function OrderRow({ busy, index, isDriver, onAdvance, onCancel, onDetails, onPri
 function OrderMobileRow({ busy, isDriver, onAdvance, onCancel, onDetails, onPrint, order }) {
   return <article className={`border p-4 ${order.status === "PENDING" ? "border-[#D4A017] bg-[#FFF0C2] shadow-[inset_4px_0_0_#B7791F]" : order.status === "CANCELLED" ? "border-red-200 bg-red-50/35" : "border-[#E4DAC9] bg-white"}`}>
     <div className="flex items-start justify-between gap-3">
-      <div><p className="font-mono text-sm font-bold text-[#8B1E1E]">{order.orderNumber}</p><p className="mt-1 font-semibold">{order.customerName}</p><p className="text-xs text-[#756D62]">{order.customerPhone} | {formatDateTime(order.createdAt)}</p></div>
+      <div><p className="font-mono text-sm font-bold text-[#8B1E1E]">{order.orderNumber}</p><p className="mt-1 font-semibold">{order.customerName}</p><p className="text-xs text-[#756D62]">{order.customerPhone} | {formatDateTime(order.createdAt)}</p>{!['DELIVERED', 'CANCELLED'].includes(order.status) ? <p className="mt-1 text-xs font-semibold text-[#8B1E1E]">Waiting {formatElapsed(order.createdAt)}</p> : null}</div>
       <Badge variant={statusVariant[order.status]}>{formatOrderStatus(order.status)}</Badge>
     </div>
     <div className={`mt-4 grid gap-3 border-y border-black/8 py-3 ${isDriver ? "grid-cols-2" : "grid-cols-3"}`}><Info label="Items" value={order.items.reduce((sum, item) => sum + item.quantity, 0)} /><Info label="Area" value={order.deliveryZone || "-"} />{!isDriver ? <Info label="Total" value={order.deliveryFeeConfirmed ? formatMoney(order.total) : "Fee pending"} /> : null}</div>
-    <p className="mt-3 line-clamp-1 text-sm text-[#756D62]">{order.deliveryStreet}</p>
-    {isDriver && order.deliveryNotes ? <p className="mt-2 text-sm"><span className="font-semibold">Note:</span> {order.deliveryNotes}</p> : null}
+    <p className="mt-3 line-clamp-1 text-sm font-medium">{summarizeItems(order.items)}</p>
+    <p className="mt-1 line-clamp-1 text-sm text-[#756D62]">{order.deliveryStreet}{order.distanceKm !== null ? ` | ${order.distanceKm.toFixed(1)} km` : ""}</p>
+    {hasOrderNotes(order) ? <div className="mt-3 border-l-2 border-amber-500 bg-amber-50 px-3 py-2 text-sm"><span className="font-semibold">Notes:</span> {summarizeNotes(order)}</div> : null}
     <div className="mt-4"><OrderActions order={order} busy={busy} isDriver={isDriver} onAdvance={onAdvance} onCancel={onCancel} onDetails={onDetails} onPrint={onPrint} /></div>
   </article>
 }
@@ -450,7 +474,14 @@ function Info({ label, value }) { return <div><p className="text-xs font-semibol
 function Price({ label, strong, value }) { return <div className={`flex justify-between ${strong ? "border-t border-[#E4DAC9] pt-2 font-bold" : "text-[#756D62]"}`}><span>{label}</span><span>{formatMoney(value)}</span></div> }
 function PendingPrice() { return <div className="flex justify-between border-t border-[#E4DAC9] pt-2 font-semibold text-amber-700"><span>Final total</span><span>Fee pending</span></div> }
 function PageButton({ disabled, icon: Icon, label, onClick }) { return <Button variant="outline" size="icon" onClick={onClick} disabled={disabled} aria-label={label}><Icon className="size-4" /></Button> }
-function EmptyState() { return <div className="flex min-h-52 flex-col items-center justify-center border border-dashed border-[#E4DAC9] bg-[#FDFAF4] p-6 text-center"><PackageCheck className="size-8 text-[#8B1E1E]" /><p className="mt-3 font-semibold">No orders found.</p></div> }
+function EmptyState({ scope }) { return <div className="flex min-h-52 flex-col items-center justify-center border border-dashed border-[#E4DAC9] bg-[#FDFAF4] p-6 text-center"><PackageCheck className="size-8 text-[#8B1E1E]" /><p className="mt-3 font-semibold">No orders found.</p><p className="mt-1 text-sm text-[#756D62]">{scope === "history" ? "Try another date or adjust the current filters." : "There are no matching orders waiting to be processed."}</p></div> }
 function formatStatus(value) { return value.split("_").map((part) => part.charAt(0) + part.slice(1).toLowerCase()).join(" ") }
 function formatMoney(value) { return new Intl.NumberFormat("en-IE", { style: "currency", currency: "EUR" }).format(Number(value || 0)) }
 function formatDateTime(value) { return new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value)) }
+function formatDateKey(value) { return new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(`${value}T12:00:00.000Z`)) }
+function formatOrderDayLabel(value) { const today = getCyprusDateKey(); if (value === today) return "Today"; if (value === shiftDateKey(today, -1)) return "Yesterday"; return new Intl.DateTimeFormat("en-GB", { weekday: "long", timeZone: "UTC" }).format(new Date(`${value}T12:00:00.000Z`)) }
+function formatElapsed(value) { const minutes = Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 60000)); if (minutes < 1) return "less than a minute"; if (minutes < 60) return `${minutes} min`; const hours = Math.floor(minutes / 60); const remaining = minutes % 60; return remaining ? `${hours}h ${remaining}m` : `${hours}h` }
+function summarizeItems(items) { return items.map((item) => `${item.quantity}x ${item.name}${item.variantLabel ? ` (${item.variantLabel})` : ""}`).join(", ") }
+function hasOrderNotes(order) { return Boolean(order.deliveryNotes || order.items.some((item) => item.note)) }
+function summarizeNotes(order) { return [order.deliveryNotes, ...order.items.filter((item) => item.note).map((item) => `${item.name}: ${item.note}`)].filter(Boolean).join(" | ") }
+function groupOrdersByDay(orders) { const groups = new Map(); orders.forEach((order) => { const date = getCyprusDateKey(new Date(order.createdAt)); if (!groups.has(date)) groups.set(date, []); groups.get(date).push(order) }); return [...groups].map(([date, entries]) => ({ date, orders: entries })) }
