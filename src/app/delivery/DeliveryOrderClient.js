@@ -1,7 +1,7 @@
 'use client'
 
 import Image from 'next/image'
-import { CheckCircle2, Plus, RefreshCw, SearchX, Utensils } from 'lucide-react'
+import { CheckCircle2, ChevronDown, Plus, RefreshCw, SearchX, Utensils } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { createPortal } from 'react-dom'
 import { useSearchParams } from 'next/navigation'
@@ -287,7 +287,7 @@ export default function DeliveryOrderClient() {
                       <h3 className="font-display text-lg font-bold leading-tight text-[#2B2B2B] sm:text-xl">{item.name}</h3>
                     </div>
                   </div>
-                  <p className="line-clamp-2 text-[12px] leading-relaxed text-[#6B6560] sm:text-[13px]">{item.description}</p>
+                  <DishDescription id={item.id} text={item.description} />
                   {requiresChoice ? (
                     <label className="mt-3 block">
                       <span className="mb-1.5 flex items-center justify-between gap-2 text-[9px] font-bold uppercase tracking-[0.13em] text-[#8B1E1E]">
@@ -356,6 +356,23 @@ export default function DeliveryOrderClient() {
       )}
     </div>
   )
+}
+
+function DishDescription({ id, text }) {
+  const [expanded, setExpanded] = useState(false)
+  const description = String(text || '').trim()
+  const canExpand = description.length > 90
+  const descriptionId = `delivery-description-${id}`
+
+  if (!description) return null
+
+  return <div>
+    <p id={descriptionId} className={`${expanded ? 'whitespace-pre-line' : 'line-clamp-2'} text-[12px] leading-relaxed text-[#6B6560] sm:text-[13px]`}>{description}</p>
+    {canExpand ? <button type="button" onClick={() => setExpanded((current) => !current)} aria-expanded={expanded} aria-controls={descriptionId} className="mt-1.5 inline-flex min-h-7 items-center gap-1 text-[11px] font-bold text-[#8B1E1E] underline decoration-[#D4A017] underline-offset-4 transition-colors hover:text-[#5F1515] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8B1E1E]/30">
+      {expanded ? 'Show less' : 'Read full description'}
+      <ChevronDown className={`size-3.5 transition-transform ${expanded ? 'rotate-180' : ''}`} aria-hidden="true" />
+    </button> : null}
+  </div>
 }
 
 function getVisibleCartButton() {

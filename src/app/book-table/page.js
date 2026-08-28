@@ -142,7 +142,7 @@ function BookingSection({ restaurantData }) {
                 {openingHours.map((item) => (
                   <li key={item.day} className="flex items-baseline justify-between gap-4 border-b border-[#D4A017]/15 pb-3 last:border-b-0 last:pb-0">
                     <span className="text-[13px] text-[#6B6560]">{item.day}</span>
-                    <span className="text-[13px] font-semibold text-[#2B2B2B]">{item.isClosed ? 'Closed' : item.hours}</span>
+                    <span className={`text-[13px] font-semibold ${item.isClosed ? 'text-[#A62121]' : 'text-[#2B2B2B]'}`}>{item.isClosed ? 'Closed' : item.hours}</span>
                   </li>
                 ))}
               </ul>
