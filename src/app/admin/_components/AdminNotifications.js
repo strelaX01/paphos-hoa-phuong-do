@@ -4,6 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 
 const NOTIFICATION_STATE_KEY = "admin-latest-notification-records"
 const NOTIFICATION_SOUND_HISTORY_KEY = "admin-notification-sound-history"
+const NOTIFICATION_SOUND_ENABLED_KEY = "admin-notification-sound-enabled"
 const NOTIFICATION_SOUND = "/audios/notification-sound.mp3"
 const NOTIFICATION_SOUND_HISTORY_TTL = 10 * 60 * 1_000
 const AdminNotificationsContext = createContext(null)
@@ -12,6 +13,8 @@ export function AdminNotificationsProvider({ children, role }) {
   const [pendingOrders, setPendingOrders] = useState(0)
   const [pendingReservations, setPendingReservations] = useState(0)
   const [soundReady, setSoundReady] = useState(false)
+  const [soundBlocked, setSoundBlocked] = useState(false)
+  const [soundEnabled, setSoundEnabled] = useState(true)
   const latestCreatedAtRef = useRef({ orders: null, reservations: null })
   const announcedRecordKeysRef = useRef(new Set())
   const countRequestInFlightRef = useRef(false)
@@ -22,8 +25,12 @@ export function AdminNotificationsProvider({ children, role }) {
   const notificationAudioRef = useRef(null)
   const audioContextRef = useRef(null)
   const notificationBufferRef = useRef(null)
+  const soundReadyRef = useRef(false)
+  const soundEnabledRef = useRef(true)
+  const unlockAttemptedRef = useRef(false)
 
   const playRawNotificationSound = useCallback(async ({ queueOnFailure = true } = {}) => {
+    if (!soundEnabledRef.current) return true
     const requestedAt = Date.now()
     if (requestedAt - lastSoundPlayedAtRef.current < 1_000) return true
 
@@ -45,7 +52,9 @@ export function AdminNotificationsProvider({ children, role }) {
           gain.connect(audioContext.destination)
           source.start(0)
           queuedSoundRef.current = false
+          soundReadyRef.current = true
           setSoundReady(true)
+          setSoundBlocked(false)
           return true
         }
       } catch {}
@@ -58,14 +67,18 @@ export function AdminNotificationsProvider({ children, role }) {
         audio.currentTime = 0
         await audio.play()
         queuedSoundRef.current = false
+        soundReadyRef.current = true
         setSoundReady(true)
+        setSoundBlocked(false)
         return true
       } catch {}
     }
 
     if (queueOnFailure) queuedSoundRef.current = true
     lastSoundPlayedAtRef.current = 0
+    soundReadyRef.current = false
     setSoundReady(false)
+    setSoundBlocked(true)
     return false
   }, [])
 
@@ -111,6 +124,7 @@ export function AdminNotificationsProvider({ children, role }) {
   }, [playRawNotificationSound])
 
   const enableNotificationSound = useCallback(async ({ playTest = true } = {}) => {
+    if (!soundEnabledRef.current) return false
     const audioContext = audioContextRef.current
     let unlocked = false
     try {
@@ -141,7 +155,9 @@ export function AdminNotificationsProvider({ children, role }) {
       }
     }
 
+    soundReadyRef.current = unlocked
     setSoundReady(unlocked)
+    setSoundBlocked(!unlocked)
     if (playTest || queuedSoundRef.current) {
       return playNotificationSound({
         queueOnFailure: true,
@@ -151,8 +167,33 @@ export function AdminNotificationsProvider({ children, role }) {
     return unlocked
   }, [playNotificationSound])
 
+  const setNotificationSoundEnabled = useCallback(async (enabled) => {
+    soundEnabledRef.current = enabled
+    setSoundEnabled(enabled)
+    try { window.localStorage.setItem(NOTIFICATION_SOUND_ENABLED_KEY, String(enabled)) } catch {}
+
+    if (!enabled) {
+      queuedSoundRef.current = false
+      queuedNotificationKeyRef.current = null
+      unlockAttemptedRef.current = false
+      soundReadyRef.current = false
+      setSoundReady(false)
+      setSoundBlocked(false)
+      notificationAudioRef.current?.pause()
+      await audioContextRef.current?.suspend().catch(() => {})
+      return true
+    }
+
+    unlockAttemptedRef.current = true
+    return enableNotificationSound({ playTest: true })
+  }, [enableNotificationSound])
+
   useEffect(() => {
     let active = true
+    let storedSoundEnabled = true
+    try { storedSoundEnabled = window.localStorage.getItem(NOTIFICATION_SOUND_ENABLED_KEY) !== "false" } catch {}
+    soundEnabledRef.current = storedSoundEnabled
+    queueMicrotask(() => { if (active) setSoundEnabled(storedSoundEnabled) })
     const audio = new Audio(NOTIFICATION_SOUND)
     audio.preload = "auto"
     audio.volume = 0.9
@@ -190,7 +231,9 @@ export function AdminNotificationsProvider({ children, role }) {
     }
 
     const unlockAudio = () => {
-      enableNotificationSound({ playTest: false }).catch(() => {})
+      if (!soundEnabledRef.current || soundReadyRef.current || unlockAttemptedRef.current) return
+      unlockAttemptedRef.current = true
+      enableNotificationSound({ playTest: false }).catch(() => setSoundBlocked(true))
     }
 
     const markRecordAnnounced = (type, recordId, createdAt) => {
@@ -324,9 +367,12 @@ export function AdminNotificationsProvider({ children, role }) {
     pendingOrders,
     pendingReservations,
     soundReady,
+    soundBlocked,
+    soundEnabled,
     enableNotificationSound,
+    setNotificationSoundEnabled,
     playNotificationSound,
-  }), [enableNotificationSound, pendingOrders, pendingReservations, playNotificationSound, soundReady])
+  }), [enableNotificationSound, pendingOrders, pendingReservations, playNotificationSound, setNotificationSoundEnabled, soundBlocked, soundEnabled, soundReady])
 
   return <AdminNotificationsContext.Provider value={value}>{children}</AdminNotificationsContext.Provider>
 }

@@ -14,7 +14,7 @@ import {
   Truck,
   Utensils,
   Video,
-  Volume2,
+  VolumeX,
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -55,7 +55,7 @@ export default function AdminShell({
 }) {
   const account = useAdminSession()
   const isDriver = account.role === "DRIVER"
-  const { enableNotificationSound, pendingOrders, pendingReservations, soundReady } = useAdminNotifications()
+  const { enableNotificationSound, pendingOrders, pendingReservations, soundBlocked, soundEnabled } = useAdminNotifications()
 
   const allowedNavItems = isDriver ? navItems.filter((item) => item.key === "orders") : navItems
   const displayedNavItems = allowedNavItems.map((item) => {
@@ -181,16 +181,17 @@ export default function AdminShell({
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2 xl:justify-end">
-              {!soundReady ? (
+              {soundEnabled && soundBlocked ? (
                 <Button
                   type="button"
                   variant="outline"
                   onClick={() => enableNotificationSound()}
-                  className="border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100"
-                  title="Enable new order and reservation sounds"
+                  size="sm"
+                  className="border-red-200 bg-red-50 text-red-800 hover:bg-red-100"
+                  title="The browser blocked notification audio"
                 >
-                  <Volume2 className="size-4" />
-                  Enable sound
+                  <VolumeX className="size-4" />
+                  Sound blocked <span className="font-bold underline">Enable</span>
                 </Button>
               ) : null}
               <ChangePasswordDialog compact className="border border-[#E4DAC9] bg-white hover:bg-[#F6F1E8] lg:hidden" />

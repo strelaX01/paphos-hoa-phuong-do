@@ -2,9 +2,10 @@
 
 import { useEffect, useMemo, useRef, useState } from "react"
 import dynamic from "next/dynamic"
-import { BellRing, CalendarDays, CircleOff, Euro, Eye, Gift, LoaderCircle, LocateFixed, Megaphone, Plus, Save, Sparkles, Trash2, Truck, X } from "lucide-react"
+import { BellRing, CalendarDays, CircleOff, Euro, Eye, Gift, LoaderCircle, LocateFixed, Megaphone, Plus, Save, Sparkles, Trash2, Truck, Volume2, VolumeX, X } from "lucide-react"
 
 import AdminShell from "@/app/admin/_components/AdminShell"
+import { useAdminNotifications } from "@/app/admin/_components/AdminNotifications"
 import AdminToast from "@/app/admin/_components/AdminToast"
 import { FestivalEffectPreview } from "@/app/components/shared/FestivalEffect"
 import { SettingsPageSkeleton } from "@/app/components/shared/SkeletonBlocks"
@@ -140,6 +141,7 @@ const initialSettings = {
 }
 
 export default function AdminSettingsPage() {
+  const { setNotificationSoundEnabled, soundBlocked, soundEnabled, soundReady } = useAdminNotifications()
   const [settings, setSettings] = useState(initialSettings)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -150,6 +152,17 @@ export default function AdminSettingsPage() {
   const showToast = (message, tone = "success") => {
     toastIdRef.current += 1
     setToast({ id: toastIdRef.current, message, tone })
+  }
+
+  const updateNotificationSound = async (enabled) => {
+    const ready = await setNotificationSoundEnabled(enabled)
+    if (!enabled) {
+      showToast("Notification sound disabled on this device.")
+    } else if (ready) {
+      showToast("Notification sound enabled on this device.")
+    } else {
+      showToast("The browser blocked notification sound. Allow audio and try again.", "error")
+    }
   }
 
   useEffect(() => {
@@ -561,6 +574,24 @@ export default function AdminSettingsPage() {
                 ) : null}
               </div>
               <StorefrontNoticePreview activeCtaDestination={activeCtaDestination} activeNoticeType={activeNoticeType} activePriorityStyle={activePriorityStyle} settings={settings} />
+            </CardContent>
+          </Card>
+
+          <Card className="border-[#E4DAC9] bg-white">
+            <CardHeader className="flex-row items-start justify-between gap-4">
+              <div className="flex min-w-0 items-start gap-3">
+                <div className={`flex size-10 shrink-0 items-center justify-center rounded-lg ${soundEnabled ? "bg-[#F6F1E8] text-[#8B1E1E]" : "bg-[#F0ECE5] text-[#8C8378]"}`}>
+                  {soundEnabled ? <Volume2 className="size-5" /> : <VolumeX className="size-5" />}
+                </div>
+                <div><CardTitle className="font-display text-xl">Notification sound</CardTitle><CardDescription>Play an alert for new orders and reservations on this device.</CardDescription></div>
+              </div>
+              <ToggleSwitch checked={soundEnabled} label="Notification sound" onChange={updateNotificationSound} />
+            </CardHeader>
+            <CardContent>
+              <div className={`border-l-2 px-4 py-3 text-sm ${soundBlocked && soundEnabled ? "border-red-600 bg-red-50 text-red-800" : "border-[#D4A017] bg-[#FAF7F0] text-[#756D62]"}`}>
+                {!soundEnabled ? "Sound is off on this device. Realtime order and reservation counts remain active." : soundBlocked ? "The browser is blocking audio. Use the Enable control in the page header to try again." : soundReady ? "Sound is ready. New orders and reservations will play an alert." : "Sound will be prepared automatically on your first click or tap."}
+              </div>
+              <p className="mt-3 text-xs text-[#756D62]">This preference is saved only in this browser and does not change other admin devices.</p>
             </CardContent>
           </Card>
 
