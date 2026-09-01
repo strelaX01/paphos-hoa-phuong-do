@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { ChevronLeft, ChevronRight, ImageOff, X } from 'lucide-react'
 
 import GalleryImage from '@/app/components/shared/GalleryImage'
@@ -267,7 +268,7 @@ export default function GalleryGridClient({ items, paginate = true, pagination =
         <PaginationControls page={page} totalPages={totalPages} onPageChange={updatePage} className="mt-8" />
       ) : null}
 
-      {activeItem ? (
+      {activeItem ? createPortal(
         <div
           ref={dialogRef}
           className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 p-3 backdrop-blur-sm sm:p-8"
@@ -322,7 +323,8 @@ export default function GalleryGridClient({ items, paginate = true, pagination =
           <p className="absolute bottom-3 left-1/2 -translate-x-1/2 text-xs font-medium tabular-nums text-white/70 sm:bottom-5">
             {activeIndex + 1} / {pageItems.length}
           </p>
-        </div>
+        </div>,
+        document.body
       ) : null}
     </>
   )
